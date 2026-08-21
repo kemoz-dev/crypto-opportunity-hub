@@ -50,3 +50,13 @@
 - [x] Record the post-upgrade active-alert verification, including unchanged 80/70/30 thresholds, 4H condition, schedule identity, notifications, and no-trade boundary.
 - [x] Expand and re-verify the snapshot-contract document with explicit schema changes, new UI components, full stored-field categories, legacy limitation, and unchanged-hourly-alert boundary.
 - [x] Add an authenticated wrong-user execution-history test that proves list and detail history access is denied when the alert does not belong to that user.
+- [x] Audit the current backtesting, scoring, stored historical data, and UI boundaries for a reproducible Opportunity Research Lab without modifying production scoring or alert behavior.
+- [x] Define persisted, user-owned experiment configurations for controlled technical combinations, score/confidence thresholds, timeframes, date range, sector/regime filters, time-based splits, and non-look-ahead entry/exit rules.
+- [x] Implement reproducible historical experiment runs with forward-return, risk, calibration, regime, sector, in-sample, and out-of-sample metrics, including explicit insufficient-data handling.
+- [x] Persist experiment metadata, source/provenance, exact configuration, results, and exportable CSV/JSON snapshots without modifying production scoring weights or trading behavior.
+- [x] Build an authenticated Opportunity Research Lab with experiment controls, transparent variable membership, research labels, results segmentation, calibration views, best-candidate reasoning, and exports.
+- [x] Add tests for experiment persistence, filtering, forward returns, time splits, segmentation, calibration, anti-look-ahead protection, insufficient data, authentication/authorization, alert continuity, and no-trade boundaries.
+- [x] Run reproducible real-data research only where retained data is sufficient; document coverage, measured findings, limitations, and whether a robust edge or V2 case exists.
+- [x] Add Research Lab controls for date range, asset scope, sector, and regime; wire them into persisted runs and exports.
+- [x] Add targeted coverage proving Research Lab runs do not create paper trades or alter alerts, schedules, scoring settings, or real-trading boundaries.
+- [x] Include complete immutable experiment configuration and filter controls in CSV exports, and test persistence plus JSON/CSV export coverage.

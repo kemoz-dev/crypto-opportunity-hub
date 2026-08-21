@@ -1,7 +1,9 @@
+import { strFromU8, unzipSync } from "fflate";
 import type { AssetProfile, Candle, DataStatus, MarketAsset, Timeframe } from "../../shared/crypto";
 
 const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
 const BINANCE_FUTURES_BASE_URL = "https://fapi.binance.com";
+const BINANCE_PUBLIC_ARCHIVE_BASE_URL = "https://data.binance.vision/data/futures/um/monthly/klines";
 
 type CoinGeckoMarketResponse = {
   id: string;
@@ -110,6 +112,49 @@ export async function fetchBinanceCandles(symbol: string, timeframe: Timeframe, 
   const payload = await getJson<unknown>(`${BINANCE_FUTURES_BASE_URL}/fapi/v1/klines?${params}`, "Binance Futures OHLCV");
   if (!Array.isArray(payload)) throw new ProviderError("Binance Futures OHLCV", "Unexpected candle response format.");
   return normalizeBinanceCandles(payload);
+}
+
+function archiveMonths(endAt: number | undefined, timeframe: Timeframe, limit: number) {
+  const interval = { "15m": 15 * 60_000, "1h": 60 * 60_000, "4h": 4 * 60 * 60_000, "1d": 24 * 60 * 60_000 }[timeframe];
+  const monthsNeeded = Math.min(12, Math.max(1, Math.ceil(limit * interval / (30 * 24 * 60 * 60_000)) + 1));
+  const anchor = new Date(endAt ?? Date.now());
+  anchor.setUTCDate(1);
+  anchor.setUTCHours(0, 0, 0, 0);
+  anchor.setUTCMonth(anchor.getUTCMonth() - 1);
+  return Array.from({ length: monthsNeeded }, (_, offset) => {
+    const date = new Date(anchor);
+    date.setUTCMonth(date.getUTCMonth() - offset);
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  });
+}
+
+export async function fetchBinanceArchiveCandles(symbol: string, timeframe: Timeframe, limit = 240, startTime?: number, endTime?: number): Promise<Candle[]> {
+  const months = archiveMonths(endTime, timeframe, limit);
+  const files = await Promise.all(months.map(async month => {
+    const url = `${BINANCE_PUBLIC_ARCHIVE_BASE_URL}/${symbol}/${timeframe}/${symbol}-${timeframe}-${month}.zip`;
+    const response = await fetch(url, { headers: { Accept: "application/zip" } });
+    if (!response.ok) throw new ProviderError("Binance public archive", `Binance public archive returned HTTP ${response.status}.`);
+    const archive = unzipSync(new Uint8Array(await response.arrayBuffer()));
+    const csv = Object.entries(archive).find(([name]) => name.endsWith(".csv"))?.[1];
+    if (!csv) throw new ProviderError("Binance public archive", "Archive did not contain a candle CSV file.");
+    return strFromU8(csv).trim().split(/\r?\n/).flatMap(line => {
+      const fields = line.split(",");
+      const normalized = { openTime: Number(fields[0]), open: Number(fields[1]), high: Number(fields[2]), low: Number(fields[3]), close: Number(fields[4]), volume: Number(fields[5]), closeTime: Number(fields[6]) };
+      return Object.values(normalized).every(Number.isFinite) ? [normalized] : [];
+    });
+  }));
+  return files.flat().filter(candle => (!startTime || candle.openTime >= startTime) && (!endTime || candle.closeTime <= endTime)).sort((left, right) => left.openTime - right.openTime).slice(-limit);
+}
+
+export async function fetchBinanceCandlesForResearch(symbol: string, timeframe: Timeframe, limit = 240, startTime?: number, endTime?: number): Promise<{ candles: Candle[]; source: "Binance Futures OHLCV" | "Binance public archive" }> {
+  try {
+    return { candles: await fetchBinanceCandles(symbol, timeframe, limit, startTime, endTime), source: "Binance Futures OHLCV" };
+  } catch (error) {
+    if (!(error instanceof ProviderError) || error.source !== "Binance Futures OHLCV") throw error;
+    const candles = await fetchBinanceArchiveCandles(symbol, timeframe, limit, startTime, endTime);
+    if (!candles.length) throw new ProviderError("Binance public archive", "No completed archive candles were available for the requested window.");
+    return { candles, source: "Binance public archive" };
+  }
 }
 
 export async function fetchBinanceDerivatives(symbol: string): Promise<DerivativesContext> {

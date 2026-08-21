@@ -175,6 +175,36 @@ export const backtestResults = mysqlTable("backtestResults", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("backtest_results_run_idx").on(table.runId)]);
 
+export const researchExperiments = mysqlTable("researchExperiments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 128 }).notNull(),
+  status: mysqlEnum("status", ["queued", "running", "completed", "failed"]).notNull(),
+  protocolVersion: varchar("protocolVersion", { length: 64 }).notNull(),
+  configurationFingerprint: varchar("configurationFingerprint", { length: 128 }).notNull(),
+  configuration: json("configuration").notNull(),
+  dataProvenance: json("dataProvenance").notNull(),
+  dataStartAt: timestamp("dataStartAt"),
+  dataEndAt: timestamp("dataEndAt"),
+  resultSnapshot: json("resultSnapshot"),
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("research_experiments_user_created_idx").on(table.userId, table.createdAt)]);
+
+export const researchExperimentResults = mysqlTable("researchExperimentResults", {
+  id: int("id").autoincrement().primaryKey(),
+  experimentId: int("experimentId").notNull().references(() => researchExperiments.id, { onDelete: "cascade" }),
+  dimension: mysqlEnum("dimension", ["aggregate", "combination", "opportunity_threshold", "confidence_threshold", "joint_threshold", "score_bucket", "confidence_bucket", "regime", "sector", "in_sample", "out_of_sample"]).notNull(),
+  dimensionKey: varchar("dimensionKey", { length: 128 }).notNull(),
+  signalCount: int("signalCount").notNull(),
+  evidenceStatus: mysqlEnum("evidenceStatus", ["SUPPORTED", "WEAK EVIDENCE", "UNSUPPORTED", "INSUFFICIENT DATA"]).notNull(),
+  metrics: json("metrics").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("research_experiment_results_experiment_dimension_idx").on(table.experimentId, table.dimension)]);
+
 export const alerts = mysqlTable("alerts", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -229,5 +259,7 @@ export type MarketData = typeof marketData.$inferSelect;
 export type TechnicalSnapshot = typeof technicalSnapshots.$inferSelect;
 export type ScoreSnapshot = typeof scoreSnapshots.$inferSelect;
 export type PaperTrade = typeof paperTrades.$inferSelect;
+export type ResearchExperiment = typeof researchExperiments.$inferSelect;
+export type ResearchExperimentResult = typeof researchExperimentResults.$inferSelect;
 export type ResearchReport = typeof researchReports.$inferSelect;
 export type AlertExecution = typeof alertExecutions.$inferSelect;
