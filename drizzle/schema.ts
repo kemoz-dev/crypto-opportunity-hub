@@ -188,6 +188,18 @@ export const alerts = mysqlTable("alerts", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [index("alerts_user_enabled_idx").on(table.userId, table.isEnabled), index("alerts_schedule_task_idx").on(table.scheduleCronTaskUid)]);
 
+export const alertExecutions = mysqlTable("alertExecutions", {
+  id: int("id").autoincrement().primaryKey(),
+  alertId: int("alertId").notNull().references(() => alerts.id, { onDelete: "cascade" }),
+  status: mysqlEnum("status", ["completed", "failed"]).notNull(),
+  triggered: boolean("triggered").notNull().default(false),
+  startedAt: timestamp("startedAt").notNull(),
+  completedAt: timestamp("completedAt").notNull(),
+  executionSnapshot: json("executionSnapshot").notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("alert_executions_alert_time_idx").on(table.alertId, table.createdAt)]);
+
 export const researchReports = mysqlTable("researchReports", {
   id: int("id").autoincrement().primaryKey(),
   title: varchar("title", { length: 128 }).notNull(),
@@ -205,3 +217,4 @@ export type TechnicalSnapshot = typeof technicalSnapshots.$inferSelect;
 export type ScoreSnapshot = typeof scoreSnapshots.$inferSelect;
 export type PaperTrade = typeof paperTrades.$inferSelect;
 export type ResearchReport = typeof researchReports.$inferSelect;
+export type AlertExecution = typeof alertExecutions.$inferSelect;

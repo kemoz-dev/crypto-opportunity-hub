@@ -28,3 +28,7 @@
 - [ ] After deployment, create one authenticated user-owned alert and verify its first scheduled execution and logs; do not create the alert on the user’s behalf.
 - [x] Add focused threshold-status and sector-evidence-label tests for `buildValidationResearch()`.
 - [x] Publish one consolidated validation report that includes evidence, anti-look-ahead result, limitations, and scoring-model recommendations end-to-end.
+- [x] Extend alert conditions to enforce non–Risk Off regime, 4H contribution, and bullish setup constraints without changing the scoring formula.
+- [x] Add supported notification delivery for triggered test alerts while preserving no-trade behavior and immutable signal evidence.
+- [ ] Create the user-authorized hourly production test alert with 80/70/30 thresholds, any asset, any sector, and paper/real trading disabled.
+- [ ] Verify the persisted schedule, first successful scheduled execution, exact scoring configuration, execution timestamp, recorded matches, no-trade boundary, unchanged user settings, and rejected unauthenticated access.

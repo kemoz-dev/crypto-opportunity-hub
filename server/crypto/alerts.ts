@@ -1,7 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { alerts } from "../../drizzle/schema";
+import { alertExecutions, alerts } from "../../drizzle/schema";
+import type { Timeframe } from "../../shared/crypto";
 import { createHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
+import { notifyOwner } from "../_core/notification";
 import { getDb } from "../db";
 import { buildLiveScanner } from "./marketService";
 import { getUserScoringConfig } from "./settings";
@@ -12,6 +14,10 @@ export const alertConditionsSchema = z.object({
   minimumTechnical: z.number().min(0).max(40),
   assetIds: z.array(z.string()).max(50).default([]),
   cooldownMinutes: z.number().int().min(5).max(10_080),
+  requireNotRiskOff: z.boolean().default(false),
+  requiredTimeframe: z.enum(["15m", "1h", "4h", "1d"]).optional(),
+  requireBullishSetup: z.boolean().default(false),
+  notificationEnabled: z.boolean().default(false),
 });
 
 export const alertInputSchema = z.object({
@@ -21,9 +27,11 @@ export const alertInputSchema = z.object({
 });
 
 type AlertConditions = z.infer<typeof alertConditionsSchema>;
+type AlertScore = { score: number; confidence: number; technicalScore: number; direction: "bullish" | "neutral" | "bearish"; technicalByTimeframe: Array<{ timeframe: Timeframe; bias: "bullish" | "neutral" | "bearish" }> };
 
-export function qualifiesForAlert(score: { score: number; confidence: number; technicalScore: number }, assetId: string, conditions: AlertConditions) {
-  return score.score >= conditions.minimumOpportunity && score.confidence >= conditions.minimumConfidence && score.technicalScore >= conditions.minimumTechnical && (conditions.assetIds.length === 0 || conditions.assetIds.includes(assetId));
+export function qualifiesForAlert(score: AlertScore, assetId: string, conditions: AlertConditions, regime: string | null) {
+  const correctTimeframe = !conditions.requiredTimeframe || score.technicalByTimeframe.some(analysis => analysis.timeframe === conditions.requiredTimeframe && analysis.bias === "bullish");
+  return score.score >= conditions.minimumOpportunity && score.confidence >= conditions.minimumConfidence && score.technicalScore >= conditions.minimumTechnical && (conditions.assetIds.length === 0 || conditions.assetIds.includes(assetId)) && (!conditions.requireNotRiskOff || regime !== "RISK OFF") && (!conditions.requireBullishSetup || score.direction === "bullish") && correctTimeframe;
 }
 
 async function getAlert(alertId: number, userId?: number) {
@@ -41,11 +49,19 @@ function parseConditions(value: unknown): AlertConditions {
   return parsed.data;
 }
 
+async function recordAlertExecution(alertId: number, status: "completed" | "failed", triggered: boolean, startedAt: Date, executionSnapshot: unknown, errorMessage?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; alert execution cannot be recorded.");
+  const completedAt = new Date();
+  await db.insert(alertExecutions).values({ alertId, status, triggered, startedAt, completedAt, executionSnapshot, errorMessage: errorMessage ?? null });
+  return { completedAt };
+}
+
 export async function createAlert(userId: number, input: z.infer<typeof alertInputSchema>, userSession: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; alert cannot be created.");
   await db.insert(alerts).values({ userId, name: input.name, isEnabled: false, conditions: input.conditions });
-  const alert = (await db.select().from(alerts).where(and(eq(alerts.userId, userId), eq(alerts.name, input.name))).limit(1))[0];
+  const alert = (await db.select().from(alerts).where(and(eq(alerts.userId, userId), eq(alerts.name, input.name))).orderBy(desc(alerts.id)).limit(1))[0];
   if (!alert) throw new Error("Alert creation failed.");
   const canSchedule = process.env.NODE_ENV === "production";
   if (!canSchedule) return { alert, scheduleState: "publish-required" as const };
@@ -73,21 +89,51 @@ export async function listAlerts(userId: number) {
   return db.select().from(alerts).where(eq(alerts.userId, userId));
 }
 
-export async function evaluateAlert(alertId: number, expectedTaskUid?: string) {
-  const alert = await getAlert(alertId);
-  if (!alert.isEnabled && expectedTaskUid) return { triggered: false, skipped: "disabled" as const };
-  if (expectedTaskUid && alert.scheduleCronTaskUid !== expectedTaskUid) throw new Error("Alert task identifier does not match this scheduled callback.");
-  const conditions = parseConditions(alert.conditions);
-  if (alert.lastTriggeredAt && Date.now() - alert.lastTriggeredAt.getTime() < conditions.cooldownMinutes * 60_000) return { triggered: false, skipped: "cooldown" as const };
-  const configuration = await getUserScoringConfig(alert.userId);
-  const scan = await buildLiveScanner(true, configuration);
-  const matches = scan.rows.filter(row => row.score && qualifiesForAlert(row.score, row.asset.id, conditions));
-  if (!matches.length) return { triggered: false, skipped: "threshold-not-met" as const, generatedAt: scan.generatedAt };
-  const snapshot = { generatedAt: scan.generatedAt, conditions, scoringConfiguration: configuration, marketRegime: scan.marketRegime, matches: matches.map(row => ({ asset: { id: row.asset.id, symbol: row.asset.symbol, name: row.asset.name, price: row.asset.price, sector: row.asset.sector }, score: row.score ? { opportunity: row.score.score, confidence: row.score.confidence, technical: row.score.technicalScore, setup: row.score.setupType, confirmingSignals: row.score.reasons.filter(reason => reason.direction === "positive").slice(0, 4), risks: row.score.missingConditions } : null, dataStatus: row.dataStatus })) };
+export async function listAlertExecutions(userId: number, alertId: number) {
+  await getAlert(alertId, userId);
   const db = await getDb();
-  if (!db) throw new Error("Database is unavailable; alert result cannot be stored.");
-  await db.update(alerts).set({ lastTriggeredAt: new Date(scan.generatedAt), lastSignalSnapshot: snapshot }).where(eq(alerts.id, alert.id));
-  return { triggered: true, snapshot };
+  if (!db) return [];
+  return db.select().from(alertExecutions).where(eq(alertExecutions.alertId, alertId)).orderBy(desc(alertExecutions.createdAt)).limit(20);
+}
+
+export async function evaluateAlert(alertId: number, expectedTaskUid?: string) {
+  const startedAt = new Date();
+  let alert: Awaited<ReturnType<typeof getAlert>> | undefined;
+  try {
+    alert = await getAlert(alertId);
+    if (!alert.isEnabled && expectedTaskUid) {
+      const result = { triggered: false, skipped: "disabled" as const };
+      await recordAlertExecution(alert.id, "completed", false, startedAt, result);
+      return result;
+    }
+    if (expectedTaskUid && alert.scheduleCronTaskUid !== expectedTaskUid) throw new Error("Alert task identifier does not match this scheduled callback.");
+    const conditions = parseConditions(alert.conditions);
+    if (alert.lastTriggeredAt && Date.now() - alert.lastTriggeredAt.getTime() < conditions.cooldownMinutes * 60_000) {
+      const result = { triggered: false, skipped: "cooldown" as const, lastTriggeredAt: alert.lastTriggeredAt };
+      await recordAlertExecution(alert.id, "completed", false, startedAt, result);
+      return result;
+    }
+    const configuration = await getUserScoringConfig(alert.userId);
+    const scan = await buildLiveScanner(true, configuration);
+    const matches = scan.rows.filter(row => row.score && qualifiesForAlert(row.score as AlertScore, row.asset.id, conditions, scan.marketRegime?.classification ?? null));
+    if (!matches.length) {
+      const result = { triggered: false, skipped: "threshold-not-met" as const, generatedAt: scan.generatedAt, conditions, scoringConfiguration: configuration, marketRegime: scan.marketRegime, dataStatus: scan.dataStatus };
+      await recordAlertExecution(alert.id, "completed", false, startedAt, result);
+      return result;
+    }
+    const snapshot = { generatedAt: scan.generatedAt, conditions, scoringConfiguration: configuration, marketRegime: scan.marketRegime, matches: matches.map(row => ({ asset: { id: row.asset.id, symbol: row.asset.symbol, name: row.asset.name, price: row.asset.price, sector: row.asset.sector }, score: row.score ? { opportunity: row.score.score, confidence: row.score.confidence, technical: row.score.technicalScore, direction: row.score.direction, setup: row.score.setupType, confirmingSignals: row.score.reasons.filter(reason => reason.direction === "positive").slice(0, 4), risks: row.score.missingConditions, timeframeContribution: row.score.technicalByTimeframe } : null, dataStatus: row.dataStatus })) };
+    const notificationDelivered = conditions.notificationEnabled ? await notifyOwner({ title: `Crypto alert: ${alert.name}`, content: `${matches.length} configured opportunity match(es) at ${new Date(scan.generatedAt).toISOString()}. No paper or real trade was created.` }) : false;
+    const db = await getDb();
+    if (!db) throw new Error("Database is unavailable; alert result cannot be stored.");
+    await db.update(alerts).set({ lastTriggeredAt: new Date(scan.generatedAt), lastSignalSnapshot: { ...snapshot, notificationDelivered } }).where(eq(alerts.id, alert.id));
+    const result = { triggered: true, snapshot: { ...snapshot, notificationDelivered } };
+    await recordAlertExecution(alert.id, "completed", true, startedAt, result);
+    return result;
+  } catch (error) {
+    const safeMessage = error instanceof Error ? error.message : "Alert evaluation failed.";
+    if (alert) await recordAlertExecution(alert.id, "failed", false, startedAt, { error: "ALERT_EVALUATION_FAILED" }, safeMessage);
+    throw error;
+  }
 }
 
 export async function evaluateAlertByTaskUid(taskUid: string) {
