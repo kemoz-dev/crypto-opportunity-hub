@@ -188,6 +188,15 @@ export const alerts = mysqlTable("alerts", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [index("alerts_user_enabled_idx").on(table.userId, table.isEnabled), index("alerts_schedule_task_idx").on(table.scheduleCronTaskUid)]);
 
+export const researchReports = mysqlTable("researchReports", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 128 }).notNull(),
+  asOf: timestamp("asOf").notNull(),
+  methodology: json("methodology").notNull(),
+  report: json("report").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("research_reports_as_of_idx").on(table.asOf)]);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Asset = typeof assets.$inferSelect;
@@ -195,3 +204,4 @@ export type MarketData = typeof marketData.$inferSelect;
 export type TechnicalSnapshot = typeof technicalSnapshots.$inferSelect;
 export type ScoreSnapshot = typeof scoreSnapshots.$inferSelect;
 export type PaperTrade = typeof paperTrades.$inferSelect;
+export type ResearchReport = typeof researchReports.$inferSelect;

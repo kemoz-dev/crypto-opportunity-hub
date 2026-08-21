@@ -5,6 +5,7 @@ import { getUserScoringConfig, saveUserScoringConfig, scoringConfigSchema } from
 import { closeLivePaperTrade, getPaperPortfolio, openLivePaperTrade } from "../crypto/paperTrading";
 import { runAndPersistBacktest } from "../crypto/backtesting";
 import { alertInputSchema, createAlert, evaluateAlert, listAlerts, setAlertEnabled } from "../crypto/alerts";
+import { getLatestResearchReport } from "../crypto/researchSummary";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
 
@@ -13,6 +14,7 @@ export const cryptoRouter = router({
     const configuration = ctx.user ? await getUserScoringConfig(ctx.user.id) : undefined;
     return buildLiveScanner(input?.forceRefresh ?? false, configuration);
   }),
+  researchSummary: publicProcedure.query(() => getLatestResearchReport()),
   settings: protectedProcedure.query(({ ctx }) => getUserScoringConfig(ctx.user.id)),
   saveSettings: protectedProcedure.input(scoringConfigSchema).mutation(({ ctx, input }) => saveUserScoringConfig(ctx.user.id, input)),
   paperPortfolio: protectedProcedure.query(async ({ ctx }) => getPaperPortfolio(ctx.user.id, await getUserScoringConfig(ctx.user.id))),

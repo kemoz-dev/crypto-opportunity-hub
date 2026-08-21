@@ -1,15 +1,30 @@
 import { and, asc, eq } from "drizzle-orm";
 import { paperPortfolios, paperTrades } from "../../drizzle/schema";
-import type { OpportunityScore, ScannerResponse, ScoringConfig } from "../../shared/crypto";
+import type { OpportunityScore, ScannerResponse, ScoringConfig, ScannerRow } from "../../shared/crypto";
 import { getDb } from "../db";
 import { buildLiveScanner } from "./marketService";
 
-type PaperTradeSnapshot = {
+export type PaperTradeSnapshot = {
   scannerGeneratedAt: number;
   asset: { id: string; symbol: string; name: string; sector: string; price: number };
   opportunity: OpportunityScore;
   marketRegime: ScannerResponse["marketRegime"];
   configuration: ScoringConfig;
+  observation: {
+    timestamp: number;
+    asset: string;
+    sector: string;
+    timeframes: string[];
+    opportunityScore: number;
+    confidenceScore: number;
+    technicalScore: number;
+    setupType: string;
+    entryPrice: number;
+    stopLoss: number;
+    target: number;
+    exactScoringComponents: OpportunityScore["reasons"];
+    missingConditions: string[];
+  };
 };
 
 function round(value: number, digits = 2) { return Number(value.toFixed(digits)); }
@@ -24,6 +39,32 @@ export function calculatePaperEntryTerms(entryPrice: number, atrPercent: number,
 
 export function cloneImmutableEntrySnapshot<T>(snapshot: T): T {
   return JSON.parse(JSON.stringify(snapshot)) as T;
+}
+
+export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerResponse["marketRegime"], generatedAt: number, configuration: ScoringConfig, terms: { stopLoss: number; takeProfit: number }): PaperTradeSnapshot {
+  if (!row.score || row.asset.price === null) throw new Error("A score and live price are required to create a paper-trade observation snapshot.");
+  return cloneImmutableEntrySnapshot({
+    scannerGeneratedAt: generatedAt,
+    asset: { id: row.asset.id, symbol: row.asset.symbol, name: row.asset.name, sector: row.asset.sector, price: row.asset.price },
+    opportunity: row.score,
+    marketRegime,
+    configuration,
+    observation: {
+      timestamp: generatedAt,
+      asset: row.asset.symbol,
+      sector: row.asset.sector,
+      timeframes: row.score.technicalByTimeframe.map(item => item.timeframe),
+      opportunityScore: row.score.score,
+      confidenceScore: row.score.confidence,
+      technicalScore: row.score.technicalScore,
+      setupType: row.score.setupType,
+      entryPrice: row.asset.price,
+      stopLoss: terms.stopLoss,
+      target: terms.takeProfit,
+      exactScoringComponents: row.score.reasons,
+      missingConditions: row.score.missingConditions,
+    },
+  });
 }
 
 function calculateMetrics(startingCapital: number, trades: Array<{ status: string; side: string; entryPrice: number; positionSize: number; realizedPnl: number | null; exitPrice: number | null; entryAt: Date; exitAt: Date | null }>, currentPrices: Map<string, number>) {
@@ -69,7 +110,7 @@ export async function openLivePaperTrade(userId: number, assetId: string, side: 
   if (atrPercent === null) throw new Error("ATR is unavailable, so a risk-normalized stop cannot be calculated.");
   const entryPrice = row.asset.price;
   const terms = calculatePaperEntryTerms(entryPrice, atrPercent, side, portfolio.currentEquity, riskPercent);
-  const snapshot: PaperTradeSnapshot = cloneImmutableEntrySnapshot({ scannerGeneratedAt: scan.generatedAt, asset: { id: row.asset.id, symbol: row.asset.symbol, name: row.asset.name, sector: row.asset.sector, price: entryPrice }, opportunity: row.score, marketRegime: scan.marketRegime, configuration });
+  const snapshot = buildPaperTradeSnapshot(row, scan.marketRegime, scan.generatedAt, configuration, terms);
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; the paper trade cannot be recorded.");
   await db.insert(paperTrades).values({ portfolioId: portfolio.id, assetId, status: "open", side, entryAt: new Date(scan.generatedAt), entryPrice, stopLoss: terms.stopLoss, takeProfit: [{ label: "2R", price: terms.takeProfit }], positionSize: terms.positionSize, riskPercent, rewardRisk: terms.rewardRisk, immutableEntrySnapshot: snapshot });

@@ -9,3 +9,9 @@ At 2026-08-21 14:17 GMT+3, the browser began a fresh live scan and remained in i
 ## Integrated Platform Verification
 
 At 2026-08-21 14:47 GMT+3, the completed scanner showed live CoinGecko and Binance-backed ranked results and active navigation for Settings, Paper Trading, Backtesting, and Alerts. Opening Settings as an unauthenticated visitor displayed an explicit sign-in gate rather than exposing a writable configuration form. This confirms the public scanner continues to use documented defaults while personalized controls remain protected.
+
+## Validation-Release Verification
+
+At 2026-08-21 15:34 GMT+3, the existing published domain was reachable and showed the explicit no-score state while its live scan had not completed; it did not display a fabricated price or opportunity. At 15:38 GMT+3, the local updated build exposed the new **Research Summary** navigation entry. The subsequent checkpoint is required to carry this new validation view to the published release.
+
+At 2026-08-21 15:39 GMT+3, an unauthenticated local `POST` request to the scheduled-alert callback returned only `{"error":"cron-only"}` with HTTP 403. The handler did not invoke alert evaluation, return a stack trace, or expose configuration or secret material. A successful scheduled execution remains unverified because no authenticated user-owned alert schedule exists yet.

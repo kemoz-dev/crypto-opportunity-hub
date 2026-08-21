@@ -17,3 +17,14 @@
 - [x] Add a deployment and operations handoff covering development commands, live-data behavior, persistence checks, verification steps, and Phase 2+ boundaries.
 - [x] Make chronological backtests apply the user-selected timeframe end-to-end and persist score-combination research analytics.
 - [x] Add configurable historical entry, stop-loss, take-profit, and risk-sizing rules to the backtest engine and prove their impact with Vitest coverage.
+- [ ] Verify the published release’s scheduled-alert activation path, cron-only authentication boundary, published scoring configuration usage, failure logs, and secret exposure boundary without attempting real trades.
+- [x] Strengthen immutable paper-trade observation snapshots to preserve all requested live signal, regime, sector, price, risk, and score-component evidence at creation time.
+- [x] Extend real-data historical research to compare requested score combinations, opportunity and confidence thresholds, multi-regime behavior, and available 24H/3D/7D/30D outcome windows without fabricating insufficient samples.
+- [x] Compare generic and supported sector hypotheses against available historical evidence and label results as Supported, Weak Evidence, Unsupported, or Insufficient Data.
+- [x] Perform a focused anti-look-ahead audit covering indicators, volume, market context, sector inputs, score components, risk calculations, alert snapshots, entries, and exits; document any leakage risk.
+- [x] Build a transparent Research Summary page showing validated evidence, observation counts, limitations, weakest and strongest combinations, threshold results, sector evidence, and non-guarantee disclosure.
+- [x] Add Vitest coverage for immutable observation evidence, research aggregation, threshold/sector labeling, and anti-look-ahead boundaries.
+- [x] Produce a real-data validation report with tested scope, signal counts, evidence status, weaknesses, and scoring-model recommendations; explicitly label insufficient data.
+- [ ] After deployment, create one authenticated user-owned alert and verify its first scheduled execution and logs; do not create the alert on the user’s behalf.
+- [x] Add focused threshold-status and sector-evidence-label tests for `buildValidationResearch()`.
+- [x] Publish one consolidated validation report that includes evidence, anti-look-ahead result, limitations, and scoring-model recommendations end-to-end.

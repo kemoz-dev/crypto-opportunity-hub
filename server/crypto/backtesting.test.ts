@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SCORING_CONFIG, type Candle } from "../../shared/crypto";
-import { runChronologicalBacktest } from "./backtesting";
+import { buildValidationResearch, runChronologicalBacktest, type HistoricalSignal } from "./backtesting";
 
 function candles(count: number): Candle[] {
   return Array.from({ length: count }, (_, index) => {
@@ -11,6 +11,10 @@ function candles(count: number): Candle[] {
 
 function input(overrides: Partial<Parameters<typeof runChronologicalBacktest>[2]> = {}) {
   return { timeframe: "1h" as const, minimumScore: 0, minimumConfidence: 0, holdingBars: 8, riskPercent: 1, maximumConcurrent: 3, entryRule: "bullish" as const, stopRule: "atr" as const, stopAtrMultiplier: 1.5, stopPercent: 2, takeProfitRule: "holding-close" as const, targetRiskReward: 2, ...overrides };
+}
+
+function evidenceSignal(overrides: Partial<HistoricalSignal> = {}): HistoricalSignal {
+  return { timeframe: "1h", timestamp: 1, entryTimestamp: 2, entryPrice: 100, exitPrice: 101, returnPercent: 1, positionReturnPercent: 1, rMultiple: 1, opportunityScore: 80, confidenceScore: 75, technicalScore: 30, stopLoss: 98, takeProfit: 104, exitReason: "holding-close", reasons: [{ key: "rsi", label: "RSI", score: 2, maxScore: 2, direction: "positive", detail: "test" }, { key: "macd", label: "MACD", score: 2, maxScore: 2, direction: "positive", detail: "test" }, { key: "ema", label: "EMA", score: 2, maxScore: 2, direction: "positive", detail: "test" }, { key: "band-volume", label: "Volume", score: 2, maxScore: 2, direction: "positive", detail: "test" }], dataCutoffAt: 1, outcomeHorizons: [], ...overrides };
 }
 
 describe("chronological backtesting", () => {
@@ -54,5 +58,34 @@ describe("chronological backtesting", () => {
       expect(signal.takeProfit).toBeGreaterThan(signal.entryPrice);
       expect(["stop-loss", "take-profit", "holding-close"]).toContain(signal.exitReason);
     });
+  });
+
+  it("records post-entry outcome windows only when subsequent candle coverage exists", () => {
+    const source = candles(360);
+    const output = runChronologicalBacktest(source, DEFAULT_SCORING_CONFIG, input({ timeframe: "1h" }));
+    output.signals.forEach(signal => {
+      const entryIndex = source.findIndex(candle => candle.openTime === signal.entryTimestamp);
+      expect(entryIndex).toBeGreaterThan(0);
+      expect(signal.entryTimestamp).toBeGreaterThan(signal.timestamp);
+      signal.outcomeHorizons.forEach(outcome => expect(entryIndex + outcome.barsAfterEntry).toBeLessThan(source.length));
+    });
+  });
+
+  it("labels comparisons with missing point-in-time context as insufficient rather than inventing evidence", () => {
+    const output = runChronologicalBacktest(candles(360), DEFAULT_SCORING_CONFIG, input());
+    expect(output.validationResearch.combinations.find(item => item.id === "D")?.status).toBe("INSUFFICIENT DATA");
+    expect(output.validationResearch.combinations.find(item => item.id === "E")?.status).toBe("INSUFFICIENT DATA");
+    expect(output.validationResearch.regimeComparison.status).toBe("INSUFFICIENT DATA");
+    expect(output.validationResearch.sectorComparison.status).toBe("INSUFFICIENT DATA");
+  });
+
+  it("labels robust and adverse threshold evidence deterministically while preserving the insufficient sector baseline", () => {
+    const supported = buildValidationResearch(Array.from({ length: 30 }, () => evidenceSignal()), "L1");
+    expect(supported.thresholds.opportunity.find(item => item.threshold === 80)?.status).toBe("SUPPORTED");
+    expect(supported.thresholds.confidence.find(item => item.threshold === 70)?.status).toBe("SUPPORTED");
+    expect(supported.thresholds.joint.status).toBe("SUPPORTED");
+    expect(supported.sectorComparison.status).toBe("INSUFFICIENT DATA");
+    const unsupported = buildValidationResearch(Array.from({ length: 30 }, () => evidenceSignal({ exitPrice: 99, returnPercent: -1, positionReturnPercent: -1, rMultiple: -1 })), "L1");
+    expect(unsupported.thresholds.opportunity.find(item => item.threshold === 80)?.status).toBe("UNSUPPORTED");
   });
 });
