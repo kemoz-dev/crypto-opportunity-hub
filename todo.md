@@ -60,3 +60,15 @@
 - [x] Add Research Lab controls for date range, asset scope, sector, and regime; wire them into persisted runs and exports.
 - [x] Add targeted coverage proving Research Lab runs do not create paper trades or alter alerts, schedules, scoring settings, or real-trading boundaries.
 - [x] Include complete immutable experiment configuration and filter controls in CSV exports, and test persistence plus JSON/CSV export coverage.
+- [ ] Audit existing provider, research, persistence, database, and scheduler boundaries for point-in-time historical data infrastructure without changing production scoring, alerts, or trading.
+- [ ] Define an immutable versioned dataset protocol covering OHLCV, quality states, historical market cap, regime, sector context, cost assumptions, instrument separation, availability markers, and survivorship limitations.
+- [ ] Add persistent, UTC-based OHLCV, dataset-version, ingestion-run, data-quality, missing-interval, historical market-cap, market-regime, and sector-context schemas with exact uniqueness constraints and non-destructive migrations.
+- [ ] Implement free/public-source OHLCV backfill and incremental ingestion across 15M/1H/4H/1D with resume state, malformed/duplicate/missing detection, provider-error recording, and data-quality updates.
+- [ ] Persist available historical market-cap, regime, and sector context without reconstructing unavailable history from present-day values.
+- [ ] Build closed-candle, multi-timeframe-safe point-in-time reconstruction and research-only spot/perpetual cost calculations that keep gross and net results separate.
+- [ ] Extend Research Lab and add a protected historical data-quality dashboard with dataset version, date, asset, instrument, cost, coverage, and availability controls.
+- [ ] Add deterministic scheduled ingestion through the existing platform scheduler, with idempotency, authenticated callback handling, and documented timeout/coverage constraints.
+- [ ] Add tests for ingestion integrity, duplicate and missing detection, dataset versioning, historical context persistence, reconstruction timing, cost handling, immutable run provenance, auth, and unchanged production/no-trade boundaries.
+- [ ] Backfill reliable public history where available, document actual coverage and unavailable fields, validate the production build, and publish the completed data-foundation checkpoint.
+- [x] Correct scheduled-ingestion authentication error handling and research-cost decimal rounding identified by deterministic tests, then re-run the full validation suite.
+- [x] Re-run complete post-fix type check, test suite, and production build after the scheduled-ingestion and research-cost corrections.

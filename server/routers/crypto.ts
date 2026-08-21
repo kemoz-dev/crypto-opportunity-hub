@@ -7,6 +7,8 @@ import { runAndPersistBacktest } from "../crypto/backtesting";
 import { alertInputSchema, createAlert, evaluateAlert, getAlertExecution, listAlertExecutions, listAlerts, setAlertEnabled } from "../crypto/alerts";
 import { getLatestResearchReport } from "../crypto/researchSummary";
 import { exportResearchExperiment, getResearchExperiment, listResearchExperiments, runResearchExperiment } from "../crypto/researchLab";
+import { listHistoricalDataQuality, listHistoricalDatasets } from "../crypto/historicalData";
+import { calculateResearchCosts, reconstructState } from "../crypto/reconstruction";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
 
@@ -18,6 +20,10 @@ export const cryptoRouter = router({
   researchSummary: publicProcedure.query(() => getLatestResearchReport()),
   researchExperiments: protectedProcedure.query(({ ctx }) => listResearchExperiments(ctx.user.id)),
   researchExperiment: protectedProcedure.input(z.object({ experimentId: z.number().int().positive() })).query(({ ctx, input }) => getResearchExperiment(ctx.user.id, input.experimentId)),
+  historicalDatasets: protectedProcedure.query(() => listHistoricalDatasets()),
+  historicalDataQuality: protectedProcedure.input(z.object({ datasetId: z.number().int().positive().optional() }).optional()).query(({ input }) => listHistoricalDataQuality(input?.datasetId)),
+  reconstructHistoricalState: protectedProcedure.input(z.object({ datasetId: z.number().int().positive(), assetId: z.string().min(1), timeframe: z.enum(["15m", "1h", "4h", "1d"]), timestamp: z.number().int().positive(), instrumentType: z.enum(["spot", "perpetual"]) })).query(async ({ ctx, input }) => reconstructState(input.assetId, input.timeframe, input.timestamp, input.datasetId, input.instrumentType, await getUserScoringConfig(ctx.user.id))),
+  previewResearchCosts: protectedProcedure.input(z.object({ grossReturnPercent: z.number(), instrumentType: z.enum(["spot", "perpetual"]), feePercent: z.number().min(0).max(10), slippagePercent: z.number().min(0).max(10), fundingMode: z.enum(["ACTUAL", "ASSUMED", "EXCLUDED", "UNAVAILABLE"]), fundingPercent: z.number().optional() })).query(({ input }) => calculateResearchCosts(input.grossReturnPercent, { version: "RESEARCH_COST_MODEL_V1", instrumentType: input.instrumentType, feePercent: input.feePercent, slippagePercent: input.slippagePercent, funding: { mode: input.fundingMode, percent: input.fundingPercent ?? null } })),
   runResearchExperiment: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(128), experimentId: z.enum(["A", "B", "C", "D", "E"]), assetIds: z.array(z.string().min(1)).max(12).default([]), timeframe: z.enum(["15m", "1h", "4h", "1d"]), candleLimit: z.number().int().min(250).max(1_000), startAt: z.number().optional(), endAt: z.number().optional(), minimumOpportunity: z.number().min(0).max(100), minimumConfidence: z.number().min(0).max(100), sector: z.string().max(64).optional(), regime: z.enum(["ALL", "RISK ON", "SELECTIVE", "RISK OFF"]).optional(), holdingBars: z.number().int().min(1).max(100), riskPercent: z.number().min(0.1).max(5), stopAtrMultiplier: z.number().min(0.25).max(10), takeProfitRule: z.enum(["risk-reward", "holding-close"]), targetRiskReward: z.number().min(0.25).max(20), trainPercent: z.number().int().min(50).max(90) })).mutation(async ({ ctx, input }) => runResearchExperiment(ctx.user.id, input, await getUserScoringConfig(ctx.user.id))),
   exportResearchExperiment: protectedProcedure.input(z.object({ experimentId: z.number().int().positive(), format: z.enum(["json", "csv"]) })).query(({ ctx, input }) => exportResearchExperiment(ctx.user.id, input.experimentId, input.format)),
   settings: protectedProcedure.query(({ ctx }) => getUserScoringConfig(ctx.user.id)),

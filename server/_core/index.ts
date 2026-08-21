@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { scheduledAlertHandler } from "../crypto/alertHandler";
+import { scheduledHistoricalIngestionHandler } from "../crypto/historicalScheduleHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -38,6 +39,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.post("/api/scheduled/evaluate-alert", scheduledAlertHandler);
+  app.post("/api/scheduled/ingest-historical-data", scheduledHistoricalIngestionHandler);
   // tRPC API
   app.use(
     "/api/trpc",

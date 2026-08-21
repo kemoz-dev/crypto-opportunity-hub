@@ -1,4 +1,4 @@
-import { boolean, double, index, int, json, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, double, index, int, json, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -183,6 +183,12 @@ export const researchExperiments = mysqlTable("researchExperiments", {
   protocolVersion: varchar("protocolVersion", { length: 64 }).notNull(),
   configurationFingerprint: varchar("configurationFingerprint", { length: 128 }).notNull(),
   configuration: json("configuration").notNull(),
+  datasetId: int("datasetId").references(() => historicalDatasets.id),
+  datasetVersion: varchar("datasetVersion", { length: 96 }),
+  datasetFingerprint: varchar("datasetFingerprint", { length: 128 }),
+  modelConfigurationFingerprint: varchar("modelConfigurationFingerprint", { length: 128 }),
+  instrumentType: mysqlEnum("instrumentType", ["spot", "perpetual"]),
+  costModel: json("costModel"),
   dataProvenance: json("dataProvenance").notNull(),
   dataStartAt: timestamp("dataStartAt"),
   dataEndAt: timestamp("dataEndAt"),
@@ -191,7 +197,7 @@ export const researchExperiments = mysqlTable("researchExperiments", {
   completedAt: timestamp("completedAt"),
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, table => [index("research_experiments_user_created_idx").on(table.userId, table.createdAt)]);
+}, table => [index("research_experiments_user_created_idx").on(table.userId, table.createdAt), index("research_experiments_dataset_idx").on(table.datasetId, table.createdAt)]);
 
 export const researchExperimentResults = mysqlTable("researchExperimentResults", {
   id: int("id").autoincrement().primaryKey(),
@@ -204,6 +210,179 @@ export const researchExperimentResults = mysqlTable("researchExperimentResults",
   reason: text("reason").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("research_experiment_results_experiment_dimension_idx").on(table.experimentId, table.dimension)]);
+
+export const historicalDatasets = mysqlTable("historicalDatasets", {
+  id: int("id").autoincrement().primaryKey(),
+  version: varchar("version", { length: 96 }).notNull(),
+  status: mysqlEnum("status", ["building", "sealed", "failed"]).notNull(),
+  protocolVersion: varchar("protocolVersion", { length: 64 }).notNull(),
+  basedOnDatasetId: int("basedOnDatasetId"),
+  ingestionCutoffAt: timestamp("ingestionCutoffAt").notNull(),
+  providerManifest: json("providerManifest").notNull(),
+  coverageManifest: json("coverageManifest").notNull(),
+  contentFingerprint: varchar("contentFingerprint", { length: 128 }),
+  notes: text("notes"),
+  sealedAt: timestamp("sealedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historical_datasets_version_unique").on(table.version), index("historical_datasets_status_created_idx").on(table.status, table.createdAt)]);
+
+export const historicalIngestionRuns = mysqlTable("historicalIngestionRuns", {
+  id: int("id").autoincrement().primaryKey(),
+  batchId: varchar("batchId", { length: 96 }).notNull(),
+  datasetId: int("datasetId").references(() => historicalDatasets.id),
+  runKind: mysqlEnum("runKind", ["backfill", "incremental", "quality_recheck"]).notNull(),
+  status: mysqlEnum("status", ["running", "completed", "partial", "failed"]).notNull(),
+  provider: varchar("provider", { length: 96 }).notNull(),
+  exchange: varchar("exchange", { length: 64 }).notNull(),
+  instrumentType: mysqlEnum("instrumentType", ["spot", "perpetual"]).notNull(),
+  assetId: varchar("assetId", { length: 96 }).references(() => assets.id),
+  timeframes: json("timeframes").notNull(),
+  requestedStartAt: timestamp("requestedStartAt"),
+  requestedEndAt: timestamp("requestedEndAt"),
+  sourceStartAt: timestamp("sourceStartAt"),
+  sourceEndAt: timestamp("sourceEndAt"),
+  insertedCount: int("insertedCount").notNull().default(0),
+  duplicateCount: int("duplicateCount").notNull().default(0),
+  malformedCount: int("malformedCount").notNull().default(0),
+  missingIntervalCount: int("missingIntervalCount").notNull().default(0),
+  providerError: text("providerError"),
+  details: json("details").notNull(),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historical_ingestion_batch_unique").on(table.batchId), index("historical_ingestion_dataset_asset_idx").on(table.datasetId, table.assetId, table.createdAt), index("historical_ingestion_status_idx").on(table.status, table.createdAt)]);
+
+export const historicalIngestionSchedules = mysqlTable("historicalIngestionSchedules", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 128 }).notNull(),
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
+  cronExpression: varchar("cronExpression", { length: 64 }).notNull(),
+  isEnabled: boolean("isEnabled").notNull().default(true),
+  configuration: json("configuration").notNull(),
+  lastDatasetId: int("lastDatasetId").references(() => historicalDatasets.id),
+  lastRunAt: timestamp("lastRunAt"),
+  lastStatus: mysqlEnum("lastStatus", ["SUCCESS", "PARTIAL", "FAILED", "SKIPPED"]),
+  lastError: text("lastError"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [uniqueIndex("historical_ingestion_schedule_name_unique").on(table.name), uniqueIndex("historical_ingestion_schedule_task_unique").on(table.scheduleCronTaskUid), index("historical_ingestion_schedule_enabled_idx").on(table.isEnabled, table.updatedAt)]);
+
+export const historicalCandles = mysqlTable("historicalCandles", {
+  id: int("id").autoincrement().primaryKey(),
+  ingestionRunId: int("ingestionRunId").notNull().references(() => historicalIngestionRuns.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  exchange: varchar("exchange", { length: 64 }).notNull(),
+  provider: varchar("provider", { length: 96 }).notNull(),
+  instrumentType: mysqlEnum("instrumentType", ["spot", "perpetual"]).notNull(),
+  timeframe: mysqlEnum("timeframe", ["15m", "1h", "4h", "1d"]).notNull(),
+  sourceOpenTimeMs: bigint("sourceOpenTimeMs", { mode: "number" }).notNull(),
+  sourceCloseTimeMs: bigint("sourceCloseTimeMs", { mode: "number" }).notNull(),
+  open: double("open").notNull(),
+  high: double("high").notNull(),
+  low: double("low").notNull(),
+  close: double("close").notNull(),
+  volume: double("volume").notNull(),
+  sourceHash: varchar("sourceHash", { length: 128 }).notNull(),
+  sourcePayload: json("sourcePayload"),
+  ingestedAt: timestamp("ingestedAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("historical_candle_revision_unique").on(table.assetId, table.exchange, table.instrumentType, table.timeframe, table.sourceOpenTimeMs, table.sourceHash),
+  index("historical_candle_lookup_idx").on(table.assetId, table.instrumentType, table.timeframe, table.sourceCloseTimeMs),
+  index("historical_candle_ingestion_idx").on(table.ingestionRunId, table.sourceOpenTimeMs),
+]);
+
+export const historicalDataQuality = mysqlTable("historicalDataQuality", {
+  id: int("id").autoincrement().primaryKey(),
+  datasetId: int("datasetId").notNull().references(() => historicalDatasets.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  exchange: varchar("exchange", { length: 64 }).notNull(),
+  provider: varchar("provider", { length: 96 }).notNull(),
+  instrumentType: mysqlEnum("instrumentType", ["spot", "perpetual"]).notNull(),
+  timeframe: mysqlEnum("timeframe", ["15m", "1h", "4h", "1d"]).notNull(),
+  status: mysqlEnum("status", ["COMPLETE", "PARTIAL", "MISSING", "STALE", "ERROR"]).notNull(),
+  earliestCandleAt: timestamp("earliestCandleAt"),
+  latestCandleAt: timestamp("latestCandleAt"),
+  expectedCandleCount: int("expectedCandleCount").notNull().default(0),
+  actualCandleCount: int("actualCandleCount").notNull().default(0),
+  missingIntervalCount: int("missingIntervalCount").notNull().default(0),
+  duplicateCount: int("duplicateCount").notNull().default(0),
+  malformedCount: int("malformedCount").notNull().default(0),
+  lastSuccessfulIngestionAt: timestamp("lastSuccessfulIngestionAt"),
+  lastIngestionRunId: int("lastIngestionRunId").references(() => historicalIngestionRuns.id),
+  freshnessThresholdMs: bigint("freshnessThresholdMs", { mode: "number" }).notNull(),
+  details: json("details").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historical_quality_dataset_scope_unique").on(table.datasetId, table.assetId, table.exchange, table.instrumentType, table.timeframe), index("historical_quality_status_idx").on(table.status, table.latestCandleAt)]);
+
+export const historicalMissingIntervals = mysqlTable("historicalMissingIntervals", {
+  id: int("id").autoincrement().primaryKey(),
+  datasetId: int("datasetId").notNull().references(() => historicalDatasets.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  exchange: varchar("exchange", { length: 64 }).notNull(),
+  instrumentType: mysqlEnum("instrumentType", ["spot", "perpetual"]).notNull(),
+  timeframe: mysqlEnum("timeframe", ["15m", "1h", "4h", "1d"]).notNull(),
+  gapStartMs: bigint("gapStartMs", { mode: "number" }).notNull(),
+  gapEndMs: bigint("gapEndMs", { mode: "number" }).notNull(),
+  expectedMissingCount: int("expectedMissingCount").notNull(),
+  detectedAt: timestamp("detectedAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historical_gap_scope_unique").on(table.datasetId, table.assetId, table.exchange, table.instrumentType, table.timeframe, table.gapStartMs), index("historical_gap_dataset_idx").on(table.datasetId, table.assetId, table.timeframe)]);
+
+export const historicalMarketCaps = mysqlTable("historicalMarketCaps", {
+  id: int("id").autoincrement().primaryKey(),
+  datasetId: int("datasetId").notNull().references(() => historicalDatasets.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  provider: varchar("provider", { length: 96 }).notNull(),
+  sourceObservedAt: timestamp("sourceObservedAt").notNull(),
+  marketCap: double("marketCap"),
+  circulatingSupply: double("circulatingSupply"),
+  availability: mysqlEnum("availability", ["AVAILABLE", "UNAVAILABLE", "APPROXIMATION"]).notNull(),
+  retrievalAt: timestamp("retrievalAt").defaultNow().notNull(),
+  sourcePayload: json("sourcePayload"),
+}, table => [uniqueIndex("historical_market_cap_dataset_asset_provider_time_unique").on(table.datasetId, table.assetId, table.provider, table.sourceObservedAt), index("historical_market_cap_lookup_idx").on(table.assetId, table.sourceObservedAt)]);
+
+export const historicalRegimeSnapshots = mysqlTable("historicalRegimeSnapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  datasetId: int("datasetId").notNull().references(() => historicalDatasets.id, { onDelete: "cascade" }),
+  timeframe: mysqlEnum("timeframe", ["15m", "1h", "4h", "1d"]).notNull(),
+  observedAt: timestamp("observedAt").notNull(),
+  classification: mysqlEnum("classification", ["RISK ON", "SELECTIVE", "RISK OFF", "UNAVAILABLE"]).notNull(),
+  regimeScore: double("regimeScore"),
+  inputs: json("inputs").notNull(),
+  definitionVersion: varchar("definitionVersion", { length: 64 }).notNull(),
+  availability: mysqlEnum("availability", ["AVAILABLE", "UNAVAILABLE"]).notNull(),
+  source: varchar("source", { length: 128 }).notNull(),
+  freshnessAt: timestamp("freshnessAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historical_regime_dataset_timeframe_time_unique").on(table.datasetId, table.timeframe, table.observedAt), index("historical_regime_lookup_idx").on(table.timeframe, table.observedAt)]);
+
+export const historicalSectorSnapshots = mysqlTable("historicalSectorSnapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  datasetId: int("datasetId").notNull().references(() => historicalDatasets.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  observedAt: timestamp("observedAt").notNull(),
+  sector: varchar("sector", { length: 96 }),
+  sectorMomentum: double("sectorMomentum"),
+  sectorRank: int("sectorRank"),
+  relativeStrengthVsSector: double("relativeStrengthVsSector"),
+  relativeStrengthVsBtc: double("relativeStrengthVsBtc"),
+  definitionVersion: varchar("definitionVersion", { length: 64 }).notNull(),
+  availability: mysqlEnum("availability", ["AVAILABLE", "UNAVAILABLE"]).notNull(),
+  source: varchar("source", { length: 128 }).notNull(),
+  freshnessAt: timestamp("freshnessAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historical_sector_dataset_asset_time_unique").on(table.datasetId, table.assetId, table.observedAt), index("historical_sector_lookup_idx").on(table.assetId, table.observedAt)]);
+
+export const historicalAssetAvailability = mysqlTable("historicalAssetAvailability", {
+  id: int("id").autoincrement().primaryKey(),
+  datasetId: int("datasetId").notNull().references(() => historicalDatasets.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  listingAt: timestamp("listingAt"),
+  delistingAt: timestamp("delistingAt"),
+  availability: mysqlEnum("availability", ["AVAILABLE", "UNAVAILABLE"]).notNull(),
+  source: varchar("source", { length: 128 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historical_asset_availability_dataset_asset_unique").on(table.datasetId, table.assetId)]);
 
 export const alerts = mysqlTable("alerts", {
   id: int("id").autoincrement().primaryKey(),

@@ -4,6 +4,7 @@ import type { AssetProfile, Candle, DataStatus, MarketAsset, Timeframe } from ".
 const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
 const BINANCE_FUTURES_BASE_URL = "https://fapi.binance.com";
 const BINANCE_PUBLIC_ARCHIVE_BASE_URL = "https://data.binance.vision/data/futures/um/monthly/klines";
+const BINANCE_PUBLIC_SPOT_ARCHIVE_BASE_URL = "https://data.binance.vision/data/spot/monthly/klines";
 
 type CoinGeckoMarketResponse = {
   id: string;
@@ -95,6 +96,21 @@ export async function fetchCoinGeckoGlobal(): Promise<GlobalMarketContext> {
   };
 }
 
+export type HistoricalMarketChart = {
+  prices: Array<[number, number]>;
+  marketCaps: Array<[number, number]>;
+  totalVolumes: Array<[number, number]>;
+  source: "CoinGecko market chart";
+};
+
+export async function fetchCoinGeckoHistoricalMarketChart(coinId: string, days = 365): Promise<HistoricalMarketChart> {
+  type Response = { prices?: Array<[number, number]>; market_caps?: Array<[number, number]>; total_volumes?: Array<[number, number]> };
+  const params = new URLSearchParams({ vs_currency: "usd", days: String(days), interval: "daily" });
+  const payload = await getJson<Response>(`${COINGECKO_BASE_URL}/coins/${coinId}/market_chart?${params}`, "CoinGecko historical market chart");
+  const normalize = (values: Array<[number, number]> | undefined) => (values ?? []).flatMap(value => Array.isArray(value) && Number.isFinite(value[0]) && Number.isFinite(value[1]) ? [[Number(value[0]), Number(value[1])] as [number, number]] : []);
+  return { prices: normalize(payload.prices), marketCaps: normalize(payload.market_caps), totalVolumes: normalize(payload.total_volumes), source: "CoinGecko market chart" };
+}
+
 export function normalizeBinanceCandles(payload: unknown): Candle[] {
   if (!Array.isArray(payload)) return [];
   return payload.flatMap(row => {
@@ -144,6 +160,54 @@ export async function fetchBinanceArchiveCandles(symbol: string, timeframe: Time
     });
   }));
   return files.flat().filter(candle => (!startTime || candle.openTime >= startTime) && (!endTime || candle.closeTime <= endTime)).sort((left, right) => left.openTime - right.openTime).slice(-limit);
+}
+
+function archiveMonthsInRange(startAt: number, endAt: number, maximumMonths = 48) {
+  const cursor = new Date(startAt);
+  cursor.setUTCDate(1);
+  cursor.setUTCHours(0, 0, 0, 0);
+  const end = new Date(endAt);
+  end.setUTCDate(1);
+  end.setUTCHours(0, 0, 0, 0);
+  const months: string[] = [];
+  while (cursor <= end && months.length < maximumMonths) {
+    months.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`);
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  return months;
+}
+
+function normalizeArchiveTimestamp(value: number) {
+  // Binance spot archive timestamps may be microseconds from 2025 onward; futures timestamps are milliseconds.
+  return value > 10_000_000_000_000 ? Math.floor(value / 1_000) : value;
+}
+
+export type HistoricalArchiveInstrument = "spot" | "perpetual";
+export type HistoricalArchiveResult = { candles: Candle[]; source: "Binance public archive"; unavailableMonths: string[]; requestedMonths: string[] };
+
+export async function fetchBinanceHistoricalArchiveRange(symbol: string, timeframe: Timeframe, instrumentType: HistoricalArchiveInstrument, startTime: number, endTime: number, maximumMonths = 48): Promise<HistoricalArchiveResult> {
+  const months = archiveMonthsInRange(startTime, endTime, maximumMonths);
+  const baseUrl = instrumentType === "spot" ? BINANCE_PUBLIC_SPOT_ARCHIVE_BASE_URL : BINANCE_PUBLIC_ARCHIVE_BASE_URL;
+  const results: Candle[][] = [];
+  const unavailableMonths: string[] = [];
+  // Sequential access keeps the public-source request cadence bounded and lets a later batch resume deterministically.
+  for (const month of months) {
+    const url = `${baseUrl}/${symbol}/${timeframe}/${symbol}-${timeframe}-${month}.zip`;
+    const response = await fetch(url, { headers: { Accept: "application/zip" } });
+    if (response.status === 404) { unavailableMonths.push(month); continue; }
+    if (!response.ok) throw new ProviderError("Binance public archive", `Binance public archive returned HTTP ${response.status}.`);
+    const archive = unzipSync(new Uint8Array(await response.arrayBuffer()));
+    const csv = Object.entries(archive).find(([name]) => name.endsWith(".csv"))?.[1];
+    if (!csv) throw new ProviderError("Binance public archive", "Archive did not contain a candle CSV file.");
+    results.push(strFromU8(csv).trim().split(/\r?\n/).flatMap(line => {
+      const fields = line.split(",");
+      const normalized = { openTime: normalizeArchiveTimestamp(Number(fields[0])), open: Number(fields[1]), high: Number(fields[2]), low: Number(fields[3]), close: Number(fields[4]), volume: Number(fields[5]), closeTime: normalizeArchiveTimestamp(Number(fields[6])) };
+      return Object.values(normalized).every(Number.isFinite) ? [normalized] : [];
+    }));
+  }
+  const unique = new Map<number, Candle>();
+  for (const candle of results.flat()) if (candle.openTime >= startTime && candle.closeTime <= endTime) unique.set(candle.openTime, candle);
+  return { candles: Array.from(unique.values()).sort((left, right) => left.openTime - right.openTime), source: "Binance public archive", unavailableMonths, requestedMonths: months };
 }
 
 export async function fetchBinanceCandlesForResearch(symbol: string, timeframe: Timeframe, limit = 240, startTime?: number, endTime?: number): Promise<{ candles: Candle[]; source: "Binance Futures OHLCV" | "Binance public archive" }> {
