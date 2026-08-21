@@ -54,6 +54,10 @@ export type TimeframeAnalysis = {
   bias: "bullish" | "neutral" | "bearish";
   rsi: number | null;
   macdHistogram: number | null;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+  bollinger: { middle: number; upper: number; lower: number; width: number } | null;
   atrPercent: number | null;
   volumeExpansion: number | null;
   priceStructure: string[];

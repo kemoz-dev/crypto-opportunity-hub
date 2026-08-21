@@ -227,5 +227,5 @@ export function analyzeTimeframe(candles: Candle[], timeframe: Timeframe, config
   const rawScore = reasons.reduce((sum, reason) => sum + reason.score, 0);
   const score = clamp(rawScore, 0, 10);
   const bias = score >= 6.2 ? "bullish" : score <= 3.4 ? "bearish" : "neutral";
-  return { timeframe, score: round(score), maxScore: 10, bias, rsi: rsi === null ? null : round(rsi), macdHistogram: macd ? round(macd.histogram, 4) : null, atrPercent: atr === null ? null : round((atr / current.close) * 100), volumeExpansion: volumeExpansion === null ? null : round(volumeExpansion), priceStructure, reasons };
+  return { timeframe, score: round(score), maxScore: 10, bias, rsi: rsi === null ? null : round(rsi), macdHistogram: macd ? round(macd.histogram, 4) : null, ema20: ema20 === undefined ? null : round(ema20, 6), ema50: ema50 === undefined ? null : round(ema50, 6), ema200: ema200 === undefined ? null : round(ema200, 6), bollinger: bollinger ? { middle: round(bollinger.middle, 6), upper: round(bollinger.upper, 6), lower: round(bollinger.lower, 6), width: round(bollinger.width, 6) } : null, atrPercent: atr === null ? null : round((atr / current.close) * 100), volumeExpansion: volumeExpansion === null ? null : round(volumeExpansion), priceStructure, reasons };
 }

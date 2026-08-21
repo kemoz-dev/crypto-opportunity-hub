@@ -35,3 +35,18 @@
 - [x] Reconcile the active alert’s user ownership with the user’s explicit in-chat authorization to select the account and submit the exact test rule.
 - [x] Document the production failure-log verification boundary: no failure was intentionally induced, while the scheduled handler’s sanitized-failure behavior is code-audited and unauthenticated production access is proven rejected.
 - [x] Re-read and verify the saved authorization-reconciliation and failure-log-boundary documentation before checkpointing.
+- [x] Define an immutable point-in-time alert-execution snapshot contract covering status, duration, scanned count, matches, notification state, scoring configuration, regime, sector, and signal evidence.
+- [x] Persist complete immutable execution snapshots for scheduled and manual evaluations without altering the active hourly alert or scoring formula.
+- [x] Persist exact point-in-time market-regime inputs, sector context, data provenance/freshness, and unavailable values for each alert execution.
+- [x] Persist immutable per-signal indicator, score-component, multi-timeframe, price, regime, sector, and scoring-version evidence for every qualifying match.
+- [x] Build authenticated alert execution-history retrieval with list and detail views that never reconstruct historical records using current data.
+- [x] Build an Alerts execution-history table and detailed snapshot inspector that clearly separates point-in-time evidence from current market state.
+- [x] Add Vitest coverage for execution persistence, snapshot immutability, regime/sector provenance, configuration preservation, status handling, historical retrieval, authentication, and no-trade boundaries.
+- [x] Verify the existing hourly Test Alert — High Opportunity 4H remains unchanged after the observability upgrade and document all schema/UI additions and limitations.
+- [x] Add integration coverage for immutable execution-row persistence and authenticated historical list/detail retrieval using the new snapshot fields.
+- [x] Re-verify and record the active hourly alert’s thresholds, 4H condition, schedule identity, notification setting, and no-trade boundary after the observability upgrade.
+- [x] Re-read and verify the saved snapshot-contract documentation lists schema changes, UI components, stored fields, legacy limitations, and the unchanged-alert boundary.
+- [x] Add authenticated tRPC router coverage for execution-history list and detail retrieval, including cross-user access denial.
+- [x] Record the post-upgrade active-alert verification, including unchanged 80/70/30 thresholds, 4H condition, schedule identity, notifications, and no-trade boundary.
+- [x] Expand and re-verify the snapshot-contract document with explicit schema changes, new UI components, full stored-field categories, legacy limitation, and unchanged-hourly-alert boundary.
+- [x] Add an authenticated wrong-user execution-history test that proves list and detail history access is denied when the alert does not belong to that user.
