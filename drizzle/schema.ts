@@ -181,10 +181,12 @@ export const alerts = mysqlTable("alerts", {
   name: varchar("name", { length: 128 }).notNull(),
   isEnabled: boolean("isEnabled").default(true).notNull(),
   conditions: json("conditions").notNull(),
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
   lastTriggeredAt: timestamp("lastTriggeredAt"),
+  lastSignalSnapshot: json("lastSignalSnapshot"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, table => [index("alerts_user_enabled_idx").on(table.userId, table.isEnabled)]);
+}, table => [index("alerts_user_enabled_idx").on(table.userId, table.isEnabled), index("alerts_schedule_task_idx").on(table.scheduleCronTaskUid)]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

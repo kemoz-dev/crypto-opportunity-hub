@@ -1,10 +1,10 @@
-import { DEFAULT_ASSET_UNIVERSE, DEFAULT_SCORING_CONFIG, SUPPORTED_TIMEFRAMES, type DataStatus, type MarketAsset, type ScannerResponse, type TimeframeAnalysis } from "../../shared/crypto";
+import { DEFAULT_ASSET_UNIVERSE, DEFAULT_SCORING_CONFIG, SUPPORTED_TIMEFRAMES, type DataStatus, type MarketAsset, type ScannerResponse, type ScoringConfig, type TimeframeAnalysis } from "../../shared/crypto";
 import { analyzeTimeframe } from "./technical";
 import { fetchBinanceCandles, fetchBinanceDerivatives, fetchCoinGeckoGlobal, fetchCoinGeckoMarkets, unavailableStatus } from "./providers";
 import { assetFromProfile, buildOpportunityScore, calculateMarketRegime } from "./scoring";
 import { persistScannerSnapshot } from "./persistence";
 
-let cachedScan: { value: ScannerResponse; expiresAt: number } | null = null;
+const cachedScans = new Map<string, { value: ScannerResponse; expiresAt: number }>();
 
 async function mapConcurrent<T, R>(items: T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> {
   const results = Array<R>(items.length);
@@ -19,7 +19,9 @@ async function mapConcurrent<T, R>(items: T[], limit: number, operation: (item: 
   return results;
 }
 
-export async function buildLiveScanner(forceRefresh = false): Promise<ScannerResponse> {
+export async function buildLiveScanner(forceRefresh = false, config: ScoringConfig = DEFAULT_SCORING_CONFIG): Promise<ScannerResponse> {
+  const cacheKey = JSON.stringify(config);
+  const cachedScan = cachedScans.get(cacheKey);
   if (!forceRefresh && cachedScan && cachedScan.expiresAt > Date.now()) return cachedScan.value;
   const generatedAt = Date.now();
   const statuses: DataStatus[] = [];
@@ -47,7 +49,7 @@ export async function buildLiveScanner(forceRefresh = false): Promise<ScannerRes
     timeframeResults.forEach((result, index) => {
       const timeframe = SUPPORTED_TIMEFRAMES[index];
       if (result.status === "fulfilled") {
-        const analysis = analyzeTimeframe(result.value, timeframe, DEFAULT_SCORING_CONFIG);
+        const analysis = analyzeTimeframe(result.value, timeframe, config);
         if (analysis) analyses.push(analysis);
         else dataStatus.push({ source: `Binance ${timeframe} OHLCV`, status: "unavailable", fetchedAt: generatedAt, message: "Insufficient returned candles for the configured indicators." });
       } else dataStatus.push(unavailableStatus(`Binance ${timeframe} OHLCV`, result.reason));
@@ -60,7 +62,7 @@ export async function buildLiveScanner(forceRefresh = false): Promise<ScannerRes
   const btc = universe.find(asset => asset.symbol === "BTC");
   const rows = provisional.map(item => ({
     asset: item.asset,
-    score: item.analyses.length ? buildOpportunityScore({ asset: item.asset, analyses: item.analyses, universe, btc, marketRegime, config: DEFAULT_SCORING_CONFIG }) : null,
+    score: item.analyses.length ? buildOpportunityScore({ asset: item.asset, analyses: item.analyses, universe, btc, marketRegime, config }) : null,
     dataStatus: item.dataStatus,
     fundingRate: item.fundingRate,
     openInterest: item.openInterest,
@@ -69,7 +71,7 @@ export async function buildLiveScanner(forceRefresh = false): Promise<ScannerRes
     generatedAt, dataStatus: statuses, marketRegime, rows,
     note: "Scores are derived from the visible live inputs and current configuration. They are research signals, not forecasts or trading instructions.",
   };
-  cachedScan = { value: scan, expiresAt: Date.now() + 60_000 };
+  cachedScans.set(cacheKey, { value: scan, expiresAt: Date.now() + 60_000 });
   void persistScannerSnapshot(scan);
   return scan;
 }

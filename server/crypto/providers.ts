@@ -93,18 +93,23 @@ export async function fetchCoinGeckoGlobal(): Promise<GlobalMarketContext> {
   };
 }
 
-export async function fetchBinanceCandles(symbol: string, timeframe: Timeframe, limit = 240): Promise<Candle[]> {
-  const params = new URLSearchParams({ symbol, interval: timeframe, limit: String(limit) });
-  const payload = await getJson<unknown>(`${BINANCE_FUTURES_BASE_URL}/fapi/v1/klines?${params}`, "Binance Futures OHLCV");
-  if (!Array.isArray(payload)) throw new ProviderError("Binance Futures OHLCV", "Unexpected candle response format.");
+export function normalizeBinanceCandles(payload: unknown): Candle[] {
+  if (!Array.isArray(payload)) return [];
   return payload.flatMap(row => {
     if (!Array.isArray(row) || row.length < 7) return [];
     const [openTime, open, high, low, close, volume, closeTime] = row;
-    const normalized = {
-      openTime: Number(openTime), closeTime: Number(closeTime), open: Number(open), high: Number(high), low: Number(low), close: Number(close), volume: Number(volume),
-    };
+    const normalized = { openTime: Number(openTime), closeTime: Number(closeTime), open: Number(open), high: Number(high), low: Number(low), close: Number(close), volume: Number(volume) };
     return Object.values(normalized).every(Number.isFinite) ? [normalized] : [];
   });
+}
+
+export async function fetchBinanceCandles(symbol: string, timeframe: Timeframe, limit = 240, startTime?: number, endTime?: number): Promise<Candle[]> {
+  const params = new URLSearchParams({ symbol, interval: timeframe, limit: String(limit) });
+  if (startTime) params.set("startTime", String(startTime));
+  if (endTime) params.set("endTime", String(endTime));
+  const payload = await getJson<unknown>(`${BINANCE_FUTURES_BASE_URL}/fapi/v1/klines?${params}`, "Binance Futures OHLCV");
+  if (!Array.isArray(payload)) throw new ProviderError("Binance Futures OHLCV", "Unexpected candle response format.");
+  return normalizeBinanceCandles(payload);
 }
 
 export async function fetchBinanceDerivatives(symbol: string): Promise<DerivativesContext> {

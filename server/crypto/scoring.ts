@@ -91,10 +91,12 @@ export function buildOpportunityScore({
   marketRegime: MarketRegime | null;
   config: ScoringConfig;
 }): OpportunityScore {
-  const technical = calculateTechnicalScore(analyses, config);
+  const sectorModel = config.sectorModels[asset.sector] ?? config.sectorModels.Other ?? { technicalMultiplier: 1, riskMultiplier: 1, description: "No sector model supplied." };
+  const rawTechnical = calculateTechnicalScore(analyses, config);
+  const technical = { ...rawTechnical, score: round(clamp(rawTechnical.score * sectorModel.technicalMultiplier, 0, 40)) };
   const momentum = calculateMomentumScore(asset, btc);
   const sectorSafety = calculateSectorScore(asset, universe);
-  const riskSafety = calculateRiskSafety(asset, analyses, config);
+  const riskSafety = round(clamp(calculateRiskSafety(asset, analyses, config) * sectorModel.riskMultiplier));
   const availableComponents = [
     { raw: technical.score / 40, weight: config.weights.technical, label: "Technical" },
     { raw: momentum / 20, weight: config.weights.momentum, label: "Market momentum" },
@@ -116,7 +118,7 @@ export function buildOpportunityScore({
     scoreReason("technical", "Technical aggregation", technical.score, 40, technical.score >= 25 ? "positive" : technical.score <= 13 ? "negative" : "neutral", `Weighted technical contribution is ${technical.score}/40; multi-timeframe consistency is ${technical.alignment}/100.`),
     scoreReason("momentum", "BTC-relative momentum", momentum, 20, momentum >= 12 ? "positive" : momentum < 8 ? "negative" : "neutral", `The momentum component compares 1h, 24h, and 7d return behavior with BTC.`),
     scoreReason("risk", "Liquidity and volatility safety", riskSafety, 100, riskSafety >= 70 ? "positive" : riskSafety < 48 ? "negative" : "neutral", `Safety reflects market capitalization, volume-to-market-cap, and ATR volatility context.`),
-    ...(sectorSafety === null ? [] : [scoreReason("sector", "Sector-relative strength", sectorSafety, 100, sectorSafety >= 60 ? "positive" : sectorSafety < 40 ? "negative" : "neutral", `The asset is measured against the tracked ${asset.sector} peer group.`)]),
+    ...(sectorSafety === null ? [] : [scoreReason("sector", "Sector-relative strength", sectorSafety, 100, sectorSafety >= 60 ? "positive" : sectorSafety < 40 ? "negative" : "neutral", `The asset is measured against the tracked ${asset.sector} peer group. The ${asset.sector} model currently applies technical ×${sectorModel.technicalMultiplier} and risk ×${sectorModel.riskMultiplier}; these are configurable research hypotheses.`)]),
     ...(marketRegime ? [scoreReason("regime", `Market regime: ${marketRegime.classification}`, marketRegime.score, 100, marketRegime.classification === "RISK ON" ? "positive" : marketRegime.classification === "RISK OFF" ? "negative" : "neutral", `Regime supplies a bounded ${regimeAdjustment >= 0 ? "+" : ""}${regimeAdjustment} point adjustment after component normalization.`)] : []),
     ...timeframeReasons,
   ];

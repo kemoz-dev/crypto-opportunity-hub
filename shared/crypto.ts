@@ -132,6 +132,11 @@ export type ScoringConfig = {
     minimumMarketCap: number;
     minimumVolumeToMarketCap: number;
   };
+  sectorModels: Record<string, {
+    technicalMultiplier: number;
+    riskMultiplier: number;
+    description: string;
+  }>;
   paperCapital: number;
 };
 
@@ -166,6 +171,15 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
     maxAtrPercent: 8,
     minimumMarketCap: 100_000_000,
     minimumVolumeToMarketCap: 0.01,
+  },
+  sectorModels: {
+    "Large Cap": { technicalMultiplier: 1, riskMultiplier: 1.05, description: "Baseline model with a modest liquidity-quality preference." },
+    "L1": { technicalMultiplier: 1, riskMultiplier: 1, description: "Baseline model for liquid base-layer assets." },
+    "DeFi": { technicalMultiplier: 1.05, riskMultiplier: 0.95, description: "Slightly higher trend emphasis with a modest risk adjustment." },
+    "Meme": { technicalMultiplier: 0.9, riskMultiplier: 0.75, description: "Higher-risk research hypothesis with a stronger safety penalty." },
+    "Oracles": { technicalMultiplier: 1, riskMultiplier: 1, description: "Baseline model pending sector-specific validation." },
+    "Infrastructure": { technicalMultiplier: 1, riskMultiplier: 1, description: "Baseline model pending sector-specific validation." },
+    Other: { technicalMultiplier: 1, riskMultiplier: 1, description: "Fallback model for uncategorized assets." },
   },
   paperCapital: 100_000,
 };
