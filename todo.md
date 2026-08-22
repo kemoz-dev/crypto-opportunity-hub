@@ -78,3 +78,12 @@
 - [x] Add immutable dataset-backed Research Lab provenance coverage, including dataset/model/cost identifiers and no-mutation boundaries.
 - [x] Correct the dataset-version test mock to supply independent quality and ingestion-run result arrays for sealing validation.
 - [x] Add Vitest coverage for incremental historical dataset branching from a sealed predecessor, including inherited quality/gap state and immutable predecessor metadata.
+- [ ] Audit existing historical coverage and select a representative free-source multi-sector market universe without using today’s rankings as historical membership.
+- [ ] Design and document the persistent Market Universe registry, immutable dataset universe snapshots, inclusion reasons, availability statuses, current-versus-historical universe label, and survivorship warning model.
+- [ ] Add non-destructive schema and services for registry assets, versioned universe composition, per-scope coverage metrics, longest gaps, and data-quality scores that are separate from Opportunity Score.
+- [ ] Investigate historical sector-classification sources for timestamp accuracy, methodology, coverage, provenance, and consistency; retain the explicit unavailable status if no source qualifies.
+- [ ] Backfill prioritized multi-asset 15M and 1H public OHLCV in bounded resilient batches, preserving duplicate prevention, gaps, partial failures, retry state, and immutable dataset lineage.
+- [ ] Extend scheduled ingestion for tiered expanded-universe batches with persisted status, processed assets, candle counts, gaps, and errors, without changing the existing hourly alert.
+- [ ] Build an authenticated Market Coverage Matrix with asset/timeframe/context availability, coverage percentage, longest-gap, quality score, universe inclusion reason, and historical/current-universe bias warnings.
+- [ ] Add Vitest coverage for universe persistence/versioning, inclusion/exclusion, multi-asset partial failures, coverage/quality calculation, sector provenance/unavailability, protected access, and unchanged production boundaries.
+- [ ] Document actual asset and sector representation, timestamp coverage, data-quality distribution, source limitations, survivorship disclosure, and schedule status; run full validation and publish the checkpoint without rerunning Research Lab or changing the Opportunity Engine.

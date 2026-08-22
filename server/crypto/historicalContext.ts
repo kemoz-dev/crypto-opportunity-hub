@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { historicalAssetAvailability, historicalCandles, historicalDatasets, historicalIngestionRuns, historicalMarketCaps, historicalRegimeSnapshots, historicalSectorSnapshots } from "../../drizzle/schema";
-import { DEFAULT_ASSET_UNIVERSE, type Timeframe } from "../../shared/crypto";
+import { type Timeframe } from "../../shared/crypto";
 import { getDb } from "../db";
 import { timeframeMs } from "./historicalData";
 import { fetchCoinGeckoHistoricalMarketChart } from "./providers";
+import { resolveEnabledUniverseAssets } from "./marketUniverse";
 
 export const HISTORICAL_REGIME_DEFINITION_VERSION = "BTC_OHLCV_CLOSED_CANDLE_V1";
 export const HISTORICAL_SECTOR_DEFINITION_VERSION = "UNAVAILABLE_WITHOUT_POINT_IN_TIME_SOURCE_V1";
@@ -57,7 +58,8 @@ export async function persistHistoricalMarketCaps(datasetId: number, days = 365)
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable.");
   const outcomes: Array<{ assetId: string; availability: "AVAILABLE" | "UNAVAILABLE"; observations: number }> = [];
-  for (const asset of DEFAULT_ASSET_UNIVERSE) {
+  const universe = await resolveEnabledUniverseAssets();
+  for (const asset of universe) {
     try {
       const chart = await fetchCoinGeckoHistoricalMarketChart(asset.id, days);
       const rows = chart.marketCaps.map(([observedAt, marketCap]) => ({ datasetId, assetId: asset.id, provider: chart.source, sourceObservedAt: new Date(observedAt), marketCap, circulatingSupply: null, availability: "AVAILABLE" as const, sourcePayload: { timestampMs: observedAt } }));
@@ -79,7 +81,8 @@ export async function persistUnavailableHistoricalSectorAndAvailability(datasetI
   const dataset = (await db.select().from(historicalDatasets).where(eq(historicalDatasets.id, datasetId)).limit(1))[0];
   if (!dataset) throw new Error("Historical dataset not found.");
   const observedAt = dataset.sealedAt ?? new Date();
-  for (const asset of DEFAULT_ASSET_UNIVERSE) {
+  const universe = await resolveEnabledUniverseAssets();
+  for (const asset of universe) {
     await db.insert(historicalSectorSnapshots).values({ datasetId, assetId: asset.id, observedAt, sector: null, sectorMomentum: null, sectorRank: null, relativeStrengthVsSector: null, relativeStrengthVsBtc: null, definitionVersion: HISTORICAL_SECTOR_DEFINITION_VERSION, availability: "UNAVAILABLE", source: "No reliable point-in-time sector provider configured", freshnessAt: null }).onDuplicateKeyUpdate({ set: { availability: "UNAVAILABLE", source: "No reliable point-in-time sector provider configured" } });
     await db.insert(historicalAssetAvailability).values({ datasetId, assetId: asset.id, listingAt: null, delistingAt: null, availability: "UNAVAILABLE", source: "Binance archive coverage only", notes: "Listing and delisting metadata unavailable. Dataset retains a survivorship-bias limitation." }).onDuplicateKeyUpdate({ set: { availability: "UNAVAILABLE", notes: "Listing and delisting metadata unavailable. Dataset retains a survivorship-bias limitation." } });
   }

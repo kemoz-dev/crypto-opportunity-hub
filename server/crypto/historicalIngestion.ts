@@ -1,9 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
 import { historicalDataQuality, historicalDatasets } from "../../drizzle/schema";
-import { DEFAULT_ASSET_UNIVERSE, type Timeframe } from "../../shared/crypto";
+import { type Timeframe } from "../../shared/crypto";
 import { getDb } from "../db";
 import { createHistoricalDataset, ingestHistoricalCandleBatch, sealHistoricalDataset, timeframeMs, type InstrumentType } from "./historicalData";
 import { fetchBinanceHistoricalArchiveRange } from "./providers";
+import { resolveEnabledUniverseAssets } from "./marketUniverse";
 
 export type HistoricalBackfillInput = {
   notes: string;
@@ -13,6 +14,7 @@ export type HistoricalBackfillInput = {
   startAt: number;
   endAt: number;
   maximumMonths?: number;
+  lookbackDays?: number;
   basedOnDatasetId?: number;
 };
 
@@ -29,7 +31,7 @@ const sanitizeProviderError = (error: unknown) => error instanceof Error ? error
 export async function runHistoricalBackfill(input: HistoricalBackfillInput): Promise<HistoricalBackfillOutcome> {
   if (input.startAt >= input.endAt) throw new Error("Historical backfill start must precede its end.");
   if (!input.timeframes.length) throw new Error("Select at least one supported timeframe.");
-  const assets = (input.assetIds?.length ? input.assetIds : DEFAULT_ASSET_UNIVERSE.map(asset => asset.id)).map(id => DEFAULT_ASSET_UNIVERSE.find(asset => asset.id === id)).filter((asset): asset is typeof DEFAULT_ASSET_UNIVERSE[number] => Boolean(asset));
+  const assets = await resolveEnabledUniverseAssets(input.assetIds);
   if (!assets.length) throw new Error("Select at least one supported historical asset.");
   const dataset = await createHistoricalDataset(input.notes, input.basedOnDatasetId);
   const completedScopes: HistoricalBackfillOutcome["completedScopes"] = [];
@@ -54,16 +56,17 @@ export async function runHistoricalIncremental(input: Omit<HistoricalBackfillInp
   if (!db) throw new Error("Database is unavailable.");
   const previous = (await db.select().from(historicalDatasets).where(eq(historicalDatasets.status, "sealed")).orderBy(desc(historicalDatasets.sealedAt)).limit(1))[0];
   if (!previous) throw new Error("Create an initial historical dataset before running an incremental collection.");
-  const assets = (input.assetIds?.length ? input.assetIds : DEFAULT_ASSET_UNIVERSE.map(asset => asset.id)).map(id => DEFAULT_ASSET_UNIVERSE.find(asset => asset.id === id)).filter((asset): asset is typeof DEFAULT_ASSET_UNIVERSE[number] => Boolean(asset));
+  const assets = await resolveEnabledUniverseAssets(input.assetIds);
   if (!assets.length || !input.timeframes.length) throw new Error("Select at least one supported asset and timeframe.");
   const dataset = await createHistoricalDataset(input.notes, previous.id);
   const completedScopes: HistoricalBackfillOutcome["completedScopes"] = [];
   const failedScopes: HistoricalBackfillOutcome["failedScopes"] = [];
+  const lookbackDays = Math.max(1, Math.min(input.lookbackDays ?? 4, 62));
   for (const asset of assets) {
     for (const timeframe of input.timeframes) {
       try {
         const priorQuality = (await db.select().from(historicalDataQuality).where(and(eq(historicalDataQuality.datasetId, previous.id), eq(historicalDataQuality.assetId, asset.id), eq(historicalDataQuality.instrumentType, input.instrumentType), eq(historicalDataQuality.timeframe, timeframe))).limit(1))[0];
-        const resumeAt = Math.max(input.endAt - 32 * 24 * 60 * 60_000, (priorQuality?.latestCandleAt?.getTime() ?? input.endAt - 32 * 24 * 60 * 60_000) - timeframeMs[timeframe]);
+        const resumeAt = Math.max(input.endAt - lookbackDays * 24 * 60 * 60_000, (priorQuality?.latestCandleAt?.getTime() ?? input.endAt - lookbackDays * 24 * 60 * 60_000) - timeframeMs[timeframe]);
         const fetched = await fetchBinanceHistoricalArchiveRange(asset.binanceSymbol, timeframe, input.instrumentType, resumeAt, input.endAt, input.maximumMonths ?? 2);
         const ingestion = await ingestHistoricalCandleBatch({ datasetId: dataset.id, assetId: asset.id, exchange: "Binance", provider: fetched.source, instrumentType: input.instrumentType, timeframe }, "incremental", fetched.candles, resumeAt, input.endAt);
         completedScopes.push({ assetId: asset.id, timeframe, insertedCount: ingestion.insertedCount, duplicateCount: ingestion.duplicateCount, malformedCount: ingestion.malformedCount, missingIntervals: ingestion.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), unavailableMonths: fetched.unavailableMonths, quality: ingestion.quality });

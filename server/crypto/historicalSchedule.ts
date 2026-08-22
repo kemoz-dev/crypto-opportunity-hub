@@ -8,8 +8,14 @@ import { inheritHistoricalDatasetContext } from "./historicalContext";
 export const HISTORICAL_INGESTION_SCHEDULE_NAME = "daily-public-historical-btc-15m";
 export const HISTORICAL_INGESTION_CRON = "0 12 2 * * *";
 const COOLDOWN_MS = 45 * 60_000;
-export type HistoricalScheduleConfiguration = { assetIds: string[]; timeframes: Timeframe[]; instrumentType: "spot" | "perpetual"; maximumMonths: number; notes: string };
-export const DEFAULT_HISTORICAL_SCHEDULE_CONFIGURATION: HistoricalScheduleConfiguration = { assetIds: ["bitcoin"], timeframes: ["15m"], instrumentType: "perpetual", maximumMonths: 2, notes: "Daily bounded completed-archive incremental ingestion for BTC 15M. Other historical scopes remain explicitly coverage-labeled and can be backfilled separately." };
+export type HistoricalScheduleConfiguration = { assetIds: string[]; timeframes: Timeframe[]; instrumentType: "spot" | "perpetual"; maximumMonths: number; lookbackDays: number; notes: string };
+export const DEFAULT_HISTORICAL_SCHEDULE_CONFIGURATION: HistoricalScheduleConfiguration = { assetIds: ["bitcoin"], timeframes: ["15m"], instrumentType: "perpetual", maximumMonths: 2, lookbackDays: 4, notes: "Daily bounded completed-archive incremental ingestion for BTC 15M. Other historical scopes remain explicitly coverage-labeled and can be backfilled separately." };
+export const EXPANDED_HISTORICAL_SCHEDULES: Array<{ name: string; cronExpression: string; configuration: HistoricalScheduleConfiguration }> = [
+  { name: "daily-public-historical-btc-15m", cronExpression: "0 12 2 * * *", configuration: DEFAULT_HISTORICAL_SCHEDULE_CONFIGURATION },
+  { name: "daily-public-historical-eth-sol-15m", cronExpression: "0 32 2 * * *", configuration: { assetIds: ["ethereum", "solana"], timeframes: ["15m"], instrumentType: "perpetual", maximumMonths: 2, lookbackDays: 4, notes: "Daily bounded Tier 1 15M completed-archive incremental ingestion for ETH and SOL." } },
+  { name: "daily-public-historical-liquid-1h", cronExpression: "0 52 2 * * *", configuration: { assetIds: ["ethereum", "binancecoin", "solana", "ripple", "cardano", "avalanche-2", "chainlink", "polkadot"], timeframes: ["1h"], instrumentType: "perpetual", maximumMonths: 2, lookbackDays: 4, notes: "Daily bounded Tier 1–2 1H completed-archive incremental ingestion. Per-asset failures are retained as partial results." } },
+  { name: "daily-public-historical-sector-1h", cronExpression: "0 12 3 * * *", configuration: { assetIds: ["arbitrum", "optimism", "aave", "uniswap", "render-token", "ondo-finance", "the-graph", "axie-infinity", "filecoin", "dogecoin", "pepe"], timeframes: ["1h"], instrumentType: "perpetual", maximumMonths: 2, lookbackDays: 4, notes: "Daily bounded Tier 3–4 representative-sector 1H completed-archive incremental ingestion. Per-asset source availability is explicit." } },
+];
 
 export async function createHistoricalIngestionScheduleRecord(taskUid: string) {
   const db = await getDb();
