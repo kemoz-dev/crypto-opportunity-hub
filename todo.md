@@ -90,4 +90,11 @@
 - [x] Correct the three new expanded-universe scheduled task paths to the deployed cron-only ingestion callback and verify their persisted task identities remain unchanged.
 - [x] Add explicit historical-coverage query error states and perform an authenticated visual verification of the Market Coverage Matrix.
 - [x] Diagnose and resolve the blank OAuth sign-in handoff and confirm the published client serves the Market Coverage Matrix release before final visual verification.
+- [ ] Inspect the three expanded production ingestion schedules and record first execution evidence with task, run, timing, asset, candle, gap, provider, retry, and final-status fields.
+- [x] Add immutable missing-range and retry-lineage persistence that preserves original provider failures, retry linkage, duplicate prevention, and dataset-version immutability.
+- [x] Add protected Ingestion Health and Research Dataset Readiness views showing runs, availability, failures, gaps, coverage, and informational readiness rationale without auto-starting research.
+- [x] Add deterministic coverage for scheduled execution persistence, partial batches, retry behavior, duplicate prevention, missing ranges, lineage, readiness, PEPE, authentication, authorization, and no-mutation boundaries.
+- [x] Propagate real retry attempts into scheduled/incremental runs and execution metrics, with original issue linkage for retry success or failure.
+- [x] Add end-to-end deterministic retry tests proving failed-scope preservation, successful retry linkage, duplicate prevention, and protected missing-range inspection.
+- [ ] Observe first production executions of all three expanded schedules, run full validation, publish the result, and report the requested ingestion-health evidence without starting Research Lab.
 - [x] Add deterministic registry inclusion/exclusion, immutable snapshot persistence/versioning, multi-asset partial-failure, and no-mutation boundary tests for the market-universe flow.

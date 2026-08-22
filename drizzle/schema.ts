@@ -230,6 +230,8 @@ export const historicalIngestionRuns = mysqlTable("historicalIngestionRuns", {
   id: int("id").autoincrement().primaryKey(),
   batchId: varchar("batchId", { length: 96 }).notNull(),
   datasetId: int("datasetId").references(() => historicalDatasets.id),
+  scheduleExecutionId: int("scheduleExecutionId").references(() => historicalScheduleExecutions.id),
+  retryAttempt: int("retryAttempt").notNull().default(0),
   runKind: mysqlEnum("runKind", ["backfill", "incremental", "quality_recheck"]).notNull(),
   status: mysqlEnum("status", ["running", "completed", "partial", "failed"]).notNull(),
   provider: varchar("provider", { length: 96 }).notNull(),
@@ -250,7 +252,7 @@ export const historicalIngestionRuns = mysqlTable("historicalIngestionRuns", {
   startedAt: timestamp("startedAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, table => [uniqueIndex("historical_ingestion_batch_unique").on(table.batchId), index("historical_ingestion_dataset_asset_idx").on(table.datasetId, table.assetId, table.createdAt), index("historical_ingestion_status_idx").on(table.status, table.createdAt)]);
+}, table => [uniqueIndex("historical_ingestion_batch_unique").on(table.batchId), index("historical_ingestion_dataset_asset_idx").on(table.datasetId, table.assetId, table.createdAt), index("historical_ingestion_schedule_execution_idx").on(table.scheduleExecutionId, table.createdAt), index("historical_ingestion_status_idx").on(table.status, table.createdAt)]);
 
 export const historicalIngestionSchedules = mysqlTable("historicalIngestionSchedules", {
   id: int("id").autoincrement().primaryKey(),
@@ -266,6 +268,62 @@ export const historicalIngestionSchedules = mysqlTable("historicalIngestionSched
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [uniqueIndex("historical_ingestion_schedule_name_unique").on(table.name), uniqueIndex("historical_ingestion_schedule_task_unique").on(table.scheduleCronTaskUid), index("historical_ingestion_schedule_enabled_idx").on(table.isEnabled, table.updatedAt)]);
+
+export const historicalScheduleExecutions = mysqlTable("historicalScheduleExecutions", {
+  id: int("id").autoincrement().primaryKey(),
+  scheduleId: int("scheduleId").notNull().references(() => historicalIngestionSchedules.id, { onDelete: "cascade" }),
+  taskUid: varchar("taskUid", { length: 65 }).notNull(),
+  datasetId: int("datasetId").references(() => historicalDatasets.id),
+  status: mysqlEnum("status", ["SUCCESS", "PARTIAL", "FAILED", "SKIPPED"]).notNull(),
+  skipReason: varchar("skipReason", { length: 128 }),
+  assetsAttempted: int("assetsAttempted").notNull().default(0),
+  assetsSucceeded: int("assetsSucceeded").notNull().default(0),
+  assetsFailed: int("assetsFailed").notNull().default(0),
+  candlesInserted: int("candlesInserted").notNull().default(0),
+  candlesSkipped: int("candlesSkipped").notNull().default(0),
+  duplicatesDetected: int("duplicatesDetected").notNull().default(0),
+  gapsDetected: int("gapsDetected").notNull().default(0),
+  providerErrors: json("providerErrors").notNull(),
+  retryCount: int("retryCount").notNull().default(0),
+  startedAt: timestamp("startedAt").notNull(),
+  completedAt: timestamp("completedAt"),
+  durationMs: int("durationMs"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("historical_schedule_execution_schedule_time_idx").on(table.scheduleId, table.createdAt), index("historical_schedule_execution_status_idx").on(table.status, table.createdAt), index("historical_schedule_execution_task_idx").on(table.taskUid, table.createdAt)]);
+
+export const historicalIngestionIssues = mysqlTable("historicalIngestionIssues", {
+  id: int("id").autoincrement().primaryKey(),
+  datasetId: int("datasetId").references(() => historicalDatasets.id),
+  scheduleExecutionId: int("scheduleExecutionId").references(() => historicalScheduleExecutions.id),
+  ingestionRunId: int("ingestionRunId").references(() => historicalIngestionRuns.id),
+  issueKind: mysqlEnum("issueKind", ["PROVIDER_FAILURE", "MISSING_RANGE", "NO_NEW_CANDLES", "SOURCE_UNAVAILABLE"]).notNull(),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  exchange: varchar("exchange", { length: 64 }).notNull(),
+  provider: varchar("provider", { length: 96 }).notNull(),
+  instrumentType: mysqlEnum("instrumentType", ["spot", "perpetual"]).notNull(),
+  timeframe: mysqlEnum("timeframe", ["15m", "1h", "4h", "1d"]).notNull(),
+  expectedStartAt: timestamp("expectedStartAt"),
+  expectedEndAt: timestamp("expectedEndAt"),
+  actualStartAt: timestamp("actualStartAt"),
+  actualEndAt: timestamp("actualEndAt"),
+  missingIntervalCount: int("missingIntervalCount").notNull().default(0),
+  errorReason: text("errorReason"),
+  firstDetectedAt: timestamp("firstDetectedAt").notNull(),
+  evidence: json("evidence").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("historical_ingestion_issue_scope_idx").on(table.assetId, table.instrumentType, table.timeframe, table.createdAt), index("historical_ingestion_issue_execution_idx").on(table.scheduleExecutionId, table.createdAt), index("historical_ingestion_issue_dataset_idx").on(table.datasetId, table.createdAt)]);
+
+export const historicalIngestionIssueEvents = mysqlTable("historicalIngestionIssueEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  issueId: int("issueId").notNull().references(() => historicalIngestionIssues.id, { onDelete: "cascade" }),
+  scheduleExecutionId: int("scheduleExecutionId").references(() => historicalScheduleExecutions.id),
+  ingestionRunId: int("ingestionRunId").references(() => historicalIngestionRuns.id),
+  eventType: mysqlEnum("eventType", ["DETECTED", "RETRY_STARTED", "RETRY_SUCCEEDED", "RETRY_FAILED", "RECHECKED"]).notNull(),
+  retryAttempt: int("retryAttempt").notNull().default(0),
+  observedAt: timestamp("observedAt").notNull(),
+  details: json("details").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("historical_issue_event_issue_time_idx").on(table.issueId, table.createdAt), index("historical_issue_event_execution_idx").on(table.scheduleExecutionId, table.createdAt)]);
 
 export const historicalCandles = mysqlTable("historicalCandles", {
   id: int("id").autoincrement().primaryKey(),
