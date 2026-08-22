@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { assets, historicalDataQuality, historicalMarketCaps, historicalUniverseMembers, historicalUniverseSnapshots, marketUniverseAssets } from "../../drizzle/schema";
+import { assets, historicalDataQuality, historicalMarketCaps, historicalRegimeSnapshots, historicalSectorSnapshots, historicalUniverseMembers, historicalUniverseSnapshots, marketUniverseAssets } from "../../drizzle/schema";
 import { getDb } from "../db";
 
 export type UniverseTier = "TIER_1" | "TIER_2" | "TIER_3" | "TIER_4";
@@ -83,6 +83,71 @@ export async function resolveEnabledUniverseAssets(assetIds?: string[]) {
     const identifiers = row.exchangeIdentifiers as { binance?: { perpetual?: string; spot?: string } };
     return { id: row.assetId, binanceSymbol: identifiers.binance?.perpetual ?? identifiers.binance?.spot ?? "", priorityTier: row.priorityTier, registrySector: row.registrySector };
   }).filter(row => Boolean(row.binanceSymbol));
+}
+
+export async function refreshMarketUniverseCoverage(datasetId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  const registry = await db.select().from(marketUniverseAssets).where(eq(marketUniverseAssets.isEnabled, true));
+  const quality = await db.select().from(historicalDataQuality).where(eq(historicalDataQuality.datasetId, datasetId));
+  const marketCaps = await db.select().from(historicalMarketCaps).where(eq(historicalMarketCaps.datasetId, datasetId));
+  for (const asset of registry) {
+    const rows = quality.filter(row => row.assetId === asset.assetId);
+    const capRows = marketCaps.filter(row => row.assetId === asset.assetId);
+    const expected = rows.reduce((sum, row) => sum + row.expectedCandleCount, 0);
+    const actual = rows.reduce((sum, row) => sum + row.actualCandleCount, 0);
+    const firstObserved = rows.map(row => row.earliestCandleAt?.getTime() ?? Number.MAX_SAFE_INTEGER).reduce((min, value) => Math.min(min, value), Number.MAX_SAFE_INTEGER);
+    const lastObserved = rows.map(row => row.latestCandleAt?.getTime() ?? 0).reduce((max, value) => Math.max(max, value), 0);
+    const availableCaps = capRows.filter(row => row.availability === "AVAILABLE").length;
+    const marketCapStatus: CoverageStatus = !capRows.length ? "UNAVAILABLE" : availableCaps === capRows.length ? "AVAILABLE" : availableCaps ? "PARTIAL" : "MISSING";
+    await db.update(marketUniverseAssets).set({ firstObservedAt: firstObserved === Number.MAX_SAFE_INTEGER ? null : new Date(firstObserved), lastObservedAt: lastObserved ? new Date(lastObserved) : null, ohlcvCoverageStatus: rows.length ? coverageStatus(actual, expected) : "UNAVAILABLE", marketCapCoverageStatus: marketCapStatus, dataQualityStatus: bestQuality(rows as Array<{ qualityRating: QualityRating }>) }).where(eq(marketUniverseAssets.assetId, asset.assetId));
+  }
+  return { datasetId, assetsRefreshed: registry.length };
+}
+
+export async function listMarketUniverseRegistry() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(marketUniverseAssets).where(eq(marketUniverseAssets.isEnabled, true));
+}
+
+export async function getHistoricalUniverseSnapshot(datasetId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const snapshot = (await db.select().from(historicalUniverseSnapshots).where(eq(historicalUniverseSnapshots.datasetId, datasetId)).limit(1))[0];
+  if (!snapshot) return null;
+  const members = await db.select().from(historicalUniverseMembers).where(eq(historicalUniverseMembers.universeSnapshotId, snapshot.id));
+  return { ...snapshot, members };
+}
+
+export async function getMarketCoverageMatrix(datasetId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [registry, snapshot, quality, marketCaps, regimes, sectors] = await Promise.all([
+    listMarketUniverseRegistry(),
+    getHistoricalUniverseSnapshot(datasetId),
+    db.select().from(historicalDataQuality).where(eq(historicalDataQuality.datasetId, datasetId)),
+    db.select().from(historicalMarketCaps).where(eq(historicalMarketCaps.datasetId, datasetId)),
+    db.select().from(historicalRegimeSnapshots).where(eq(historicalRegimeSnapshots.datasetId, datasetId)),
+    db.select().from(historicalSectorSnapshots).where(eq(historicalSectorSnapshots.datasetId, datasetId)),
+  ]);
+  const snapshotMembers = new Map((snapshot?.members ?? []).map(member => [member.assetId, member]));
+  const regimeAvailability = regimes.some(item => item.availability === "AVAILABLE") ? "AVAILABLE" : regimes.length ? "UNAVAILABLE" : "UNAVAILABLE";
+  const rows = registry.map(asset => {
+    const scopes = quality.filter(item => item.assetId === asset.assetId);
+    const timeframe = Object.fromEntries(["15m", "1h", "4h", "1d"].map(value => {
+      const scope = scopes.find(item => item.timeframe === value);
+      return [value, scope ? { status: scope.status, expected: scope.expectedCandleCount, observed: scope.actualCandleCount, missing: scope.missingIntervalCount, duplicates: scope.duplicateCount, coveragePercent: scope.coveragePercent, longestGapMs: scope.longestGapMs, qualityScore: scope.qualityScore, qualityRating: scope.qualityRating, latestIngestionAt: scope.lastSuccessfulIngestionAt } : { status: "UNAVAILABLE", expected: 0, observed: 0, missing: 0, duplicates: 0, coveragePercent: 0, longestGapMs: 0, qualityScore: 0, qualityRating: "UNAVAILABLE", latestIngestionAt: null }];
+    }));
+    const capRows = marketCaps.filter(item => item.assetId === asset.assetId);
+    const availableCaps = capRows.filter(item => item.availability === "AVAILABLE").length;
+    const marketCapStatus: CoverageStatus = !capRows.length ? "UNAVAILABLE" : availableCaps === capRows.length ? "AVAILABLE" : availableCaps ? "PARTIAL" : "MISSING";
+    const sectorRows = sectors.filter(item => item.assetId === asset.assetId);
+    const sectorStatus = sectorRows.some(item => item.availability === "AVAILABLE") ? "AVAILABLE" : "UNAVAILABLE";
+    const member = snapshotMembers.get(asset.assetId);
+    return { assetId: asset.assetId, symbol: asset.symbol, name: asset.name, priorityTier: asset.priorityTier, inclusionReason: asset.inclusionReason, registrySector: asset.registrySector, sectorClassificationStatus: asset.sectorClassificationStatus, firstObservedAt: asset.firstObservedAt, lastObservedAt: asset.lastObservedAt, ohlcvCoverageStatus: asset.ohlcvCoverageStatus, marketCapStatus, regimeStatus: regimeAvailability, sectorStatus, dataQualityStatus: member?.dataQualityStatus ?? asset.dataQualityStatus, timeframes: timeframe, snapshotEvidence: member?.qualityEvidence ?? null };
+  });
+  return { datasetId, snapshot, rows };
 }
 
 export async function snapshotMarketUniverse(datasetId: number) {

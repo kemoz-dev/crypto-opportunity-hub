@@ -2,9 +2,9 @@ import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { historicalAssetAvailability, historicalCandles, historicalDatasets, historicalIngestionRuns, historicalMarketCaps, historicalRegimeSnapshots, historicalSectorSnapshots } from "../../drizzle/schema";
 import { type Timeframe } from "../../shared/crypto";
 import { getDb } from "../db";
-import { timeframeMs } from "./historicalData";
+import { recomputeHistoricalQuality, timeframeMs } from "./historicalData";
 import { fetchCoinGeckoHistoricalMarketChart } from "./providers";
-import { resolveEnabledUniverseAssets } from "./marketUniverse";
+import { refreshMarketUniverseCoverage, resolveEnabledUniverseAssets, snapshotMarketUniverse } from "./marketUniverse";
 
 export const HISTORICAL_REGIME_DEFINITION_VERSION = "BTC_OHLCV_CLOSED_CANDLE_V1";
 export const HISTORICAL_SECTOR_DEFINITION_VERSION = "UNAVAILABLE_WITHOUT_POINT_IN_TIME_SOURCE_V1";
@@ -91,7 +91,10 @@ export async function persistUnavailableHistoricalSectorAndAvailability(datasetI
 export async function persistHistoricalDatasetContext(datasetId: number) {
   const [regime, marketCaps] = await Promise.all([persistHistoricalRegimeSnapshots(datasetId), persistHistoricalMarketCaps(datasetId)]);
   await persistUnavailableHistoricalSectorAndAvailability(datasetId);
-  return { regime, marketCaps };
+  const quality = await recomputeHistoricalQuality(datasetId);
+  const coverage = await refreshMarketUniverseCoverage(datasetId);
+  const universeSnapshot = await snapshotMarketUniverse(datasetId);
+  return { regime, marketCaps, quality, coverage, universeSnapshotId: universeSnapshot.id };
 }
 
 async function insertInBatches<T>(rows: T[], insert: (batch: T[]) => Promise<unknown>) {

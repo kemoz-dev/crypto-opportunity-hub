@@ -21,7 +21,7 @@ export type HistoricalBackfillInput = {
 export type HistoricalBackfillOutcome = {
   datasetId: number;
   datasetVersion: string;
-  completedScopes: Array<{ assetId: string; timeframe: Timeframe; insertedCount: number; duplicateCount: number; malformedCount: number; missingIntervals: number; unavailableMonths: string[]; quality: string }>;
+  completedScopes: Array<{ assetId: string; timeframe: Timeframe; insertedCount: number; duplicateCount: number; malformedCount: number; missingIntervals: number; unavailableMonths: string[]; dailyFallbackDays: string[]; unavailableDays: string[]; quality: string }>;
   failedScopes: Array<{ assetId: string; timeframe: Timeframe; error: string }>;
   sealed: boolean;
 };
@@ -40,8 +40,9 @@ export async function runHistoricalBackfill(input: HistoricalBackfillInput): Pro
     for (const timeframe of input.timeframes) {
       try {
         const fetched = await fetchBinanceHistoricalArchiveRange(asset.binanceSymbol, timeframe, input.instrumentType, input.startAt, input.endAt, input.maximumMonths ?? 48);
-        const ingestion = await ingestHistoricalCandleBatch({ datasetId: dataset.id, assetId: asset.id, exchange: "Binance", provider: fetched.source, instrumentType: input.instrumentType, timeframe }, "backfill", fetched.candles, input.startAt, input.endAt);
-        completedScopes.push({ assetId: asset.id, timeframe, insertedCount: ingestion.insertedCount, duplicateCount: ingestion.duplicateCount, malformedCount: ingestion.malformedCount, missingIntervals: ingestion.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), unavailableMonths: fetched.unavailableMonths, quality: ingestion.quality });
+        const sourceDetails = { requestedMonths: fetched.requestedMonths, unavailableMonths: fetched.unavailableMonths, dailyFallbackDays: fetched.dailyFallbackDays, unavailableDays: fetched.unavailableDays };
+        const ingestion = await ingestHistoricalCandleBatch({ datasetId: dataset.id, assetId: asset.id, exchange: "Binance", provider: fetched.source, instrumentType: input.instrumentType, timeframe }, "backfill", fetched.candles, input.startAt, input.endAt, sourceDetails);
+        completedScopes.push({ assetId: asset.id, timeframe, insertedCount: ingestion.insertedCount, duplicateCount: ingestion.duplicateCount, malformedCount: ingestion.malformedCount, missingIntervals: ingestion.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), unavailableMonths: fetched.unavailableMonths, dailyFallbackDays: fetched.dailyFallbackDays, unavailableDays: fetched.unavailableDays, quality: ingestion.quality });
       } catch (error) {
         failedScopes.push({ assetId: asset.id, timeframe, error: sanitizeProviderError(error) });
       }
@@ -68,8 +69,9 @@ export async function runHistoricalIncremental(input: Omit<HistoricalBackfillInp
         const priorQuality = (await db.select().from(historicalDataQuality).where(and(eq(historicalDataQuality.datasetId, previous.id), eq(historicalDataQuality.assetId, asset.id), eq(historicalDataQuality.instrumentType, input.instrumentType), eq(historicalDataQuality.timeframe, timeframe))).limit(1))[0];
         const resumeAt = Math.max(input.endAt - lookbackDays * 24 * 60 * 60_000, (priorQuality?.latestCandleAt?.getTime() ?? input.endAt - lookbackDays * 24 * 60 * 60_000) - timeframeMs[timeframe]);
         const fetched = await fetchBinanceHistoricalArchiveRange(asset.binanceSymbol, timeframe, input.instrumentType, resumeAt, input.endAt, input.maximumMonths ?? 2);
-        const ingestion = await ingestHistoricalCandleBatch({ datasetId: dataset.id, assetId: asset.id, exchange: "Binance", provider: fetched.source, instrumentType: input.instrumentType, timeframe }, "incremental", fetched.candles, resumeAt, input.endAt);
-        completedScopes.push({ assetId: asset.id, timeframe, insertedCount: ingestion.insertedCount, duplicateCount: ingestion.duplicateCount, malformedCount: ingestion.malformedCount, missingIntervals: ingestion.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), unavailableMonths: fetched.unavailableMonths, quality: ingestion.quality });
+        const sourceDetails = { requestedMonths: fetched.requestedMonths, unavailableMonths: fetched.unavailableMonths, dailyFallbackDays: fetched.dailyFallbackDays, unavailableDays: fetched.unavailableDays };
+        const ingestion = await ingestHistoricalCandleBatch({ datasetId: dataset.id, assetId: asset.id, exchange: "Binance", provider: fetched.source, instrumentType: input.instrumentType, timeframe }, "incremental", fetched.candles, resumeAt, input.endAt, sourceDetails);
+        completedScopes.push({ assetId: asset.id, timeframe, insertedCount: ingestion.insertedCount, duplicateCount: ingestion.duplicateCount, malformedCount: ingestion.malformedCount, missingIntervals: ingestion.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), unavailableMonths: fetched.unavailableMonths, dailyFallbackDays: fetched.dailyFallbackDays, unavailableDays: fetched.unavailableDays, quality: ingestion.quality });
       } catch (error) {
         failedScopes.push({ assetId: asset.id, timeframe, error: sanitizeProviderError(error) });
       }

@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { historicalCandles, historicalDataQuality, historicalDatasets, historicalIngestionRuns, historicalMissingIntervals } from "../../drizzle/schema";
-import { calculateCoverageQuality, snapshotMarketUniverse } from "./marketUniverse";
+import { calculateCoverageQuality } from "./marketUniverse";
 import type { Candle, Timeframe } from "../../shared/crypto";
 import { getDb } from "../db";
 
@@ -81,12 +81,12 @@ export async function createHistoricalDataset(notes: string, basedOnDatasetId?: 
   return dataset;
 }
 
-export async function ingestHistoricalCandleBatch(scope: HistoricalScope, runKind: "backfill" | "incremental", candles: HistoricalCandleInput[], requestedStartAt?: number, requestedEndAt?: number) {
+export async function ingestHistoricalCandleBatch(scope: HistoricalScope, runKind: "backfill" | "incremental", candles: HistoricalCandleInput[], requestedStartAt?: number, requestedEndAt?: number, sourceDetails?: Record<string, unknown>) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable.");
   const batchId = `INGEST-${randomUUID()}`;
   const audit = auditHistoricalCandles(candles, scope.timeframe);
-  await db.insert(historicalIngestionRuns).values({ batchId, datasetId: scope.datasetId, runKind, status: "running", provider: scope.provider, exchange: scope.exchange, instrumentType: scope.instrumentType, assetId: scope.assetId, timeframes: [scope.timeframe], requestedStartAt: requestedStartAt ? new Date(requestedStartAt) : null, requestedEndAt: requestedEndAt ? new Date(requestedEndAt) : null, insertedCount: 0, duplicateCount: 0, malformedCount: audit.malformed.length, missingIntervalCount: audit.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), details: { validation: { malformed: audit.malformed.map(item => item.reason), internalDuplicates: audit.internalDuplicates.length } } });
+  await db.insert(historicalIngestionRuns).values({ batchId, datasetId: scope.datasetId, runKind, status: "running", provider: scope.provider, exchange: scope.exchange, instrumentType: scope.instrumentType, assetId: scope.assetId, timeframes: [scope.timeframe], requestedStartAt: requestedStartAt ? new Date(requestedStartAt) : null, requestedEndAt: requestedEndAt ? new Date(requestedEndAt) : null, insertedCount: 0, duplicateCount: 0, malformedCount: audit.malformed.length, missingIntervalCount: audit.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), details: { validation: { malformed: audit.malformed.map(item => item.reason), internalDuplicates: audit.internalDuplicates.length }, sourceDetails: sourceDetails ?? null } });
   const run = (await db.select().from(historicalIngestionRuns).where(eq(historicalIngestionRuns.batchId, batchId)).limit(1))[0];
   if (!run) throw new Error("Historical ingestion run creation failed.");
   try {
@@ -101,7 +101,8 @@ export async function ingestHistoricalCandleBatch(scope: HistoricalScope, runKin
     const missingCandles = allCandleAudit.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0);
     const longestGapMs = Math.max(0, ...allCandleAudit.gaps.map(gap => gap.endMs - gap.startMs + timeframeMs[scope.timeframe]));
     const qualityRank = calculateCoverageQuality({ expected: quality.expected, actual: quality.actual, missing: missingCandles, longestGapMs, timeframeMs: timeframeMs[scope.timeframe], duplicates: audit.internalDuplicates.length + (audit.valid.length - fresh.length), malformed: audit.malformed.length, stale: quality.status === "STALE", providerState: quality.status === "COMPLETE" ? "completed" : quality.status === "ERROR" ? "failed" : "partial" });
-    await db.insert(historicalDataQuality).values({ datasetId: scope.datasetId, assetId: scope.assetId, exchange: scope.exchange, provider: scope.provider, instrumentType: scope.instrumentType, timeframe: scope.timeframe, status: quality.status, earliestCandleAt: allCandleAudit.valid[0] ? new Date(allCandleAudit.valid[0].openTime) : null, latestCandleAt: quality.latest ? new Date(quality.latest) : null, expectedCandleCount: quality.expected, actualCandleCount: quality.actual, coveragePercent: qualityRank.coveragePercent, missingIntervalCount: missingCandles, longestGapMs, duplicateCount: audit.internalDuplicates.length + (audit.valid.length - fresh.length), malformedCount: audit.malformed.length, qualityScore: qualityRank.qualityScore, qualityRating: qualityRank.qualityRating, lastSuccessfulIngestionAt: new Date(), lastIngestionRunId: run.id, freshnessThresholdMs: timeframeMs[scope.timeframe] * 2, details: { gaps: allCandleAudit.gaps, malformedReasons: audit.malformed.map(item => item.reason), sourceScope: scope } }).onDuplicateKeyUpdate({ set: { status: quality.status, earliestCandleAt: allCandleAudit.valid[0] ? new Date(allCandleAudit.valid[0].openTime) : null, latestCandleAt: quality.latest ? new Date(quality.latest) : null, expectedCandleCount: quality.expected, actualCandleCount: quality.actual, coveragePercent: qualityRank.coveragePercent, missingIntervalCount: missingCandles, longestGapMs, duplicateCount: audit.internalDuplicates.length + (audit.valid.length - fresh.length), malformedCount: audit.malformed.length, qualityScore: qualityRank.qualityScore, qualityRating: qualityRank.qualityRating, lastSuccessfulIngestionAt: new Date(), lastIngestionRunId: run.id, details: { gaps: allCandleAudit.gaps, malformedReasons: audit.malformed.map(item => item.reason), sourceScope: scope } } });
+    const qualityDetails = { gaps: allCandleAudit.gaps, malformedReasons: audit.malformed.map(item => item.reason), sourceScope: scope, sourceDetails: sourceDetails ?? null };
+    await db.insert(historicalDataQuality).values({ datasetId: scope.datasetId, assetId: scope.assetId, exchange: scope.exchange, provider: scope.provider, instrumentType: scope.instrumentType, timeframe: scope.timeframe, status: quality.status, earliestCandleAt: allCandleAudit.valid[0] ? new Date(allCandleAudit.valid[0].openTime) : null, latestCandleAt: quality.latest ? new Date(quality.latest) : null, expectedCandleCount: quality.expected, actualCandleCount: quality.actual, coveragePercent: qualityRank.coveragePercent, missingIntervalCount: missingCandles, longestGapMs, duplicateCount: audit.internalDuplicates.length + (audit.valid.length - fresh.length), malformedCount: audit.malformed.length, qualityScore: qualityRank.qualityScore, qualityRating: qualityRank.qualityRating, lastSuccessfulIngestionAt: new Date(), lastIngestionRunId: run.id, freshnessThresholdMs: timeframeMs[scope.timeframe] * 2, details: qualityDetails }).onDuplicateKeyUpdate({ set: { status: quality.status, earliestCandleAt: allCandleAudit.valid[0] ? new Date(allCandleAudit.valid[0].openTime) : null, latestCandleAt: quality.latest ? new Date(quality.latest) : null, expectedCandleCount: quality.expected, actualCandleCount: quality.actual, coveragePercent: qualityRank.coveragePercent, missingIntervalCount: missingCandles, longestGapMs, duplicateCount: audit.internalDuplicates.length + (audit.valid.length - fresh.length), malformedCount: audit.malformed.length, qualityScore: qualityRank.qualityScore, qualityRating: qualityRank.qualityRating, lastSuccessfulIngestionAt: new Date(), lastIngestionRunId: run.id, details: qualityDetails } });
     if (allCandleAudit.gaps.length) await db.insert(historicalMissingIntervals).values(allCandleAudit.gaps.map(gap => ({ datasetId: scope.datasetId, assetId: scope.assetId, exchange: scope.exchange, instrumentType: scope.instrumentType, timeframe: scope.timeframe, gapStartMs: gap.startMs, gapEndMs: gap.endMs, expectedMissingCount: gap.expectedMissingCount }))).onDuplicateKeyUpdate({ set: { expectedMissingCount: sql`VALUES(expectedMissingCount)`, detectedAt: new Date() } });
     await db.update(historicalIngestionRuns).set({ status: audit.malformed.length || allCandleAudit.gaps.length ? "partial" : "completed", sourceStartAt: audit.valid[0] ? new Date(audit.valid[0].openTime) : null, sourceEndAt: audit.valid.at(-1) ? new Date(audit.valid.at(-1)!.closeTime) : null, insertedCount: fresh.length, duplicateCount: audit.internalDuplicates.length + (audit.valid.length - fresh.length), malformedCount: audit.malformed.length, missingIntervalCount: allCandleAudit.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0), completedAt: new Date() }).where(eq(historicalIngestionRuns.id, run.id));
     return { runId: run.id, batchId, insertedCount: fresh.length, duplicateCount: audit.internalDuplicates.length + (audit.valid.length - fresh.length), malformedCount: audit.malformed.length, gaps: allCandleAudit.gaps, quality: quality.status };
@@ -110,6 +111,23 @@ export async function ingestHistoricalCandleBatch(scope: HistoricalScope, runKin
     await db.update(historicalIngestionRuns).set({ status: "failed", providerError: message, completedAt: new Date() }).where(eq(historicalIngestionRuns.id, run.id));
     throw error;
   }
+}
+
+export async function recomputeHistoricalQuality(datasetId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  const rows = await db.select().from(historicalDataQuality).where(eq(historicalDataQuality.datasetId, datasetId));
+  for (const row of rows) {
+    const candles = await db.select({ openTime: historicalCandles.sourceOpenTimeMs, closeTime: historicalCandles.sourceCloseTimeMs, open: historicalCandles.open, high: historicalCandles.high, low: historicalCandles.low, close: historicalCandles.close, volume: historicalCandles.volume }).from(historicalCandles).where(and(eq(historicalCandles.assetId, row.assetId), eq(historicalCandles.exchange, row.exchange), eq(historicalCandles.instrumentType, row.instrumentType), eq(historicalCandles.timeframe, row.timeframe))).orderBy(asc(historicalCandles.sourceOpenTimeMs));
+    const audit = auditHistoricalCandles(candles.map(candle => ({ openTime: candle.openTime, closeTime: candle.closeTime, open: candle.open, high: candle.high, low: candle.low, close: candle.close, volume: candle.volume })), row.timeframe);
+    const quality = summarizeQuality(audit.valid, audit, row.timeframe);
+    const missingCandles = audit.gaps.reduce((sum, gap) => sum + gap.expectedMissingCount, 0);
+    const longestGapMs = Math.max(0, ...audit.gaps.map(gap => gap.endMs - gap.startMs + timeframeMs[row.timeframe]));
+    const providerState = quality.status === "ERROR" ? "failed" : quality.status === "MISSING" || quality.status === "PARTIAL" ? "partial" : "completed";
+    const qualityRank = calculateCoverageQuality({ expected: quality.expected, actual: quality.actual, missing: missingCandles, longestGapMs, timeframeMs: timeframeMs[row.timeframe], duplicates: row.duplicateCount, malformed: row.malformedCount, stale: quality.status === "STALE", providerState });
+    await db.update(historicalDataQuality).set({ status: quality.status, earliestCandleAt: audit.valid[0] ? new Date(audit.valid[0].openTime) : null, latestCandleAt: quality.latest ? new Date(quality.latest) : null, expectedCandleCount: quality.expected, actualCandleCount: quality.actual, coveragePercent: qualityRank.coveragePercent, missingIntervalCount: missingCandles, longestGapMs, qualityScore: qualityRank.qualityScore, qualityRating: qualityRank.qualityRating, details: { ...(row.details as Record<string, unknown>), qualityRecomputedAt: new Date().toISOString(), qualityFormula: "coverage-45-continuity-25-freshness-15-integrity-10-provider-5" } }).where(eq(historicalDataQuality.id, row.id));
+  }
+  return { datasetId, scopesRecomputed: rows.length };
 }
 
 export async function sealHistoricalDataset(datasetId: number) {
@@ -121,7 +139,6 @@ export async function sealHistoricalDataset(datasetId: number) {
   const providerManifest = { providers: Array.from(new Set(runs.map(run => run.provider))), exchangeInstrumentPairs: Array.from(new Set(runs.map(run => `${run.exchange}:${run.instrumentType}`))), completedCandleOnly: true };
   const contentFingerprint = createHash("sha256").update(stable({ coverageManifest, providerManifest })).digest("hex");
   await db.update(historicalDatasets).set({ status: "sealed", providerManifest, coverageManifest, contentFingerprint, sealedAt: new Date() }).where(eq(historicalDatasets.id, datasetId));
-  await snapshotMarketUniverse(datasetId);
   return { datasetId, providerManifest, coverageManifest, contentFingerprint };
 }
 
@@ -131,13 +148,7 @@ export async function listHistoricalDataQuality(datasetId?: number) {
   if (!datasetId) return db.select().from(historicalDataQuality).orderBy(desc(historicalDataQuality.createdAt));
   const dataset = (await db.select().from(historicalDatasets).where(eq(historicalDatasets.id, datasetId)).limit(1))[0];
   if (!dataset || dataset.status !== "sealed" || !dataset.sealedAt) return [];
-  const rows = await db.select().from(historicalDataQuality).where(lte(historicalDataQuality.createdAt, dataset.sealedAt)).orderBy(desc(historicalDataQuality.createdAt));
-  const latestByScope = new Map<string, typeof rows[number]>();
-  for (const row of rows) {
-    const key = `${row.assetId}:${row.exchange}:${row.instrumentType}:${row.timeframe}`;
-    if (!latestByScope.has(key)) latestByScope.set(key, row);
-  }
-  return Array.from(latestByScope.values()).sort((left, right) => left.assetId.localeCompare(right.assetId) || left.timeframe.localeCompare(right.timeframe));
+  return db.select().from(historicalDataQuality).where(eq(historicalDataQuality.datasetId, datasetId)).orderBy(desc(historicalDataQuality.createdAt));
 }
 
 export async function listHistoricalDatasets() {
