@@ -88,5 +88,6 @@
 - [x] Add Vitest coverage for universe persistence/versioning, inclusion/exclusion, multi-asset partial failures, coverage/quality calculation, sector provenance/unavailability, protected access, and unchanged production boundaries.
 - [x] Document actual asset and sector representation, timestamp coverage, data-quality distribution, source limitations, survivorship disclosure, and schedule status; run full validation and publish the checkpoint without rerunning Research Lab or changing the Opportunity Engine.
 - [x] Correct the three new expanded-universe scheduled task paths to the deployed cron-only ingestion callback and verify their persisted task identities remain unchanged.
-- [ ] Add explicit historical-coverage query error states and perform an authenticated visual verification of the Market Coverage Matrix.
+- [x] Add explicit historical-coverage query error states and perform an authenticated visual verification of the Market Coverage Matrix.
+- [x] Diagnose and resolve the blank OAuth sign-in handoff and confirm the published client serves the Market Coverage Matrix release before final visual verification.
 - [x] Add deterministic registry inclusion/exclusion, immutable snapshot persistence/versioning, multi-asset partial-failure, and no-mutation boundary tests for the market-universe flow.

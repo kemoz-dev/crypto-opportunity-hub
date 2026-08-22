@@ -15,3 +15,15 @@ A cache-busted production load later served a different client asset (`assets/in
 The current development build was separately opened after the production checks. Its Historical Data dialog rendered the new heading, **Immutable data lineage, Market Coverage Matrix, closed-candle reconstruction, and research-cost assumptions**, confirming that the new client implementation is active in development. The dialog began its protected data load; final populated-matrix inspection remains dependent on the active authenticated browser session.
 
 After the protected queries settled, the development dialog correctly displayed **Sign in to inspect historical research data**. This confirms the intended unauthenticated guard; it does not substitute for the remaining signed-in populated-matrix inspection.
+
+The later development check again showed live scanner data but the Historical Data dialog’s **Sign in** guard. This confirms that dashboard market data is public while historical coverage evidence remains protected; a dedicated authenticated project session is still required for the remaining populated matrix inspection.
+
+OAuth diagnosis: the blank login handoff eventually returned to the callback with `{"error":"invalid oauth state"}`. The callback’s secure one-time nonce check rejected a delayed login attempt, which is the intended CSRF protection. A fresh application-initiated sign-in attempt is required and must complete within the nonce’s ten-minute lifetime.
+
+After a fresh sign-in succeeded, an authenticated request to `crypto.marketCoverageMatrix` returned HTTP 200 with dataset `300001`, immutable snapshot `60001`, and 20 registry rows. This verifies that protected coverage data is correctly accessible and persisted. The initially rendered `0 registry assets` state is therefore being treated as a client query-settlement/rendering issue, not an access-control or data-persistence failure.
+
+The subsequent authenticated development rendering completed successfully. It showed 20 registry assets, the `CURRENT SURVIVOR UNIVERSE` warning, the `HISTORICAL SECTOR DATA UNAVAILABLE` warning, per-timeframe 15M/1H/4H/1D evidence, market-cap and regime statuses, aggregate coverage, longest gap, quality, latest-observed time, and PEPE as an explicit missing scope. This completes the signed-in development visual verification.
+
+Published-client verification then progressed: the production domain now renders the new Market Coverage Matrix UI. Its protected historical-data queries currently return no selected dataset or coverage rows, and the explicit `Coverage Matrix unavailable` state renders instead. This separates client propagation (now verified) from a remaining production historical-data availability/authentication diagnosis.
+
+After the authenticated production requests settled, the published dialog completed successfully. It rendered the selected sealed dataset `300001`, all 20 Market Coverage Matrix rows, snapshot context, current-survivor and historical-sector-unavailable warnings, timeframe coverage, quality cells, and the explicit missing PEPE row. This completes published-client and signed-in matrix verification.
