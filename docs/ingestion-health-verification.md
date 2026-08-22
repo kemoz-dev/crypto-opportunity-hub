@@ -24,4 +24,6 @@ The user authorized a single post-run inspection task. It is active with task UI
 
 On 2026-08-22, platform inspection confirmed that all three rows above were enabled, retained their expected cron-only callback and next UTC execution, and each had an empty execution-log result (`total: 0`). This is retained as the pre-run baseline only; it is neither a successful ingestion result nor a platform failure.
 
+The published application was also reached successfully after the documentation-only checkpoint. This read-only check did not authenticate, invoke an ingestion callback, modify a setting, or constitute evidence of a schedule run.
+
 The older BTC 15M ingestion task remains enabled and separate. Its existing 2026-08-22 02:14:53 UTC execution succeeded with HTTP 200 in 6,075 ms; that historical predecessor is not counted as one of the three new expanded-universe first runs.
