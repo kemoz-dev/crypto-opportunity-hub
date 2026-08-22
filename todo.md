@@ -101,3 +101,8 @@
 - [ ] Observe first production executions of all three expanded schedules, run full validation, publish the result, and report the requested ingestion-health evidence without starting Research Lab.
 - [ ] Run the user-authorized one-time follow-up after 2026-08-23 03:20 UTC; inspect the three first scheduled executions, report the requested evidence, and then stop without any prohibited mutations.
 - [x] Add deterministic registry inclusion/exclusion, immutable snapshot persistence/versioning, multi-asset partial-failure, and no-mutation boundary tests for the market-universe flow.
+- [x] Define the research-only Execution Cost & Liquidity model, explicit unavailable-data handling, point-in-time rules, and strict non-mutation boundary from Opportunity Engine, alerts, trading, and active Research Lab runs.
+- [x] Add immutable, versioned persistence for cost models, liquidity tiers and observations, historical-funding availability, and user-owned cost-study results with full dataset and assumption provenance.
+- [x] Implement deterministic spot/perpetual cost calculations for fees, slippage, estimated volume impact, explicit funding availability or assumptions, net-versus-gross outcomes, sensitivities, and stress scenarios.
+- [x] Add protected Execution Cost Lab APIs and interface with transparent configuration, trade-size, instrument, liquidity, funding, stress, and cost-breakdown states.
+- [x] Add tests, migration validation, TypeScript/build validation, documentation, and non-mutation assertions for the research-only cost engine without starting a new Research Lab experiment.

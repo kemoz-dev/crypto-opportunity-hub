@@ -11,8 +11,25 @@ import { listHistoricalDataQuality, listHistoricalDatasets } from "../crypto/his
 import { calculateResearchCosts, reconstructState } from "../crypto/reconstruction";
 import { getHistoricalUniverseSnapshot, getMarketCoverageMatrix, listMarketUniverseRegistry } from "../crypto/marketUniverse";
 import { listHistoricalIngestionHealth } from "../crypto/ingestionObservability";
+import { createExecutionCostStudy, exportExecutionCostStudy, getExecutionCostStudy, listExecutionCostStudies, previewExecutionCostStudy } from "../crypto/executionCostStudies";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
+
+const executionCostStudyInputSchema = z.object({
+  name: z.string().trim().min(3).max(128),
+  datasetId: z.number().int().positive(),
+  assetId: z.string().min(1).max(96),
+  timeframe: z.enum(["15m", "1h", "4h", "1d"]),
+  instrumentType: z.enum(["spot", "perpetual"]),
+  side: z.enum(["long", "short"]),
+  entryAt: z.number().int().positive(),
+  exitAt: z.number().int().positive(),
+  tradeSizeUsd: z.number().positive().max(100_000_000),
+  fee: z.object({ entryKind: z.enum(["maker", "taker"]), entryPercent: z.number().min(0).max(10), exitKind: z.enum(["maker", "taker"]), exitPercent: z.number().min(0).max(10), source: z.string().trim().min(1).max(128) }),
+  slippage: z.object({ entryBps: z.number().min(0).max(10_000), exitBps: z.number().min(0).max(10_000), source: z.string().trim().min(1).max(128) }),
+  liquidityImpact: z.object({ enabled: z.boolean(), lookbackHours: z.number().int().min(1).max(168), participationCoefficient: z.number().min(0).max(1_000), capBps: z.number().min(0).max(10_000), source: z.string().trim().min(1).max(128) }),
+  funding: z.object({ mode: z.enum(["ACTUAL", "ASSUMED", "EXCLUDED", "UNAVAILABLE"]), assumedPercent: z.number().min(-100).max(100).nullable().optional(), source: z.string().trim().max(128).nullable().optional() }),
+});
 
 export const cryptoRouter = router({
   scanner: publicProcedure.input(z.object({ forceRefresh: z.boolean().optional() }).optional()).query(async ({ input, ctx }) => {
@@ -30,6 +47,11 @@ export const cryptoRouter = router({
   historicalIngestionHealth: protectedProcedure.query(() => listHistoricalIngestionHealth()),
   reconstructHistoricalState: protectedProcedure.input(z.object({ datasetId: z.number().int().positive(), assetId: z.string().min(1), timeframe: z.enum(["15m", "1h", "4h", "1d"]), timestamp: z.number().int().positive(), instrumentType: z.enum(["spot", "perpetual"]) })).query(async ({ ctx, input }) => reconstructState(input.assetId, input.timeframe, input.timestamp, input.datasetId, input.instrumentType, await getUserScoringConfig(ctx.user.id))),
   previewResearchCosts: protectedProcedure.input(z.object({ grossReturnPercent: z.number(), instrumentType: z.enum(["spot", "perpetual"]), feePercent: z.number().min(0).max(10), slippagePercent: z.number().min(0).max(10), fundingMode: z.enum(["ACTUAL", "ASSUMED", "EXCLUDED", "UNAVAILABLE"]), fundingPercent: z.number().optional() })).query(({ input }) => calculateResearchCosts(input.grossReturnPercent, { version: "RESEARCH_COST_MODEL_V1", instrumentType: input.instrumentType, feePercent: input.feePercent, slippagePercent: input.slippagePercent, funding: { mode: input.fundingMode, percent: input.fundingPercent ?? null } })),
+  executionCostStudies: protectedProcedure.query(({ ctx }) => listExecutionCostStudies(ctx.user.id)),
+  executionCostStudy: protectedProcedure.input(z.object({ studyId: z.number().int().positive() })).query(({ ctx, input }) => getExecutionCostStudy(ctx.user.id, input.studyId)),
+  previewExecutionCostStudy: protectedProcedure.input(executionCostStudyInputSchema).query(({ input }) => previewExecutionCostStudy(input)),
+  createExecutionCostStudy: protectedProcedure.input(executionCostStudyInputSchema).mutation(({ ctx, input }) => createExecutionCostStudy(ctx.user.id, input)),
+  exportExecutionCostStudy: protectedProcedure.input(z.object({ studyId: z.number().int().positive(), format: z.enum(["json", "csv"]) })).query(({ ctx, input }) => exportExecutionCostStudy(ctx.user.id, input.studyId, input.format)),
   runResearchExperiment: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(128), experimentId: z.enum(["A", "B", "C", "D", "E"]), assetIds: z.array(z.string().min(1)).max(12).default([]), timeframe: z.enum(["15m", "1h", "4h", "1d"]), candleLimit: z.number().int().min(250).max(1_000), startAt: z.number().optional(), endAt: z.number().optional(), minimumOpportunity: z.number().min(0).max(100), minimumConfidence: z.number().min(0).max(100), sector: z.string().max(64).optional(), regime: z.enum(["ALL", "RISK ON", "SELECTIVE", "RISK OFF"]).optional(), holdingBars: z.number().int().min(1).max(100), riskPercent: z.number().min(0.1).max(5), stopAtrMultiplier: z.number().min(0.25).max(10), takeProfitRule: z.enum(["risk-reward", "holding-close"]), targetRiskReward: z.number().min(0.25).max(20), trainPercent: z.number().int().min(50).max(90), datasetReference: z.object({ datasetId: z.number().int().positive(), datasetVersion: z.string().min(1).max(96), datasetFingerprint: z.string().min(1).max(128) }).optional(), modelVersion: z.string().min(1).max(96).optional(), instrumentType: z.enum(["spot", "perpetual"]).optional(), costModel: z.object({ version: z.string().min(1).max(96), treatment: z.enum(["GROSS_ONLY", "DECLARED_NET"]), feePercent: z.number().min(0).max(10).optional(), slippagePercent: z.number().min(0).max(10).optional(), fundingMode: z.enum(["ACTUAL", "ASSUMED", "EXCLUDED", "UNAVAILABLE"]).optional() }).optional() })).mutation(async ({ ctx, input }) => runResearchExperiment(ctx.user.id, input, await getUserScoringConfig(ctx.user.id))),
   exportResearchExperiment: protectedProcedure.input(z.object({ experimentId: z.number().int().positive(), format: z.enum(["json", "csv"]) })).query(({ ctx, input }) => exportResearchExperiment(ctx.user.id, input.experimentId, input.format)),
   settings: protectedProcedure.query(({ ctx }) => getUserScoringConfig(ctx.user.id)),

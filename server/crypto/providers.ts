@@ -35,6 +35,14 @@ export type DerivativesContext = {
   statuses: DataStatus[];
 };
 
+export type HistoricalFundingRate = {
+  symbol: string;
+  fundingRate: number;
+  fundingTime: number;
+  markPrice: number | null;
+  rateType: string | null;
+};
+
 class ProviderError extends Error {
   constructor(public source: string, message: string) {
     super(message);
@@ -286,6 +294,31 @@ export async function fetchBinanceDerivatives(symbol: string): Promise<Derivativ
     openInterest: interest.status === "fulfilled" ? Number(interest.value.openInterest ?? NaN) || null : null,
     statuses,
   };
+}
+
+export async function fetchBinanceHistoricalFundingRates(symbol: string, startTime: number, endTime: number): Promise<HistoricalFundingRate[]> {
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime > endTime) throw new ProviderError("Binance funding rate history", "A valid historical funding range is required.");
+  type FundingPayload = Array<{ symbol?: string; fundingRate?: string; fundingTime?: number; markPrice?: string; rateType?: string }>;
+  const records: HistoricalFundingRate[] = [];
+  let cursor = startTime;
+  const maximumPages = 8;
+  for (let page = 0; page < maximumPages && cursor <= endTime; page += 1) {
+    const params = new URLSearchParams({ symbol, startTime: String(cursor), endTime: String(endTime), limit: "1000" });
+    const payload = await getJson<FundingPayload>(`${BINANCE_FUTURES_BASE_URL}/fapi/v1/fundingRate?${params}`, "Binance funding rate history");
+    const normalized = payload.flatMap(item => {
+      const fundingTime = Number(item.fundingTime);
+      const fundingRate = Number(item.fundingRate);
+      const markPrice = item.markPrice === undefined ? null : Number(item.markPrice);
+      if (!Number.isFinite(fundingTime) || !Number.isFinite(fundingRate) || (markPrice !== null && !Number.isFinite(markPrice))) return [];
+      return [{ symbol: item.symbol ?? symbol, fundingRate, fundingTime, markPrice, rateType: item.rateType ?? null }];
+    }).filter(item => item.fundingTime >= startTime && item.fundingTime <= endTime);
+    records.push(...normalized);
+    const last = normalized.at(-1);
+    if (payload.length < 1000 || !last) break;
+    cursor = last.fundingTime + 1;
+  }
+  const unique = new Map(records.map(item => [item.fundingTime, item]));
+  return Array.from(unique.values()).sort((left, right) => left.fundingTime - right.fundingTime);
 }
 
 export function unavailableStatus(source: string, error: unknown): DataStatus {
