@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { getDb } = vi.hoisted(() => ({ getDb: vi.fn() }));
 vi.mock("../db", () => ({ getDb }));
 
-import { appendHistoricalIssueEvent, calculateResearchReadiness, recordHistoricalIngestionIssue } from "./ingestionObservability";
+import { appendHistoricalIssueEvent, calculateResearchReadiness, nextScheduledRunUtc, recordHistoricalIngestionIssue } from "./ingestionObservability";
 
 describe("research dataset readiness", () => {
   beforeEach(() => vi.resetAllMocks());
@@ -26,11 +26,19 @@ describe("research dataset readiness", () => {
     expect(readiness.reasons.join(" ")).toContain("3 recorded regime classifications");
   });
 
+  it("derives the next UTC occurrence from the persisted daily six-field schedule without client-local time", () => {
+    expect(nextScheduledRunUtc("0 32 2 * * *", new Date("2026-08-22T02:31:59Z"))?.toISOString()).toBe("2026-08-22T02:32:00.000Z");
+    expect(nextScheduledRunUtc("0 32 2 * * *", new Date("2026-08-22T02:32:00Z"))?.toISOString()).toBe("2026-08-23T02:32:00.000Z");
+    expect(nextScheduledRunUtc("0 */15 * * * *", new Date("2026-08-22T02:32:00Z"))).toBeNull();
+  });
+
   it("preserves original missing-range evidence and appends a separate retry-success event", async () => {
     const inserts: unknown[] = [];
+    const updates: unknown[] = [];
     const db = {
       insert: vi.fn(() => ({ values: async (value: unknown) => { inserts.push(value); } })),
       select: vi.fn(() => ({ from: () => ({ where: () => ({ orderBy: () => ({ limit: async () => [{ id: 77, assetId: "pepe" }] }) }) }) })),
+      update: vi.fn(() => ({ set: (value: unknown) => { updates.push(value); return { where: async () => undefined }; } })),
     };
     getDb.mockResolvedValue(db);
 
@@ -38,8 +46,9 @@ describe("research dataset readiness", () => {
     await appendHistoricalIssueEvent([issue.id], { scheduleExecutionId: 90002, eventType: "RETRY_SUCCEEDED", retryAttempt: 1, details: { insertedCount: 0, duplicateCount: 0 } });
 
     expect(inserts).toHaveLength(3);
-    expect(inserts[0]).toEqual(expect.objectContaining({ issueKind: "SOURCE_UNAVAILABLE", errorReason: "Public archive did not provide PEPE." }));
+    expect(inserts[0]).toEqual(expect.objectContaining({ issueKind: "SOURCE_UNAVAILABLE", errorReason: "Public archive did not provide PEPE.", retryStatus: "PENDING", lastCheckedAt: expect.any(Date) }));
     expect(inserts[1]).toEqual(expect.objectContaining({ issueId: 77, eventType: "DETECTED" }));
     expect(inserts[2]).toEqual([expect.objectContaining({ issueId: 77, eventType: "RETRY_SUCCEEDED", retryAttempt: 1 })]);
+    expect(updates).toEqual([expect.objectContaining({ retryStatus: "RECOVERED", lastCheckedAt: expect.any(Date) })]);
   });
 });

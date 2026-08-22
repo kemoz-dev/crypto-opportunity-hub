@@ -309,6 +309,8 @@ export const historicalIngestionIssues = mysqlTable("historicalIngestionIssues",
   missingIntervalCount: int("missingIntervalCount").notNull().default(0),
   errorReason: text("errorReason"),
   firstDetectedAt: timestamp("firstDetectedAt").notNull(),
+  lastCheckedAt: timestamp("lastCheckedAt").notNull(),
+  retryStatus: mysqlEnum("retryStatus", ["PENDING", "RECOVERED", "RETRY_FAILED", "NOT_APPLICABLE"]).notNull().default("PENDING"),
   evidence: json("evidence").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("historical_ingestion_issue_scope_idx").on(table.assetId, table.instrumentType, table.timeframe, table.createdAt), index("historical_ingestion_issue_execution_idx").on(table.scheduleExecutionId, table.createdAt), index("historical_ingestion_issue_dataset_idx").on(table.datasetId, table.createdAt)]);

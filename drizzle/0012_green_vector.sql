@@ -1,0 +1,2 @@
+ALTER TABLE `historicalIngestionIssues` ADD `lastCheckedAt` timestamp NOT NULL;--> statement-breakpoint
+ALTER TABLE `historicalIngestionIssues` ADD `retryStatus` enum('PENDING','RECOVERED','RETRY_FAILED','NOT_APPLICABLE') DEFAULT 'PENDING' NOT NULL;

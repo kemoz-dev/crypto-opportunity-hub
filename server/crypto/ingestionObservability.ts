@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { historicalDataQuality, historicalIngestionIssueEvents, historicalIngestionIssues, historicalIngestionSchedules, historicalRegimeSnapshots, historicalScheduleExecutions } from "../../drizzle/schema";
 import type { Timeframe } from "../../shared/crypto";
 import { getDb } from "../db";
@@ -6,6 +6,14 @@ import { getDb } from "../db";
 export type ExecutionStatus = "SUCCESS" | "PARTIAL" | "FAILED" | "SKIPPED";
 export type IssueKind = "PROVIDER_FAILURE" | "MISSING_RANGE" | "NO_NEW_CANDLES" | "SOURCE_UNAVAILABLE";
 export type ScopeAddress = { datasetId?: number; scheduleExecutionId?: number; ingestionRunId?: number; assetId: string; exchange: string; provider: string; instrumentType: "spot" | "perpetual"; timeframe: Timeframe; expectedStartAt?: number; expectedEndAt?: number; actualStartAt?: number; actualEndAt?: number };
+
+export function nextScheduledRunUtc(cronExpression: string, now = new Date()) {
+  const [seconds, minutes, hours, dayOfMonth, month, dayOfWeek] = cronExpression.trim().split(/\s+/);
+  if (![seconds, minutes, hours].every(value => /^\d+$/.test(value)) || dayOfMonth !== "*" || month !== "*" || dayOfWeek !== "*") return null;
+  const candidate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), Number(hours), Number(minutes), Number(seconds)));
+  if (candidate.getTime() <= now.getTime()) candidate.setUTCDate(candidate.getUTCDate() + 1);
+  return candidate;
+}
 
 export function calculateResearchReadiness(input: { assetCount: number; timeframeCoverage: Record<string, { observed: number; expected: number }>; missingRanges: number; regimeCount: number; continuityPercent: number; incrementalExecutionCount: number }) {
   const populatedFrames = Object.values(input.timeframeCoverage).filter(scope => scope.observed > 0).length;
@@ -42,7 +50,7 @@ export async function recordHistoricalIngestionIssue(scope: ScopeAddress, issueK
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable.");
   const observedAt = new Date();
-  await db.insert(historicalIngestionIssues).values({ datasetId: scope.datasetId ?? null, scheduleExecutionId: scope.scheduleExecutionId ?? null, ingestionRunId: scope.ingestionRunId ?? null, issueKind, assetId: scope.assetId, exchange: scope.exchange, provider: scope.provider, instrumentType: scope.instrumentType, timeframe: scope.timeframe, expectedStartAt: scope.expectedStartAt ? new Date(scope.expectedStartAt) : null, expectedEndAt: scope.expectedEndAt ? new Date(scope.expectedEndAt) : null, actualStartAt: scope.actualStartAt ? new Date(scope.actualStartAt) : null, actualEndAt: scope.actualEndAt ? new Date(scope.actualEndAt) : null, missingIntervalCount, errorReason, firstDetectedAt: observedAt, evidence });
+  await db.insert(historicalIngestionIssues).values({ datasetId: scope.datasetId ?? null, scheduleExecutionId: scope.scheduleExecutionId ?? null, ingestionRunId: scope.ingestionRunId ?? null, issueKind, assetId: scope.assetId, exchange: scope.exchange, provider: scope.provider, instrumentType: scope.instrumentType, timeframe: scope.timeframe, expectedStartAt: scope.expectedStartAt ? new Date(scope.expectedStartAt) : null, expectedEndAt: scope.expectedEndAt ? new Date(scope.expectedEndAt) : null, actualStartAt: scope.actualStartAt ? new Date(scope.actualStartAt) : null, actualEndAt: scope.actualEndAt ? new Date(scope.actualEndAt) : null, missingIntervalCount, errorReason, firstDetectedAt: observedAt, lastCheckedAt: observedAt, retryStatus: "PENDING", evidence });
   const issue = (await db.select().from(historicalIngestionIssues).where(eq(historicalIngestionIssues.assetId, scope.assetId)).orderBy(desc(historicalIngestionIssues.id)).limit(1))[0];
   if (!issue) throw new Error("Ingestion issue creation failed.");
   await db.insert(historicalIngestionIssueEvents).values({ issueId: issue.id, scheduleExecutionId: scope.scheduleExecutionId ?? null, ingestionRunId: scope.ingestionRunId ?? null, eventType: "DETECTED", retryAttempt: 0, observedAt, details: evidence });
@@ -65,6 +73,8 @@ export async function appendHistoricalIssueEvent(issueIds: number[], input: { sc
   if (!db) throw new Error("Database is unavailable.");
   const observedAt = new Date();
   await db.insert(historicalIngestionIssueEvents).values(issueIds.map(issueId => ({ issueId, scheduleExecutionId: input.scheduleExecutionId ?? null, ingestionRunId: input.ingestionRunId ?? null, eventType: input.eventType, retryAttempt: input.retryAttempt, observedAt, details: input.details })));
+  const retryStatus = input.eventType === "RETRY_SUCCEEDED" ? "RECOVERED" : input.eventType === "RETRY_FAILED" ? "RETRY_FAILED" : "PENDING";
+  await db.update(historicalIngestionIssues).set({ lastCheckedAt: observedAt, retryStatus }).where(inArray(historicalIngestionIssues.id, issueIds));
 }
 
 export async function listHistoricalIngestionHealth() {
@@ -88,5 +98,5 @@ export async function listHistoricalIngestionHealth() {
   const regimeCount = new Set(regimes.filter(regime => regime.availability === "AVAILABLE" && regime.classification !== "UNAVAILABLE").map(regime => regime.classification)).size;
   const incrementalExecutionCount = executions.filter(execution => execution.status === "SUCCESS" || execution.status === "PARTIAL").length;
   const readiness = calculateResearchReadiness({ assetCount: new Set(quality.map(row => row.assetId)).size, timeframeCoverage: frameCoverage, missingRanges: unresolved.filter(issue => issue.issueKind === "MISSING_RANGE").length, regimeCount, continuityPercent: continuity, incrementalExecutionCount });
-  return { schedules, executions, latest: { success: latestByStatus("SUCCESS"), partial: latestByStatus("PARTIAL"), failed: latestByStatus("FAILED") }, unresolvedIssues: unresolved, readiness };
+  return { schedules: schedules.map(schedule => ({ ...schedule, nextScheduledAt: schedule.isEnabled ? nextScheduledRunUtc(schedule.cronExpression) : null })), executions, latest: { success: latestByStatus("SUCCESS"), partial: latestByStatus("PARTIAL"), failed: latestByStatus("FAILED") }, unresolvedIssues: unresolved, readiness };
 }

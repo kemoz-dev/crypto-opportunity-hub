@@ -96,5 +96,7 @@
 - [x] Add deterministic coverage for scheduled execution persistence, partial batches, retry behavior, duplicate prevention, missing ranges, lineage, readiness, PEPE, authentication, authorization, and no-mutation boundaries.
 - [x] Propagate real retry attempts into scheduled/incremental runs and execution metrics, with original issue linkage for retry success or failure.
 - [x] Add end-to-end deterministic retry tests proving failed-scope preservation, successful retry linkage, duplicate prevention, and protected missing-range inspection.
+- [x] Persist and display each failed or missing range's last-checked timestamp and retry status, preserving append-only source evidence.
+- [x] Add next scheduled run visibility to the protected Ingestion Health view using durable platform-compatible schedule metadata.
 - [ ] Observe first production executions of all three expanded schedules, run full validation, publish the result, and report the requested ingestion-health evidence without starting Research Lab.
 - [x] Add deterministic registry inclusion/exclusion, immutable snapshot persistence/versioning, multi-asset partial-failure, and no-mutation boundary tests for the market-universe flow.
