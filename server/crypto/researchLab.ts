@@ -37,6 +37,10 @@ export type ResearchExperimentInput = {
   takeProfitRule: "risk-reward" | "holding-close";
   targetRiskReward: number;
   trainPercent: number;
+  datasetReference?: { datasetId: number; datasetVersion: string; datasetFingerprint: string };
+  modelVersion?: string;
+  instrumentType?: "spot" | "perpetual";
+  costModel?: { version: string; treatment: "GROSS_ONLY" | "DECLARED_NET"; feePercent?: number; slippagePercent?: number; fundingMode?: "ACTUAL" | "ASSUMED" | "EXCLUDED" | "UNAVAILABLE" };
 };
 
 type Regime = "RISK ON" | "SELECTIVE" | "RISK OFF" | "UNAVAILABLE";
@@ -261,10 +265,13 @@ export async function runResearchExperiment(userId: number, input: ResearchExper
   if (!EXPERIMENTS.some(experiment => experiment.id === input.experimentId)) throw new Error("Unsupported experiment.");
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; the research run cannot be persisted.");
-  const configuration = { protocolVersion: RESEARCH_PROTOCOL_VERSION, input, scoringConfiguration, experiment: EXPERIMENTS.find(experiment => experiment.id === input.experimentId) };
+  const modelVersion = input.modelVersion ?? "OPPORTUNITY_ENGINE_RESEARCH_ADAPTER_V1";
+  const costModel = input.costModel ?? { version: "RESEARCH_GROSS_ONLY_V1", treatment: "GROSS_ONLY" as const, fundingMode: "UNAVAILABLE" as const };
+  const modelConfigurationFingerprint = fingerprint({ modelVersion, scoringConfiguration });
+  const configuration = { protocolVersion: RESEARCH_PROTOCOL_VERSION, input, modelVersion, modelConfigurationFingerprint, costModel, scoringConfiguration, experiment: EXPERIMENTS.find(experiment => experiment.id === input.experimentId) };
   const configurationFingerprint = fingerprint(configuration);
   const startedAt = new Date();
-  await db.insert(researchExperiments).values({ userId, name: input.name, status: "running", protocolVersion: RESEARCH_PROTOCOL_VERSION, configurationFingerprint, configuration, dataProvenance: { provider: "Binance Futures OHLCV", sourceVersion: "fapi/v1/klines", requestedAt: startedAt.toISOString(), retainedSeries: "completed OHLCV candles only" }, startedAt });
+  await db.insert(researchExperiments).values({ userId, name: input.name, status: "running", protocolVersion: RESEARCH_PROTOCOL_VERSION, configurationFingerprint, configuration, datasetId: input.datasetReference?.datasetId ?? null, datasetVersion: input.datasetReference?.datasetVersion ?? null, datasetFingerprint: input.datasetReference?.datasetFingerprint ?? null, modelConfigurationFingerprint, instrumentType: input.instrumentType ?? "perpetual", costModel, dataProvenance: { provider: "Binance Futures OHLCV", sourceVersion: "fapi/v1/klines", requestedAt: startedAt.toISOString(), retainedSeries: "completed OHLCV candles only", selectedHistoricalDataset: input.datasetReference ?? null, analysisDataMode: input.datasetReference ? "ARCHIVE_DIRECT_WITH_IMMUTABLE_DATASET_REFERENCE" : "ARCHIVE_DIRECT_LEGACY" }, startedAt });
   const experiment = (await db.select().from(researchExperiments).where(and(eq(researchExperiments.userId, userId), eq(researchExperiments.configurationFingerprint, configurationFingerprint))).orderBy(desc(researchExperiments.id)).limit(1))[0];
   if (!experiment) throw new Error("Research experiment creation failed.");
   try {
@@ -286,7 +293,7 @@ export async function runResearchExperiment(userId: number, input: ResearchExper
     const result = buildResearchResultRows(allSignals, input);
     const dateRange = primaryEntries.flatMap(([, response]) => response.candles).sort((a, b) => a.openTime - b.openTime);
     const sources = Array.from(new Set(primaryEntries.map(([, response]) => response.source)));
-    const dataProvenance = { provider: sources, sourceVersion: "fapi/v1/klines or Binance public completed-candle archive", requestedAt: startedAt.toISOString(), assetsRequested: assets.map(asset => asset.symbol), assetsWithCandles: assets.filter(asset => (primary.get(asset.binanceSymbol)?.candles.length ?? 0) > 0).map(asset => asset.symbol), timeframe: input.timeframe, higherTimeframe: high ?? "unavailable", completedCandleOnly: true, regimeBasis: "BTC same-time trailing 24-hour OHLCV proxy; not production regime reconstruction", sectorBasis: "Current configured static asset taxonomy; point-in-time classification history unavailable" };
+    const dataProvenance = { provider: sources, sourceVersion: "fapi/v1/klines or Binance public completed-candle archive", requestedAt: startedAt.toISOString(), assetsRequested: assets.map(asset => asset.symbol), assetsWithCandles: assets.filter(asset => (primary.get(asset.binanceSymbol)?.candles.length ?? 0) > 0).map(asset => asset.symbol), timeframe: input.timeframe, higherTimeframe: high ?? "unavailable", completedCandleOnly: true, selectedHistoricalDataset: input.datasetReference ?? null, analysisDataMode: input.datasetReference ? "ARCHIVE_DIRECT_WITH_IMMUTABLE_DATASET_REFERENCE" : "ARCHIVE_DIRECT_LEGACY", modelVersion, modelConfigurationFingerprint, instrumentType: input.instrumentType ?? "perpetual", costModel, regimeBasis: "BTC same-time trailing 24-hour OHLCV proxy; not production regime reconstruction", sectorBasis: "Current configured static asset taxonomy; point-in-time classification history unavailable" };
     const resultSnapshot = { generatedAt: new Date().toISOString(), selectedMetrics: calculateResearchMetrics(result.selected), allQualifyingSignals: result.selected, timeSplit: result.timeSplit, splitAt: result.splitAt, currentBestCandidate: result.currentBestCandidate, dataLimitations: ["Historical market-cap, CoinGecko market-context, and production sector-model inputs are not reconstructed from present-day values.", "Regime labels are an explicitly separate BTC same-time OHLCV proxy, not the production regime model.", "Sector labels use the configured taxonomy and do not claim historical classification-point-in-time coverage.", "Drawdown is a chronological equal-risk observation series, not a fully capital-constrained portfolio simulation.", "No fees, slippage, funding, or liquidity impact are modeled in this research run."], protocol: RESEARCH_PROTOCOL_VERSION };
     await db.insert(researchExperimentResults).values(result.rows.map(item => ({ experimentId: experiment.id, ...item })));
     await db.update(researchExperiments).set({ status: "completed", completedAt: new Date(), dataStartAt: dateRange[0] ? new Date(dateRange[0].openTime) : null, dataEndAt: dateRange.at(-1) ? new Date(dateRange.at(-1)!.closeTime) : null, dataProvenance, resultSnapshot }).where(eq(researchExperiments.id, experiment.id));
@@ -315,11 +322,11 @@ export async function getResearchExperiment(userId: number, experimentId: number
 export async function exportResearchExperiment(userId: number, experimentId: number, format: "json" | "csv") {
   const experiment = await getResearchExperiment(userId, experimentId);
   if (format === "json") return { filename: `opportunity-research-${experimentId}.json`, mimeType: "application/json", content: JSON.stringify(experiment, null, 2) };
-  const header = ["recordType", "experimentId", "name", "protocolVersion", "configurationFingerprint", "dataStartAt", "dataEndAt", "configurationJson", "dataProvenanceJson", "dimension", "dimensionKey", "signalCount", "evidenceStatus", "reason", "winRate", "averageReturn", "medianReturn", "expectancy", "profitFactor", "maximumDrawdown", "averageR"];
+  const header = ["recordType", "experimentId", "name", "protocolVersion", "configurationFingerprint", "datasetId", "datasetVersion", "datasetFingerprint", "modelConfigurationFingerprint", "instrumentType", "costModelJson", "dataStartAt", "dataEndAt", "configurationJson", "dataProvenanceJson", "dimension", "dimensionKey", "signalCount", "evidenceStatus", "reason", "winRate", "averageReturn", "medianReturn", "expectancy", "profitFactor", "maximumDrawdown", "averageR"];
   const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const lines = experiment.results.map(result => {
     const metrics = result.metrics as Partial<ResearchMetrics>;
-    return ["result", experiment.id, experiment.name, experiment.protocolVersion, experiment.configurationFingerprint, experiment.dataStartAt?.toISOString(), experiment.dataEndAt?.toISOString(), JSON.stringify(experiment.configuration), JSON.stringify(experiment.dataProvenance), result.dimension, result.dimensionKey, result.signalCount, result.evidenceStatus, result.reason, metrics.winRate, metrics.averageReturn, metrics.medianReturn, metrics.expectancy, metrics.profitFactor, metrics.maximumDrawdown, metrics.averageR].map(escape).join(",");
+    return ["result", experiment.id, experiment.name, experiment.protocolVersion, experiment.configurationFingerprint, experiment.datasetId, experiment.datasetVersion, experiment.datasetFingerprint, experiment.modelConfigurationFingerprint, experiment.instrumentType, JSON.stringify(experiment.costModel), experiment.dataStartAt?.toISOString(), experiment.dataEndAt?.toISOString(), JSON.stringify(experiment.configuration), JSON.stringify(experiment.dataProvenance), result.dimension, result.dimensionKey, result.signalCount, result.evidenceStatus, result.reason, metrics.winRate, metrics.averageReturn, metrics.medianReturn, metrics.expectancy, metrics.profitFactor, metrics.maximumDrawdown, metrics.averageR].map(escape).join(",");
   });
   return { filename: `opportunity-research-${experimentId}.csv`, mimeType: "text/csv", content: [header.join(","), ...lines].join("\n") };
 }

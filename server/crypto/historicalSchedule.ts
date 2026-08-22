@@ -3,6 +3,7 @@ import { historicalIngestionSchedules } from "../../drizzle/schema";
 import type { Timeframe } from "../../shared/crypto";
 import { getDb } from "../db";
 import { runHistoricalIncremental } from "./historicalIngestion";
+import { inheritHistoricalDatasetContext } from "./historicalContext";
 
 export const HISTORICAL_INGESTION_SCHEDULE_NAME = "daily-public-historical-btc-15m";
 export const HISTORICAL_INGESTION_CRON = "0 12 2 * * *";
@@ -28,9 +29,10 @@ export async function evaluateHistoricalIngestionByTaskUid(taskUid: string) {
   await db.update(historicalIngestionSchedules).set({ lastRunAt: new Date(now), lastStatus: "SKIPPED", lastError: null }).where(and(eq(historicalIngestionSchedules.id, schedule.id), eq(historicalIngestionSchedules.scheduleCronTaskUid, taskUid)));
   try {
     const result = await runHistoricalIncremental({ notes: `${configuration.notes} Scheduler task ${taskUid}.`, assetIds: configuration.assetIds, timeframes: configuration.timeframes, instrumentType: configuration.instrumentType, endAt: now, maximumMonths: configuration.maximumMonths });
+    const context = await inheritHistoricalDatasetContext(result.basedOnDatasetId, result.datasetId);
     const status = result.failedScopes.length ? "PARTIAL" as const : "SUCCESS" as const;
     await db.update(historicalIngestionSchedules).set({ lastDatasetId: result.datasetId, lastRunAt: new Date(), lastStatus: status, lastError: result.failedScopes.length ? result.failedScopes.map(scope => `${scope.assetId}/${scope.timeframe}: ${scope.error}`).join("; ") : null }).where(eq(historicalIngestionSchedules.id, schedule.id));
-    return { status, scheduleId: schedule.id, datasetId: result.datasetId, failedScopes: result.failedScopes.length, completedScopes: result.completedScopes.length };
+    return { status, scheduleId: schedule.id, datasetId: result.datasetId, failedScopes: result.failedScopes.length, completedScopes: result.completedScopes.length, context };
   } catch (error) {
     const message = error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, "provider endpoint") : "Historical ingestion failed.";
     await db.update(historicalIngestionSchedules).set({ lastStatus: "FAILED", lastError: message }).where(eq(historicalIngestionSchedules.id, schedule.id));

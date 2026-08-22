@@ -90,3 +90,31 @@ export async function persistHistoricalDatasetContext(datasetId: number) {
   await persistUnavailableHistoricalSectorAndAvailability(datasetId);
   return { regime, marketCaps };
 }
+
+async function insertInBatches<T>(rows: T[], insert: (batch: T[]) => Promise<unknown>) {
+  for (let offset = 0; offset < rows.length; offset += 500) await insert(rows.slice(offset, offset + 500));
+}
+
+export async function inheritHistoricalDatasetContext(sourceDatasetId: number, targetDatasetId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  const [marketCaps, regimes, sectors, availability] = await Promise.all([
+    db.select().from(historicalMarketCaps).where(eq(historicalMarketCaps.datasetId, sourceDatasetId)),
+    db.select().from(historicalRegimeSnapshots).where(eq(historicalRegimeSnapshots.datasetId, sourceDatasetId)),
+    db.select().from(historicalSectorSnapshots).where(eq(historicalSectorSnapshots.datasetId, sourceDatasetId)),
+    db.select().from(historicalAssetAvailability).where(eq(historicalAssetAvailability.datasetId, sourceDatasetId)),
+  ]);
+  await insertInBatches(marketCaps, batch => db.insert(historicalMarketCaps).values(batch.map(row => ({
+    datasetId: targetDatasetId, assetId: row.assetId, provider: row.provider, sourceObservedAt: row.sourceObservedAt, marketCap: row.marketCap, circulatingSupply: row.circulatingSupply, availability: row.availability, retrievalAt: row.retrievalAt, sourcePayload: { inheritedFromDatasetId: sourceDatasetId, sourcePayload: row.sourcePayload },
+  }))).onDuplicateKeyUpdate({ set: { marketCap: sql`VALUES(marketCap)`, circulatingSupply: sql`VALUES(circulatingSupply)`, availability: sql`VALUES(availability)`, sourcePayload: sql`VALUES(sourcePayload)` } }));
+  await insertInBatches(regimes, batch => db.insert(historicalRegimeSnapshots).values(batch.map(row => ({
+    datasetId: targetDatasetId, timeframe: row.timeframe, observedAt: row.observedAt, classification: row.classification, regimeScore: row.regimeScore, inputs: { inheritedFromDatasetId: sourceDatasetId, inputs: row.inputs }, definitionVersion: row.definitionVersion, availability: row.availability, source: row.source, freshnessAt: row.freshnessAt,
+  }))).onDuplicateKeyUpdate({ set: { classification: sql`VALUES(classification)`, regimeScore: sql`VALUES(regimeScore)`, inputs: sql`VALUES(inputs)`, availability: sql`VALUES(availability)`, freshnessAt: sql`VALUES(freshnessAt)` } }));
+  await insertInBatches(sectors, batch => db.insert(historicalSectorSnapshots).values(batch.map(row => ({
+    datasetId: targetDatasetId, assetId: row.assetId, observedAt: row.observedAt, sector: row.sector, sectorMomentum: row.sectorMomentum, sectorRank: row.sectorRank, relativeStrengthVsSector: row.relativeStrengthVsSector, relativeStrengthVsBtc: row.relativeStrengthVsBtc, definitionVersion: row.definitionVersion, availability: row.availability, source: row.source, freshnessAt: row.freshnessAt,
+  }))).onDuplicateKeyUpdate({ set: { sector: sql`VALUES(sector)`, sectorMomentum: sql`VALUES(sectorMomentum)`, sectorRank: sql`VALUES(sectorRank)`, relativeStrengthVsSector: sql`VALUES(relativeStrengthVsSector)`, relativeStrengthVsBtc: sql`VALUES(relativeStrengthVsBtc)`, availability: sql`VALUES(availability)`, source: sql`VALUES(source)` } }));
+  await insertInBatches(availability, batch => db.insert(historicalAssetAvailability).values(batch.map(row => ({
+    datasetId: targetDatasetId, assetId: row.assetId, listingAt: row.listingAt, delistingAt: row.delistingAt, availability: row.availability, source: row.source, notes: `${row.notes} Inherited from dataset ${sourceDatasetId}.`,
+  }))).onDuplicateKeyUpdate({ set: { listingAt: sql`VALUES(listingAt)`, delistingAt: sql`VALUES(delistingAt)`, availability: sql`VALUES(availability)`, source: sql`VALUES(source)`, notes: sql`VALUES(notes)` } }));
+  return { marketCaps: marketCaps.length, regimes: regimes.length, sectors: sectors.length, availability: availability.length, inheritedFromDatasetId: sourceDatasetId };
+}

@@ -123,7 +123,16 @@ export async function sealHistoricalDataset(datasetId: number) {
 export async function listHistoricalDataQuality(datasetId?: number) {
   const db = await getDb();
   if (!db) return [];
-  return datasetId ? db.select().from(historicalDataQuality).where(eq(historicalDataQuality.datasetId, datasetId)).orderBy(asc(historicalDataQuality.assetId), asc(historicalDataQuality.timeframe)) : db.select().from(historicalDataQuality).orderBy(desc(historicalDataQuality.createdAt));
+  if (!datasetId) return db.select().from(historicalDataQuality).orderBy(desc(historicalDataQuality.createdAt));
+  const dataset = (await db.select().from(historicalDatasets).where(eq(historicalDatasets.id, datasetId)).limit(1))[0];
+  if (!dataset || dataset.status !== "sealed" || !dataset.sealedAt) return [];
+  const rows = await db.select().from(historicalDataQuality).where(lte(historicalDataQuality.createdAt, dataset.sealedAt)).orderBy(desc(historicalDataQuality.createdAt));
+  const latestByScope = new Map<string, typeof rows[number]>();
+  for (const row of rows) {
+    const key = `${row.assetId}:${row.exchange}:${row.instrumentType}:${row.timeframe}`;
+    if (!latestByScope.has(key)) latestByScope.set(key, row);
+  }
+  return Array.from(latestByScope.values()).sort((left, right) => left.assetId.localeCompare(right.assetId) || left.timeframe.localeCompare(right.timeframe));
 }
 
 export async function listHistoricalDatasets() {
