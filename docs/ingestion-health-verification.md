@@ -8,6 +8,14 @@ The protected health API returned HTTP 200 with zero persisted expanded-schedule
 
 The checkpointed production domain served the Historical Data shell immediately after publication. A direct authenticated request for the newly added `historicalIngestionHealth` procedure initially returned HTTP 404 during deployment propagation. A subsequent cache-busted request returned HTTP 200 and the protected schedule payload, including the three expanded schedule records. This is not a failed ingestion execution; no expanded schedule task has yet run through the new callback.
 
+After the pre-first-run enhancement, the published `historicalIngestionHealth` procedure again returned HTTP 200. A manual coverage request without the required selected-dataset object returned the expected request-validation error and is not evidence of missing production coverage. The protected user interface must select its sealed dataset before querying that endpoint.
+
+A subsequent authenticated selected-dataset request for dataset `300001` returned HTTP 200, immutable snapshot `60001`, and 20 Matrix rows. The release therefore retains the full persisted Market Universe evidence alongside the new Ingestion Health surface.
+
+## One-time first-run follow-up
+
+The user authorized a single post-run inspection task. It is active with task UID `eAkdJChwe3SmSWZ1QY1MZf`, six-field cron `0 20 3 23 8 *`, one-time execution mode, and expiry at 2026-08-23 04:00:00 UTC. Its mandate is restricted to inspecting the three ordinary production executions and reporting their persisted evidence; it explicitly prohibits Research Lab, scoring, alert, paper-trading, real-trading, provider, sentiment, on-chain, and ML changes.
+
 | Schedule | Task UID | Callback | Next UTC execution | Platform runs at baseline |
 | --- | --- | --- | --- | --- |
 | ETH/SOL 15M | `joNJFMck3fFT77bTCLbSby` | `/api/scheduled/ingest-historical-data` | 2026-08-23 02:32 | 0 |

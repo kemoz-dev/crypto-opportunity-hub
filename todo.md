@@ -99,4 +99,5 @@
 - [x] Persist and display each failed or missing range's last-checked timestamp and retry status, preserving append-only source evidence.
 - [x] Add next scheduled run visibility to the protected Ingestion Health view using durable platform-compatible schedule metadata.
 - [ ] Observe first production executions of all three expanded schedules, run full validation, publish the result, and report the requested ingestion-health evidence without starting Research Lab.
+- [ ] Run the user-authorized one-time follow-up after 2026-08-23 03:20 UTC; inspect the three first scheduled executions, report the requested evidence, and then stop without any prohibited mutations.
 - [x] Add deterministic registry inclusion/exclusion, immutable snapshot persistence/versioning, multi-asset partial-failure, and no-mutation boundary tests for the market-universe flow.
