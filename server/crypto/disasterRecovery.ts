@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { gunzipSync, gzipSync, strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import {
   alertExecutions,
@@ -47,6 +47,7 @@ import { storageGetSignedUrl, storagePut } from "../storage";
 export const DISASTER_RECOVERY_ARCHIVE_VERSION = "crypto-opportunity-hub-dr-v2";
 export const DISASTER_RECOVERY_ARCHIVE_FORMAT = "zip-json";
 export const DISASTER_RECOVERY_RETENTION_DAYS = 30;
+export const VERIFIED_PRIMARY_RECOVERY_EXPORT_ID = "dr-20260823-c0df3a744ffd49bd";
 const APPLICATION_VERSION = "crypto-opportunity-hub@1.0.0";
 
 const TABLE_ORDER = [
@@ -419,8 +420,22 @@ export async function getDisasterRecoveryArchive(userId: number, archiveId: numb
   return archive;
 }
 
+export async function getVerifiedPrimaryDisasterRecoveryArchive(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  const archive = (await db.select().from(disasterRecoveryArchives).where(and(eq(disasterRecoveryArchives.userId, userId), eq(disasterRecoveryArchives.exportId, VERIFIED_PRIMARY_RECOVERY_EXPORT_ID))).limit(1))[0];
+  const verification = archive?.verification as RestoreValidation | null | undefined;
+  if (!archive || archive.status !== "verified" || !archive.storageKey || !verification?.valid || verification.checksumMismatches.length || verification.errors.length) throw new Error("Verified primary recovery archive is not available for this account.");
+  return archive;
+}
+
 export async function getDisasterRecoveryArchiveDownload(userId: number, archiveId: number) {
   const archive = await getDisasterRecoveryArchive(userId, archiveId);
   if (archive.status !== "verified" || !archive.storageKey) throw new Error("A verified stored archive is not available for download.");
   return { exportId: archive.exportId, filename: `${archive.exportId}.zip`, url: await storageGetSignedUrl(archive.storageKey), expires: "provider-signed URL" };
+}
+
+export async function getVerifiedPrimaryDisasterRecoveryArchiveDownload(userId: number) {
+  const archive = await getVerifiedPrimaryDisasterRecoveryArchive(userId);
+  return { exportId: archive.exportId, filename: `${archive.exportId}.zip`, url: await storageGetSignedUrl(archive.storageKey!), expires: "provider-signed URL", archiveSizeBytes: archive.archiveSizeBytes, archiveChecksum: archive.archiveChecksum };
 }

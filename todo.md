@@ -112,3 +112,5 @@
 - [x] Implement isolated archive restore validation with source-versus-restored counts, checksum comparison, relationship checks, dataset-version and immutable-snapshot preservation, and explicit mismatch reporting.
 - [x] Build protected backup inspection/download controls and recovery documentation, keeping backup status separate from ingestion status and leaving existing ingestion schedules unchanged.
 - [x] Create and verify the first stored disaster-recovery archive, run full tests, TypeScript and production-build validation, and report portability limits without starting Research Lab or modifying scoring, alerts, or trading.
+- [x] Expose the already verified primary disaster-recovery ZIP through a dedicated authenticated owner-only download action with its exact metadata and validation evidence.
+- [x] Verify the protected download returns the exact primary ZIP and document its size, export ID, verification, and checksum result without regenerating the archive.
