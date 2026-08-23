@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { desc, eq, inArray, sql } from "drizzle-orm";
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { gunzipSync, gzipSync, strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import {
   alertExecutions,
   alerts,
@@ -44,7 +44,7 @@ import {
 import { getDb } from "../db";
 import { storageGetSignedUrl, storagePut } from "../storage";
 
-export const DISASTER_RECOVERY_ARCHIVE_VERSION = "crypto-opportunity-hub-dr-v1";
+export const DISASTER_RECOVERY_ARCHIVE_VERSION = "crypto-opportunity-hub-dr-v2";
 export const DISASTER_RECOVERY_ARCHIVE_FORMAT = "zip-json";
 export const DISASTER_RECOVERY_RETENTION_DAYS = 30;
 const APPLICATION_VERSION = "crypto-opportunity-hub@1.0.0";
@@ -57,12 +57,15 @@ const TABLE_ORDER = [
   "marketUniverseAssets", "historicalUniverseSnapshots", "historicalUniverseMembers", "executionCostModels", "historicalFundingRates", "historicalLiquidityObservations", "executionCostStudies",
   "alerts", "alertExecutions", "researchReports",
 ] as const;
+const LARGE_TABLES = new Set(["historicalCandles", "historicalRegimeSnapshots"]);
+const LARGE_TABLE_BATCH_SIZE = 2_000;
 
 const archivePath = (table: string) => `data/${table}.json`;
 
 type Row = Record<string, unknown>;
 type Snapshot = { tables: Record<string, Row[]>; schema: Record<string, string>; startedAt: string; completedAt: string };
-type ArchiveComponent = { path: string; recordCount: number; checksum: string; bytes: number };
+type ArchiveComponent = { path: string; recordCount: number; checksum: string; bytes: number; table?: string; encoding?: "json" | "ndjson-gzip" };
+type LargeArchiveFile = { table: "historicalCandles" | "historicalRegimeSnapshots"; path: string; bytes: Uint8Array; recordCount: number };
 export type RestoreValidation = {
   environment: "isolated-in-memory-archive-reconstruction";
   valid: boolean;
@@ -191,7 +194,7 @@ function relationshipValidation(snapshot: Snapshot) {
 }
 
 export function calculateDisasterRecoveryLogicalChecksum(components: ArchiveComponent[]) {
-  return sha256(stableJson(components.map(({ path, checksum, recordCount }) => ({ path, checksum, recordCount }))));
+  return sha256(stableJson(components.map(({ path, checksum, recordCount, table, encoding }) => ({ path, checksum, recordCount, table, encoding }))));
 }
 
 function portability() {
@@ -244,11 +247,11 @@ async function collectSnapshot(db: any, userId: number): Promise<Snapshot> {
     historicalIngestionRuns: rows(await db.select().from(historicalIngestionRuns)),
     historicalIngestionIssues: rows(await db.select().from(historicalIngestionIssues)),
     historicalIngestionIssueEvents: rows(await db.select().from(historicalIngestionIssueEvents)),
-    historicalCandles: rows(await db.select().from(historicalCandles)),
+    historicalCandles: [],
     historicalDataQuality: rows(await db.select().from(historicalDataQuality)),
     historicalMissingIntervals: rows(await db.select().from(historicalMissingIntervals)),
     historicalMarketCaps: rows(await db.select().from(historicalMarketCaps)),
-    historicalRegimeSnapshots: rows(await db.select().from(historicalRegimeSnapshots)),
+    historicalRegimeSnapshots: [],
     historicalSectorSnapshots: rows(await db.select().from(historicalSectorSnapshots)),
     historicalAssetAvailability: rows(await db.select().from(historicalAssetAvailability)),
     marketUniverseAssets: rows(await db.select().from(marketUniverseAssets)),
@@ -267,21 +270,45 @@ async function collectSnapshot(db: any, userId: number): Promise<Snapshot> {
   return { tables, schema, startedAt, completedAt: new Date().toISOString() };
 }
 
-function createArchive(snapshot: Snapshot, exportId: string) {
+async function collectLargeArchiveFiles(db: any): Promise<LargeArchiveFile[]> {
+  const output: LargeArchiveFile[] = [];
+  for (const [tableName, table] of [["historicalCandles", historicalCandles], ["historicalRegimeSnapshots", historicalRegimeSnapshots]] as const) {
+    let afterId = 0;
+    let part = 0;
+    while (true) {
+      const batch = await db.select().from(table).where(gt(table.id, afterId)).orderBy(asc(table.id)).limit(LARGE_TABLE_BATCH_SIZE);
+      if (!batch.length) break;
+      const payload = strToU8(`${batch.map((row: unknown) => stableJson(row)).join("\n")}\n`);
+      output.push({ table: tableName, path: `data/${tableName}/${String(part).padStart(6, "0")}.ndjson.gz`, bytes: gzipSync(payload, { level: 6 }), recordCount: batch.length });
+      afterId = batch[batch.length - 1].id;
+      part += 1;
+    }
+  }
+  return output;
+}
+
+function createArchive(snapshot: Snapshot, exportId: string, largeFiles: LargeArchiveFile[]) {
   const components: ArchiveComponent[] = [];
   const files: Record<string, Uint8Array> = {};
   for (const tableName of TABLE_ORDER) {
+    if (LARGE_TABLES.has(tableName)) {
+      for (const file of largeFiles.filter(item => item.table === tableName)) {
+        files[file.path] = file.bytes;
+        components.push({ path: file.path, table: tableName, encoding: "ndjson-gzip", recordCount: file.recordCount, checksum: sha256(file.bytes), bytes: file.bytes.byteLength });
+      }
+      continue;
+    }
     const path = archivePath(tableName);
     const bytes = strToU8(stableJson(snapshot.tables[tableName] ?? []));
     files[path] = bytes;
-    components.push({ path, recordCount: snapshot.tables[tableName]?.length ?? 0, checksum: sha256(bytes), bytes: bytes.byteLength });
+    components.push({ path, table: tableName, encoding: "json", recordCount: snapshot.tables[tableName]?.length ?? 0, checksum: sha256(bytes), bytes: bytes.byteLength });
   }
   const schemaPath = "schema/mysql-ddl.json";
   const schemaBytes = strToU8(stableJson(snapshot.schema));
   files[schemaPath] = schemaBytes;
-  components.push({ path: schemaPath, recordCount: Object.keys(snapshot.schema).length, checksum: sha256(schemaBytes), bytes: schemaBytes.byteLength });
+  components.push({ path: schemaPath, encoding: "json", recordCount: Object.keys(snapshot.schema).length, checksum: sha256(schemaBytes), bytes: schemaBytes.byteLength });
   const datasetVersions = tableRows(snapshot, "historicalDatasets").map(row => ({ id: Number(row.id), version: String(row.version), contentFingerprint: typeof row.contentFingerprint === "string" ? row.contentFingerprint : null, status: String(row.status) }));
-  const entityCounts = Object.fromEntries(TABLE_ORDER.map(tableName => [tableName, snapshot.tables[tableName]?.length ?? 0]));
+  const entityCounts = Object.fromEntries(TABLE_ORDER.map(tableName => [tableName, LARGE_TABLES.has(tableName) ? largeFiles.filter(file => file.table === tableName).reduce((total, file) => total + file.recordCount, 0) : snapshot.tables[tableName]?.length ?? 0]));
   const manifest: DisasterRecoveryManifest = {
     exportId,
     exportTimestamp: new Date().toISOString(),
@@ -299,7 +326,7 @@ function createArchive(snapshot: Snapshot, exportId: string) {
     archiveChecksum: calculateDisasterRecoveryLogicalChecksum(components),
   };
   files["manifest.json"] = strToU8(stableJson(manifest));
-  return { manifest, archiveBytes: zipSync(files, { level: 9 }) };
+  return { manifest, archiveBytes: zipSync(files, { level: 0 }) };
 }
 
 export function validateDisasterRecoveryArchive(archiveBytes: Uint8Array): RestoreValidation {
@@ -307,6 +334,8 @@ export function validateDisasterRecoveryArchive(archiveBytes: Uint8Array): Resto
   const checksumMismatches: string[] = [];
   let manifest: DisasterRecoveryManifest | null = null;
   let snapshot: Snapshot = { tables: {}, schema: {}, startedAt: "", completedAt: "" };
+  const restoredCounts: Record<string, number> = {};
+  const largeRelationshipMissing = new Map<string, number>();
   try {
     const files = unzipSync(archiveBytes);
     const manifestBytes = files["manifest.json"];
@@ -319,15 +348,32 @@ export function validateDisasterRecoveryArchive(archiveBytes: Uint8Array): Resto
         continue;
       }
       if (sha256(bytes) !== component.checksum) checksumMismatches.push(`${component.path}: checksum mismatch`);
-      if (component.path.startsWith("data/")) snapshot.tables[component.path.slice(5, -5)] = JSON.parse(strFromU8(bytes)) as Row[];
+      if (component.encoding === "ndjson-gzip") {
+        const table = component.table;
+        if (!table) throw new Error(`${component.path}: missing table metadata.`);
+        const restoredRows = strFromU8(gunzipSync(bytes)).trim().split("\n").filter(Boolean).map(line => JSON.parse(line) as Row);
+        restoredCounts[table] = (restoredCounts[table] ?? 0) + restoredRows.length;
+        for (const row of restoredRows) {
+          if (table === "historicalCandles") {
+            if (!tableIdSet(snapshot, "historicalIngestionRuns").has(row.ingestionRunId)) largeRelationshipMissing.set("historicalCandles.ingestionRunId -> historicalIngestionRuns.id", (largeRelationshipMissing.get("historicalCandles.ingestionRunId -> historicalIngestionRuns.id") ?? 0) + 1);
+            if (!tableIdSet(snapshot, "assets").has(row.assetId)) largeRelationshipMissing.set("historicalCandles.assetId -> assets.id", (largeRelationshipMissing.get("historicalCandles.assetId -> assets.id") ?? 0) + 1);
+          }
+          if (table === "historicalRegimeSnapshots" && !tableIdSet(snapshot, "historicalDatasets").has(row.datasetId)) largeRelationshipMissing.set("historicalRegimeSnapshots.datasetId -> historicalDatasets.id", (largeRelationshipMissing.get("historicalRegimeSnapshots.datasetId -> historicalDatasets.id") ?? 0) + 1);
+        }
+      } else if (component.path.startsWith("data/")) {
+        const table = component.table ?? component.path.slice(5, -5);
+        const restoredRows = JSON.parse(strFromU8(bytes)) as Row[];
+        snapshot.tables[table] = restoredRows;
+        restoredCounts[table] = restoredRows.length;
+      }
       if (component.path === "schema/mysql-ddl.json") snapshot.schema = JSON.parse(strFromU8(bytes)) as Record<string, string>;
     }
     if (calculateDisasterRecoveryLogicalChecksum(manifest.components) !== manifest.archiveChecksum) checksumMismatches.push("manifest: logical archive checksum mismatch");
   } catch (error) {
     errors.push(error instanceof Error ? error.message : "Archive parsing failed.");
   }
-  const sourceVsRestoredCounts = manifest ? Object.entries(manifest.entityCounts).map(([table, source]) => ({ table, source, restored: tableRows(snapshot, table).length, matches: source === tableRows(snapshot, table).length })) : [];
-  const relationshipChecks = manifest ? relationshipValidation(snapshot) : [];
+  const sourceVsRestoredCounts = manifest ? Object.entries(manifest.entityCounts).map(([table, source]) => ({ table, source, restored: restoredCounts[table] ?? tableRows(snapshot, table).length, matches: source === (restoredCounts[table] ?? tableRows(snapshot, table).length) })) : [];
+  const relationshipChecks = manifest ? [...relationshipValidation(snapshot), ...Array.from(largeRelationshipMissing.entries()).map(([relationship, missingReferences]) => ({ relationship, valid: missingReferences === 0, missingReferences }))] : [];
   if (sourceVsRestoredCounts.some(item => !item.matches)) errors.push("Source-versus-restored record-count mismatch.");
   if (relationshipChecks.some(item => !item.valid)) errors.push("Relationship-integrity mismatch.");
   return { environment: "isolated-in-memory-archive-reconstruction", valid: Boolean(manifest) && !errors.length && !checksumMismatches.length, archiveChecksum: manifest?.archiveChecksum ?? "", sourceVsRestoredCounts, relationshipChecks, checksumMismatches, errors };
@@ -337,8 +383,11 @@ export async function createDisasterRecoveryArchive(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; a disaster-recovery archive cannot be created.");
   const exportId = `dr-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
-  const snapshot = await db.transaction(async tx => collectSnapshot(tx, userId));
-  const { manifest, archiveBytes } = createArchive(snapshot, exportId);
+  const { manifest, archiveBytes } = await db.transaction(async tx => {
+    const snapshot = await collectSnapshot(tx, userId);
+    const largeFiles = await collectLargeArchiveFiles(tx);
+    return createArchive(snapshot, exportId, largeFiles);
+  });
   const retentionUntil = new Date(Date.now() + DISASTER_RECOVERY_RETENTION_DAYS * 24 * 60 * 60_000);
   const verification = validateDisasterRecoveryArchive(archiveBytes);
   if (!verification.valid) throw new Error(`Archive validation failed before storage: ${[...verification.errors, ...verification.checksumMismatches].join("; ")}`);

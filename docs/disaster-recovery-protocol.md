@@ -1,6 +1,6 @@
 # Disaster-Recovery Export and Recovery Protocol
 
-**Protocol version:** `crypto-opportunity-hub-dr-v1`  
+**Protocol version:** `crypto-opportunity-hub-dr-v2`  
 **Scope:** Historical research data, immutable lineage/context, market-universe history, owner-scoped research and execution-cost records, and ingestion-operational evidence.  
 **Protected boundaries:** This protocol does not run Research Lab, alter Opportunity or Confidence scoring, modify alerts, change paper trading, enable real trading, or modify existing ingestion schedules.
 
@@ -10,7 +10,7 @@ Each authenticated archive is a versioned `ZIP` package, generated from a single
 
 | Archive component | Content | Integrity evidence |
 | --- | --- | --- |
-| `data/*.json` | Historical OHLCV, datasets, runs, quality, gaps, issues/events, market-universe history, context, owner-scoped Research Lab and Cost Lab records, and operational records | Per-component SHA-256 checksum and record count |
+| `data/*.json` and large-table `data/<table>/*.ndjson.gz` partitions | Historical OHLCV, datasets, runs, quality, gaps, issues/events, market-universe history, context, owner-scoped Research Lab and Cost Lab records, and operational records. V2 partitions high-volume candles and regime snapshots as compressed newline-delimited JSON to prevent memory-dependent exports. | Per-component SHA-256 checksum and record count |
 | `schema/mysql-ddl.json` | Captured `SHOW CREATE TABLE` DDL for every exported entity | Per-component SHA-256 checksum |
 | `manifest.json` | Export ID/time, archive/application/schema versions, dataset versions/fingerprints, entity counts, checksums, source-provenance and portability classification | Logical archive checksum calculated from every component path, count, and checksum |
 
@@ -40,7 +40,7 @@ If the hosted project is unavailable, obtain the newest archive whose status is 
 
 1. Download and preserve the ZIP without modifying archive contents.
 2. Provision compatible MySQL/InnoDB and apply `schema/mysql-ddl.json` in dependency order.
-3. Import `data/*.json` in the manifest’s dependency order, preserving IDs and JSON payloads.
+3. Import `data/*.json` and decompress/import large-table `data/<table>/*.ndjson.gz` partitions in the manifest’s dependency order, preserving IDs and JSON payloads.
 4. Compare imported counts with `manifest.entityCounts` and recompute every listed SHA-256 checksum.
 5. Verify dataset IDs, versions, content fingerprints, universe snapshots/members, candles, gaps, issue events, and historical context.
 6. Verify owner-scoped Research Lab/Cost Lab records, configuration fingerprints, and provenance.

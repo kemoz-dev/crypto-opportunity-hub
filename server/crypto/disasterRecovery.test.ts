@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { strToU8, zipSync } from "fflate";
+import { gzipSync, strToU8, zipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({ getDb: vi.fn(), storagePut: vi.fn(), storageGetSignedUrl: vi.fn() }));
@@ -36,6 +36,25 @@ describe("disaster recovery archive validation", () => {
     const result = validateDisasterRecoveryArchive(fixture({ tamper: true }));
     expect(result.valid).toBe(false);
     expect(result.checksumMismatches).toContain("data/assets.json: checksum mismatch");
+  });
+
+  it("validates a compressed NDJSON large-table partition with its parent references", () => {
+    const asset = strToU8(JSON.stringify([{ id: "bitcoin" }]));
+    const run = strToU8(JSON.stringify([{ id: 41 }]));
+    const candles = gzipSync(strToU8(`${JSON.stringify({ id: 9, assetId: "bitcoin", ingestionRunId: 41 })}\n`));
+    const schema = strToU8(JSON.stringify({ assets: "CREATE TABLE assets (...)" }));
+    const components = [
+      { path: "data/assets.json", table: "assets", encoding: "json", recordCount: 1, checksum: checksum(asset), bytes: asset.byteLength },
+      { path: "data/historicalIngestionRuns.json", table: "historicalIngestionRuns", encoding: "json", recordCount: 1, checksum: checksum(run), bytes: run.byteLength },
+      { path: "data/historicalCandles/000000.ndjson.gz", table: "historicalCandles", encoding: "ndjson-gzip", recordCount: 1, checksum: checksum(candles), bytes: candles.byteLength },
+      { path: "schema/mysql-ddl.json", encoding: "json", recordCount: 1, checksum: checksum(schema), bytes: schema.byteLength },
+    ] as const;
+    const manifest = { exportId: "dr-gzip", exportTimestamp: "2026-08-23T00:00:00.000Z", archiveFormat: "zip-json", archiveVersion: "crypto-opportunity-hub-dr-v2", applicationVersion: "test", schemaVersion: "test", snapshotStartedAt: "2026-08-23T00:00:00.000Z", snapshotCompletedAt: "2026-08-23T00:00:01.000Z", datasetVersions: [], components, entityCounts: { assets: 1, historicalIngestionRuns: 1, historicalCandles: 1 }, sourceProvenance: { providerEvidencePreserved: true, ingestionEvidencePreserved: true, privateRecordsScope: "owner-only", scheduleState: "configuration-only" }, portability: { portable: [], partiallyPortable: [], notPortable: [] }, archiveChecksum: calculateDisasterRecoveryLogicalChecksum(components) };
+    const archive = zipSync({ "data/assets.json": asset, "data/historicalIngestionRuns.json": run, "data/historicalCandles/000000.ndjson.gz": candles, "schema/mysql-ddl.json": schema, "manifest.json": strToU8(JSON.stringify(manifest)) });
+    const result = validateDisasterRecoveryArchive(archive);
+    expect(result.valid).toBe(true);
+    expect(result.sourceVsRestoredCounts).toContainEqual({ table: "historicalCandles", source: 1, restored: 1, matches: true });
+    expect(result.relationshipChecks.find(check => check.relationship === "historicalCandles.ingestionRunId -> historicalIngestionRuns.id")).toMatchObject({ valid: true, missingReferences: 0 });
   });
 
   it("rejects cross-user archive retrieval", async () => {

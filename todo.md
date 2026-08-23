@@ -111,4 +111,4 @@
 - [x] Add durable backup metadata and authenticated full-system archive generation covering historical lineage, market-universe, context, research, execution-cost, and ingestion-operational evidence while preserving relationships.
 - [x] Implement isolated archive restore validation with source-versus-restored counts, checksum comparison, relationship checks, dataset-version and immutable-snapshot preservation, and explicit mismatch reporting.
 - [x] Build protected backup inspection/download controls and recovery documentation, keeping backup status separate from ingestion status and leaving existing ingestion schedules unchanged.
-- [ ] Create and verify the first stored disaster-recovery archive, run full tests, TypeScript and production-build validation, and report portability limits without starting Research Lab or modifying scoring, alerts, or trading.
+- [x] Create and verify the first stored disaster-recovery archive, run full tests, TypeScript and production-build validation, and report portability limits without starting Research Lab or modifying scoring, alerts, or trading.
