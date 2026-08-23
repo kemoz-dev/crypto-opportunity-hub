@@ -627,6 +627,29 @@ export const researchReports = mysqlTable("researchReports", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("research_reports_as_of_idx").on(table.asOf)]);
 
+export const disasterRecoveryArchives = mysqlTable("disasterRecoveryArchives", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  exportId: varchar("exportId", { length: 96 }).notNull(),
+  status: mysqlEnum("status", ["creating", "verified", "failed", "expired"]).notNull(),
+  archiveFormat: varchar("archiveFormat", { length: 32 }).notNull(),
+  archiveVersion: varchar("archiveVersion", { length: 32 }).notNull(),
+  applicationVersion: varchar("applicationVersion", { length: 64 }).notNull(),
+  schemaVersion: varchar("schemaVersion", { length: 96 }).notNull(),
+  datasetVersions: json("datasetVersions").notNull(),
+  manifest: json("manifest").notNull(),
+  componentChecksums: json("componentChecksums").notNull(),
+  archiveChecksum: varchar("archiveChecksum", { length: 128 }).notNull(),
+  archiveSizeBytes: bigint("archiveSizeBytes", { mode: "number" }).notNull().default(0),
+  storageKey: varchar("storageKey", { length: 255 }),
+  storageUrl: varchar("storageUrl", { length: 512 }),
+  retentionUntil: timestamp("retentionUntil").notNull(),
+  verification: json("verification"),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  verifiedAt: timestamp("verifiedAt"),
+}, table => [uniqueIndex("disaster_recovery_archive_export_id_unique").on(table.exportId), index("disaster_recovery_archive_user_created_idx").on(table.userId, table.createdAt), index("disaster_recovery_archive_retention_idx").on(table.retentionUntil, table.status)]);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Asset = typeof assets.$inferSelect;

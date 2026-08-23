@@ -107,3 +107,8 @@
 - [x] Add protected Execution Cost Lab APIs and interface with transparent configuration, trade-size, instrument, liquidity, funding, stress, and cost-breakdown states.
 - [x] Add tests, migration validation, TypeScript/build validation, documentation, and non-mutation assertions for the research-only cost engine without starting a new Research Lab experiment.
 - [x] Perform and document a read-only deployment-persistence audit covering database-backed historical data, snapshots, research records, schedule dependencies, backup posture, portable export feasibility, and worst-case recovery without production mutation.
+- [x] Define the versioned portable disaster-recovery archive contract, manifest, checksums, ownership scope, retention policy, and explicit portable/partial/non-portable classification without changing protected behavior.
+- [x] Add durable backup metadata and authenticated full-system archive generation covering historical lineage, market-universe, context, research, execution-cost, and ingestion-operational evidence while preserving relationships.
+- [x] Implement isolated archive restore validation with source-versus-restored counts, checksum comparison, relationship checks, dataset-version and immutable-snapshot preservation, and explicit mismatch reporting.
+- [x] Build protected backup inspection/download controls and recovery documentation, keeping backup status separate from ingestion status and leaving existing ingestion schedules unchanged.
+- [ ] Create and verify the first stored disaster-recovery archive, run full tests, TypeScript and production-build validation, and report portability limits without starting Research Lab or modifying scoring, alerts, or trading.
