@@ -106,3 +106,4 @@
 - [x] Implement deterministic spot/perpetual cost calculations for fees, slippage, estimated volume impact, explicit funding availability or assumptions, net-versus-gross outcomes, sensitivities, and stress scenarios.
 - [x] Add protected Execution Cost Lab APIs and interface with transparent configuration, trade-size, instrument, liquidity, funding, stress, and cost-breakdown states.
 - [x] Add tests, migration validation, TypeScript/build validation, documentation, and non-mutation assertions for the research-only cost engine without starting a new Research Lab experiment.
+- [x] Perform and document a read-only deployment-persistence audit covering database-backed historical data, snapshots, research records, schedule dependencies, backup posture, portable export feasibility, and worst-case recovery without production mutation.
