@@ -27,3 +27,33 @@ On 2026-08-22, platform inspection confirmed that all three rows above were enab
 The published application was also reached successfully after the documentation-only checkpoint. This read-only check did not authenticate, invoke an ingestion callback, modify a setting, or constitute evidence of a schedule run.
 
 The older BTC 15M ingestion task remains enabled and separate. Its existing 2026-08-22 02:14:53 UTC execution succeeded with HTTP 200 in 6,075 ms; that historical predecessor is not counted as one of the three new expanded-universe first runs.
+
+## First ordinary production executions — 2026-08-23
+
+The authorized post-cadence inspection occurred after 03:20 UTC on 2026-08-23. No job was manually invoked. All three persisted `historicalScheduleExecutions` are `SUCCESS`, even though the platform callback log for each reports a 30-second StartToClose timeout. The distinction is material: the platform stopped waiting for the HTTP response, while the deployed handler continued and durably finalized its own execution row, ingestion-run rows, quality records, and issue evidence.
+
+| Schedule | Schedule / execution ID | Persisted timing (UTC) | Durable result | Asset result | Inserts / duplicates / gaps | Provider / retry result |
+| --- | --- | --- | --- | --- | --- | --- |
+| ETH/SOL 15M | `30001` / `1` | 02:35:11–02:36:02; 51,128 ms | `SUCCESS` | 2 attempted; 2 succeeded; 0 failed | 554 / 0 / 3,478 | No provider errors; 0 retries |
+| Liquid-major 1H | `30002` / `30001` | 02:55:13–02:56:30; 76,852 ms | `SUCCESS` | 8 attempted; 8 succeeded; 0 failed | 552 / 0 / 3,480 | No provider errors; 0 retries |
+| Representative-sector 1H | `30003` / `60001` | 03:15:17–03:16:37; 80,400 ms | `SUCCESS` | 11 attempted; 11 completed; 0 failed | 680 / 0 / 4,360 | No provider errors; 0 retries |
+
+The platform log records corresponding non-manual callback timeouts at 02:35:08–02:35:38, 02:55:11–02:55:41, and 03:15:11–03:15:41 UTC, each with `http_status: 0` and zero platform-level retry attempts. They are retained as transport-observability evidence, not substituted for the durable application result above. The application persisted the successful execution after those 30-second callback windows; no hidden retry or manual run occurred.
+
+| Scope | Per-asset persisted evidence | Missing-range / availability evidence |
+| --- | --- | --- |
+| ETH/SOL 15M | `ethereum` and `solana`: each `partial`, 277 inserted, 0 duplicates, 1,739 continuity gaps | 2 `MISSING_RANGE` rows; both retry status `PENDING` |
+| Liquid-major 1H | `avalanche-2`, `binancecoin`, `cardano`, `chainlink`, `ethereum`, `polkadot`, `ripple`, and `solana`: each `partial`, 69 inserted, 0 duplicates, 435 gaps | 8 `MISSING_RANGE` rows; each retry status `PENDING` |
+| Representative-sector 1H | `aave`, `arbitrum`, `axie-infinity`, `dogecoin`, `filecoin`, `ondo-finance`, `optimism`, `render-token`, `the-graph`, and `uniswap`: each `partial`, 68 inserted, 0 duplicates, 436 gaps. `pepe`: `completed`, 0 inserted, 0 duplicates, 0 gaps. | 10 `MISSING_RANGE` rows remain `PENDING`; `pepe` has one `NO_NEW_CANDLES` row stating that no new public-archive candles were available. This is not a provider error and PEPE was not substituted. |
+
+The first-run issue-event trail contains only `DETECTED` events at retry attempt 0: 2 for the 15M execution, 8 for the liquid-major 1H execution, and 11 for the representative-sector 1H execution. No `RETRY_STARTED`, `RETRY_SUCCEEDED`, or `RETRY_FAILED` event exists yet. The unresolved gaps are therefore explicitly pending future ordinary cadence, rather than being reported as recovered or as provider failure.
+
+### Retained coverage, readiness, and sector status
+
+The newly sealed dataset lineages retain 15M coverage of 105,674 / 109,152 candles (96.8136%) for dataset `330001`; 1H coverage of 166,992 / 170,472 candles (97.9586%) for dataset `360001`; and 1H coverage of 167,672 / 175,512 candles (95.5331%) for dataset `390001`. Across the protected health calculation's retained evidence, 21 represented assets, three populated timeframe scopes, three available regime classifications, three successful/partial scheduled incremental executions, 20 unresolved missing-range rows, 53.3205% average continuity, and 1,827,716 / 1,849,470 observed-versus-expected candles (98.8237%) produce **`ACCUMULATING`** readiness. It is not `READY_FOR_REVIEW`, because unresolved missing ranges remain. This informational state cannot start Research Lab.
+
+Historical sector data remains explicitly unavailable: all 20 registry assets retain `HISTORICAL_UNAVAILABLE`, and all 104 historical sector snapshots retain `UNAVAILABLE`. No timestamp-aware sector classification was introduced or substituted.
+
+### Validation and protected boundaries
+
+The final post-execution validation passed: 28 Vitest files / 91 tests, TypeScript `pnpm check`, and production `pnpm build`. No source or configuration change was made during the audit. A database check found zero Research Lab experiments created during the 02:35–03:35 UTC audit window. Opportunity Score, Confidence Score, scoring weights, alerts, thresholds, paper trading, real trading, providers, sentiment, on-chain data, ML, APIs, and existing Research Lab behavior were not changed.

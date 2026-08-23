@@ -90,7 +90,7 @@
 - [x] Correct the three new expanded-universe scheduled task paths to the deployed cron-only ingestion callback and verify their persisted task identities remain unchanged.
 - [x] Add explicit historical-coverage query error states and perform an authenticated visual verification of the Market Coverage Matrix.
 - [x] Diagnose and resolve the blank OAuth sign-in handoff and confirm the published client serves the Market Coverage Matrix release before final visual verification.
-- [ ] Inspect the three expanded production ingestion schedules and record first execution evidence with task, run, timing, asset, candle, gap, provider, retry, and final-status fields.
+- [x] Inspect the three expanded production ingestion schedules and record first execution evidence with task, run, timing, asset, candle, gap, provider, retry, and final-status fields.
 - [x] Add immutable missing-range and retry-lineage persistence that preserves original provider failures, retry linkage, duplicate prevention, and dataset-version immutability.
 - [x] Add protected Ingestion Health and Research Dataset Readiness views showing runs, availability, failures, gaps, coverage, and informational readiness rationale without auto-starting research.
 - [x] Add deterministic coverage for scheduled execution persistence, partial batches, retry behavior, duplicate prevention, missing ranges, lineage, readiness, PEPE, authentication, authorization, and no-mutation boundaries.
@@ -98,8 +98,8 @@
 - [x] Add end-to-end deterministic retry tests proving failed-scope preservation, successful retry linkage, duplicate prevention, and protected missing-range inspection.
 - [x] Persist and display each failed or missing range's last-checked timestamp and retry status, preserving append-only source evidence.
 - [x] Add next scheduled run visibility to the protected Ingestion Health view using durable platform-compatible schedule metadata.
-- [ ] Observe first production executions of all three expanded schedules, run full validation, publish the result, and report the requested ingestion-health evidence without starting Research Lab.
-- [ ] Run the user-authorized one-time follow-up after 2026-08-23 03:20 UTC; inspect the three first scheduled executions, report the requested evidence, and then stop without any prohibited mutations.
+- [x] Observe first production executions of all three expanded schedules, run full validation, publish the result, and report the requested ingestion-health evidence without starting Research Lab.
+- [x] Run the user-authorized one-time follow-up after 2026-08-23 03:20 UTC; inspect the three first scheduled executions, report the requested evidence, and then stop without any prohibited mutations.
 - [x] Add deterministic registry inclusion/exclusion, immutable snapshot persistence/versioning, multi-asset partial-failure, and no-mutation boundary tests for the market-universe flow.
 - [x] Define the research-only Execution Cost & Liquidity model, explicit unavailable-data handling, point-in-time rules, and strict non-mutation boundary from Opportunity Engine, alerts, trading, and active Research Lab runs.
 - [x] Add immutable, versioned persistence for cost models, liquidity tiers and observations, historical-funding availability, and user-owned cost-study results with full dataset and assumption provenance.
