@@ -1,6 +1,6 @@
 import { DEFAULT_ASSET_UNIVERSE, DEFAULT_SCORING_CONFIG, SUPPORTED_TIMEFRAMES, type DataStatus, type MarketAsset, type ScannerResponse, type ScoringConfig, type TimeframeAnalysis } from "../../shared/crypto";
 import { analyzeTimeframe } from "./technical";
-import { fetchBinanceCandles, fetchBinanceDerivatives, fetchCoinGeckoGlobal, fetchCoinGeckoMarkets, unavailableStatus } from "./providers";
+import { fetchBinanceDerivatives, fetchCoinGeckoGlobal, fetchCoinGeckoMarkets, fetchValidatedLiveOhlcv, unavailableStatus } from "./providers";
 import { assetFromProfile, buildOpportunityScore, calculateMarketRegime } from "./scoring";
 import { persistScannerSnapshot } from "./persistence";
 
@@ -17,6 +17,10 @@ async function mapConcurrent<T, R>(items: T[], limit: number, operation: (item: 
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return results;
+}
+
+export function hasMixedLiveOhlcvProviders(results: Array<{ series: { provider: string } | null }>) {
+  return new Set(results.flatMap(result => result.series ? [result.series.provider] : [])).size > 1;
 }
 
 export async function buildLiveScanner(forceRefresh = false, config: ScoringConfig = DEFAULT_SCORING_CONFIG): Promise<ScannerResponse> {
@@ -44,17 +48,20 @@ export async function buildLiveScanner(forceRefresh = false, config: ScoringConf
   const marketRegime = calculateMarketRegime(universe.find(asset => asset.symbol === "BTC"), universe, global);
   const provisional = await mapConcurrent(universe, 3, async asset => {
     const dataStatus: DataStatus[] = [];
-    const timeframeResults = await Promise.allSettled(SUPPORTED_TIMEFRAMES.map(timeframe => fetchBinanceCandles(asset.binanceSymbol, timeframe)));
+    const minimumCandles = Math.max(config.indicator.emaSlow + 2, config.indicator.macdSlow + config.indicator.macdSignal + 2, 60);
+    const timeframeResults = await Promise.all(SUPPORTED_TIMEFRAMES.map(timeframe => fetchValidatedLiveOhlcv(asset.symbol, timeframe, minimumCandles)));
     const analyses: TimeframeAnalysis[] = [];
+    const mixedProviders = hasMixedLiveOhlcvProviders(timeframeResults);
+    if (mixedProviders) dataStatus.push({ source: "Live OHLCV provider consistency", provider: "Provider-neutral validation", symbol: asset.symbol, capability: "OHLCV", status: "unavailable", fetchedAt: generatedAt, message: "Validated OHLCV was available from more than one provider across required timeframes; cross-provider scoring was prevented.", errorClass: "MIXED_PROVIDER_PREVENTED", normalizationVersion: "live-ohlcv-normalization-v1", dataQuality: "UNAVAILABLE" });
     timeframeResults.forEach((result, index) => {
       const timeframe = SUPPORTED_TIMEFRAMES[index];
-      if (result.status === "fulfilled") {
-        const analysis = analyzeTimeframe(result.value, timeframe, config);
+      dataStatus.push(...result.statuses);
+      if (result.series && !mixedProviders) {
+        const analysis = analyzeTimeframe(result.series.candles, timeframe, config);
         if (analysis) analyses.push(analysis);
-        else dataStatus.push({ source: `Binance ${timeframe} OHLCV`, status: "unavailable", fetchedAt: generatedAt, message: "Insufficient returned candles for the configured indicators." });
-      } else dataStatus.push(unavailableStatus(`Binance ${timeframe} OHLCV`, result.reason));
+        else dataStatus.push({ source: `${result.series.provider} OHLCV`, provider: result.series.provider, symbol: result.series.symbol, timeframe, capability: "OHLCV", normalizationVersion: result.series.normalizationVersion, dataQuality: "UNAVAILABLE", errorClass: "VALIDATION_FAILED", status: "unavailable", fetchedAt: generatedAt, message: "Validated candles were insufficient for the configured indicators." });
+      }
     });
-    if (analyses.length) dataStatus.push({ source: "Binance Futures OHLCV", status: "live", fetchedAt: generatedAt });
     const derivatives = await fetchBinanceDerivatives(asset.binanceSymbol);
     dataStatus.push(...derivatives.statuses);
     return { asset, analyses, dataStatus, fundingRate: derivatives.fundingRate, openInterest: derivatives.openInterest };

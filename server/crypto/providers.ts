@@ -3,6 +3,7 @@ import type { AssetProfile, Candle, DataStatus, MarketAsset, Timeframe } from ".
 
 const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
 const BINANCE_FUTURES_BASE_URL = "https://fapi.binance.com";
+const KRAKEN_BASE_URL = "https://api.kraken.com/0/public";
 const BINANCE_PUBLIC_ARCHIVE_BASE_URL = "https://data.binance.vision/data/futures/um/monthly/klines";
 const BINANCE_PUBLIC_SPOT_ARCHIVE_BASE_URL = "https://data.binance.vision/data/spot/monthly/klines";
 const BINANCE_PUBLIC_DAILY_ARCHIVE_BASE_URL = "https://data.binance.vision/data/futures/um/daily/klines";
@@ -43,8 +44,8 @@ export type HistoricalFundingRate = {
   rateType: string | null;
 };
 
-class ProviderError extends Error {
-  constructor(public source: string, message: string) {
+export class ProviderError extends Error {
+  constructor(public source: string, message: string, public errorClass: NonNullable<DataStatus["errorClass"]> = "PROVIDER_REQUEST_FAILED") {
     super(message);
   }
 }
@@ -54,7 +55,7 @@ async function getJson<T>(url: string, source: string): Promise<T> {
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
-    if (!response.ok) throw new ProviderError(source, `${source} returned HTTP ${response.status}.`);
+    if (!response.ok) throw new ProviderError(source, `${source} returned HTTP ${response.status}.`, response.status === 451 ? "PROVIDER_UNAVAILABLE_REGION_RESTRICTION" : "PROVIDER_REQUEST_FAILED");
     return await response.json() as T;
   } catch (error) {
     if (error instanceof ProviderError) throw error;
@@ -139,6 +140,103 @@ export async function fetchBinanceCandles(symbol: string, timeframe: Timeframe, 
   const payload = await getJson<unknown>(`${BINANCE_FUTURES_BASE_URL}/fapi/v1/klines?${params}`, "Binance Futures OHLCV");
   if (!Array.isArray(payload)) throw new ProviderError("Binance Futures OHLCV", "Unexpected candle response format.");
   return normalizeBinanceCandles(payload);
+}
+
+export const LIVE_OHLCV_NORMALIZATION_VERSION = "live-ohlcv-normalization-v1";
+const KRAKEN_PAIR_BY_SYMBOL: Record<string, string> = { BTC: "BTC/USD", ETH: "ETH/USD", SOL: "SOL/USD", LINK: "LINK/USD", AVAX: "AVAX/USD", SUI: "SUI/USD", UNI: "UNI/USD", AAVE: "AAVE/USD", DOGE: "DOGE/USD", ADA: "ADA/USD", XRP: "XRP/USD", DOT: "DOT/USD" };
+const KRAKEN_INTERVAL_BY_TIMEFRAME: Record<Timeframe, number> = { "15m": 15, "1h": 60, "4h": 240, "1d": 1440 };
+const TIMEFRAME_MS: Record<Timeframe, number> = { "15m": 15 * 60_000, "1h": 60 * 60_000, "4h": 4 * 60 * 60_000, "1d": 24 * 60 * 60_000 };
+
+export type NormalizedLiveOhlcvSeries = {
+  provider: "Binance Futures" | "Kraken Spot";
+  symbol: string;
+  timeframe: Timeframe;
+  retrievedAt: number;
+  normalizationVersion: typeof LIVE_OHLCV_NORMALIZATION_VERSION;
+  dataQuality: "VALID";
+  candles: Candle[];
+};
+
+export type LiveOhlcvFetchResult = { series: NormalizedLiveOhlcvSeries | null; statuses: DataStatus[] };
+
+function ohlcvStatus(input: Omit<DataStatus, "fetchedAt" | "normalizationVersion" | "capability"> & { fetchedAt?: number }): DataStatus {
+  return { fetchedAt: input.fetchedAt ?? Date.now(), capability: "OHLCV", normalizationVersion: LIVE_OHLCV_NORMALIZATION_VERSION, ...input };
+}
+
+function validationError(errorClass: NonNullable<DataStatus["errorClass"]>, message: string) {
+  return new ProviderError("Live OHLCV validation", message, errorClass);
+}
+
+export function validateNormalizedLiveOhlcv(candles: Candle[], timeframe: Timeframe, retrievedAt: number, minimumCandles: number): Candle[] {
+  const interval = TIMEFRAME_MS[timeframe];
+  const completed = candles.filter(candle => candle.closeTime < retrievedAt);
+  if (completed.length < minimumCandles) throw validationError("VALIDATION_FAILED", `Only ${completed.length} complete ${timeframe} candles were returned; ${minimumCandles} are required.`);
+  let previousOpen = -1;
+  for (const candle of completed) {
+    if (![candle.openTime, candle.closeTime, candle.open, candle.high, candle.low, candle.close, candle.volume].every(Number.isFinite)) throw validationError("VALIDATION_FAILED", "A candle contains a non-finite field.");
+    if (candle.openTime % interval !== 0 || candle.closeTime !== candle.openTime + interval - 1) throw validationError("TIMESTAMP_CORRUPTION", `Candle timestamps do not match ${timeframe}.`);
+    if (candle.open <= 0 || candle.high <= 0 || candle.low <= 0 || candle.close <= 0 || candle.high < Math.max(candle.open, candle.close) || candle.low > Math.min(candle.open, candle.close)) throw validationError("VALIDATION_FAILED", "A candle has invalid OHLC bounds.");
+    if (candle.volume <= 0) throw validationError("MISSING_VOLUME", "A candle has missing or zero volume.");
+    if (previousOpen >= 0 && candle.openTime !== previousOpen + interval) throw validationError("TIMEFRAME_MISMATCH", "The candle series spacing does not match the requested timeframe.");
+    previousOpen = candle.openTime;
+  }
+  return completed.slice(-minimumCandles);
+}
+
+type KrakenOhlcPayload = { error?: string[]; result?: Record<string, unknown> };
+
+export function normalizeKrakenCandles(payload: KrakenOhlcPayload, expectedPair: string, timeframe: Timeframe): Candle[] {
+  if (payload.error?.length) throw new ProviderError("Kraken Spot OHLCV", payload.error.join("; "));
+  const entries = Object.entries(payload.result ?? {}).filter(([key]) => key !== "last");
+  if (entries.length !== 1 || entries[0][0] !== expectedPair) throw validationError("SYMBOL_MAPPING_MISMATCH", `Kraken returned ${entries.map(([key]) => key).join(",") || "no pair"} for expected ${expectedPair}.`);
+  const records = entries[0][1];
+  if (!Array.isArray(records)) throw validationError("VALIDATION_FAILED", "Kraken OHLC payload is not an array.");
+  const interval = TIMEFRAME_MS[timeframe];
+  return records.map(record => {
+    if (!Array.isArray(record) || record.length < 8) throw validationError("VALIDATION_FAILED", "Kraken returned a malformed OHLC row.");
+    const openTime = Number(record[0]) * 1_000;
+    const [open, high, low, close, volume] = [record[1], record[2], record[3], record[4], record[6]].map(Number);
+    return { openTime, closeTime: openTime + interval - 1, open, high, low, close, volume };
+  });
+}
+
+function unavailableOhlcvStatus(provider: string, symbol: string, timeframe: Timeframe, error: unknown): DataStatus {
+  const typed = error instanceof ProviderError ? error : new ProviderError(provider, error instanceof Error ? error.message : "Provider request failed.");
+  return ohlcvStatus({ source: `${provider} OHLCV`, provider, symbol, timeframe, status: "unavailable", message: typed.message, errorClass: typed.errorClass, dataQuality: "UNAVAILABLE" });
+}
+
+function validOhlcvStatus(series: NormalizedLiveOhlcvSeries): DataStatus {
+  return ohlcvStatus({ source: `${series.provider} OHLCV`, provider: series.provider, symbol: series.symbol, timeframe: series.timeframe, status: "live", dataQuality: "VALID", fetchedAt: series.retrievedAt });
+}
+
+export async function fetchValidatedLiveOhlcv(symbol: string, timeframe: Timeframe, minimumCandles: number, limit = 240): Promise<LiveOhlcvFetchResult> {
+  const retrievedAt = Date.now();
+  const statuses: DataStatus[] = [];
+  try {
+    const candles = validateNormalizedLiveOhlcv(await fetchBinanceCandles(`${symbol}USDT`, timeframe, limit), timeframe, retrievedAt, minimumCandles);
+    const series: NormalizedLiveOhlcvSeries = { provider: "Binance Futures", symbol: `${symbol}USDT`, timeframe, retrievedAt, normalizationVersion: LIVE_OHLCV_NORMALIZATION_VERSION, dataQuality: "VALID", candles };
+    statuses.push(validOhlcvStatus(series));
+    return { series, statuses };
+  } catch (error) {
+    statuses.push(unavailableOhlcvStatus("Binance Futures", `${symbol}USDT`, timeframe, error));
+    if (!(error instanceof ProviderError) || error.errorClass !== "PROVIDER_UNAVAILABLE_REGION_RESTRICTION") return { series: null, statuses };
+  }
+  const pair = KRAKEN_PAIR_BY_SYMBOL[symbol];
+  if (!pair) {
+    statuses.push(ohlcvStatus({ source: "Kraken Spot OHLCV", provider: "Kraken Spot", symbol, timeframe, status: "unavailable", message: `No approved Kraken mapping exists for ${symbol}.`, errorClass: "SYMBOL_MAPPING_MISMATCH", dataQuality: "UNAVAILABLE" }));
+    return { series: null, statuses };
+  }
+  try {
+    const params = new URLSearchParams({ pair, interval: String(KRAKEN_INTERVAL_BY_TIMEFRAME[timeframe]), assetVersion: "1" });
+    const payload = await getJson<KrakenOhlcPayload>(`${KRAKEN_BASE_URL}/OHLC?${params}`, "Kraken Spot OHLCV");
+    const candles = validateNormalizedLiveOhlcv(normalizeKrakenCandles(payload, pair, timeframe), timeframe, retrievedAt, minimumCandles);
+    const series: NormalizedLiveOhlcvSeries = { provider: "Kraken Spot", symbol: pair, timeframe, retrievedAt, normalizationVersion: LIVE_OHLCV_NORMALIZATION_VERSION, dataQuality: "VALID", candles };
+    statuses.push(validOhlcvStatus(series));
+    return { series, statuses };
+  } catch (error) {
+    statuses.push(unavailableOhlcvStatus("Kraken Spot", pair, timeframe, error));
+    return { series: null, statuses };
+  }
 }
 
 function archiveMonths(endAt: number | undefined, timeframe: Timeframe, limit: number) {

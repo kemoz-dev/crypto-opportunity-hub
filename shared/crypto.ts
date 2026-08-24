@@ -36,6 +36,13 @@ export type DataStatus = {
   status: "live" | "stale" | "unavailable";
   fetchedAt: number;
   message?: string;
+  provider?: string;
+  symbol?: string;
+  timeframe?: Timeframe;
+  capability?: "OHLCV" | "FUNDING" | "OPEN_INTEREST" | "MARKET_CONTEXT";
+  errorClass?: "PROVIDER_UNAVAILABLE_REGION_RESTRICTION" | "PROVIDER_REQUEST_FAILED" | "VALIDATION_FAILED" | "SYMBOL_MAPPING_MISMATCH" | "TIMEFRAME_MISMATCH" | "TIMESTAMP_CORRUPTION" | "MISSING_VOLUME" | "MIXED_PROVIDER_PREVENTED";
+  normalizationVersion?: string;
+  dataQuality?: "VALID" | "UNAVAILABLE";
 };
 
 export type ScoreReason = {

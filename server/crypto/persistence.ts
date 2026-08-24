@@ -16,7 +16,7 @@ export async function persistScannerSnapshot(scan: ScannerResponse): Promise<voi
       })));
     }
     const allStatuses = [...scan.dataStatus, ...rowsWithAssets.flatMap(row => row.dataStatus)];
-    if (allStatuses.length) await db.insert(dataSources).values(allStatuses.map(status => ({ provider: status.source.split(" ")[0], endpoint: status.source, status: status.status, fetchedAt: new Date(status.fetchedAt), message: status.message ?? null })));
+    if (allStatuses.length) await db.insert(dataSources).values(allStatuses.map(status => ({ provider: status.provider ?? status.source.split(" ")[0], endpoint: status.source, status: status.status, fetchedAt: new Date(status.fetchedAt), message: status.message ?? null, metadata: { provider: status.provider ?? null, symbol: status.symbol ?? null, timeframe: status.timeframe ?? null, capability: status.capability ?? null, errorClass: status.errorClass ?? null, normalizationVersion: status.normalizationVersion ?? null, dataQuality: status.dataQuality ?? null } })));
     const technicalRows = rowsWithAssets.flatMap(row => (row.score?.technicalByTimeframe ?? []).map(analysis => ({
       assetId: row.asset.id, timeframe: analysis.timeframe, observedAt, sourceObservedAt: row.asset.lastUpdatedAt ? new Date(row.asset.lastUpdatedAt) : null,
       rsi: analysis.rsi, macdHistogram: analysis.macdHistogram, atrPercent: analysis.atrPercent, volumeExpansion: analysis.volumeExpansion, analysis,
