@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { fetchValidatedLiveOhlcv, getApprovedKrakenMappings, type LiveOhlcvMonitorOptions } from "./providers";
 
 export const PROVIDER_MONITOR_NAME = "production-live-ohlcv-provider-health";
-export const PROVIDER_MONITOR_CRON = "0 38 */4 * * *";
+export const PROVIDER_MONITOR_CRON = "0 40 */4 * * *";
 const MONITOR_INTERVAL_MS = 4 * 60 * 60_000;
 const REPRESENTATIVE_SYMBOL = "BTC";
 const REQUIRED_TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1d"];
