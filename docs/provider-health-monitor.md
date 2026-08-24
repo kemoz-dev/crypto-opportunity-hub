@@ -4,7 +4,7 @@
 
 The Provider Health Monitor is a deterministic, **read-only** infrastructure check. It records health evidence for the live OHLCV acquisition path; it does not invoke the market scanner, generate Opportunity or Confidence scores, create signals, create trades, evaluate user alerts, start Research Lab, alter historical data, or change any scoring configuration.
 
-The platform calls the cron-only endpoint `/api/scheduled/provider-health-monitor`. The handler authenticates the platform task identity, finds the monitor only by the authenticated task UID, rejects non-cron requests, and stores an idempotent immutable execution record. The four-hour UTC schedule is `0 32 */4 * * *`; it is deliberately offset from the current scheduled ingestion window.
+The platform calls the cron-only endpoint `/api/scheduled/provider-health-monitor`. The handler authenticates the platform task identity, finds the monitor only by the authenticated task UID, rejects non-cron requests, and stores an idempotent immutable execution record. The four-hour UTC schedule is `0 38 */4 * * *`; it is deliberately offset from the current scheduled ingestion window.
 
 ## What each run tests
 
