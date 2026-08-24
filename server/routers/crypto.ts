@@ -14,6 +14,7 @@ import { listHistoricalIngestionHealth } from "../crypto/ingestionObservability"
 import { createExecutionCostStudy, exportExecutionCostStudy, getExecutionCostStudy, listExecutionCostStudies, previewExecutionCostStudy } from "../crypto/executionCostStudies";
 import { createDisasterRecoveryArchive, getDisasterRecoveryArchive, getDisasterRecoveryArchiveDownload, getVerifiedPrimaryDisasterRecoveryArchive, getVerifiedPrimaryDisasterRecoveryArchiveDownload, listDisasterRecoveryArchives } from "../crypto/disasterRecovery";
 import { getProviderMonitorSummary, listProviderMonitorHistory } from "../crypto/providerMonitor";
+import { getAssetIntelligence } from "../crypto/assetIntelligence";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
 
@@ -38,6 +39,7 @@ export const cryptoRouter = router({
     const configuration = ctx.user ? await getUserScoringConfig(ctx.user.id) : undefined;
     return buildLiveScanner(input?.forceRefresh ?? false, configuration);
   }),
+  assetIntelligence: publicProcedure.input(z.object({ assetId: z.string().min(1), timeframe: z.enum(["15m", "1h", "4h", "1d"]).default("4h") })).query(async ({ ctx, input }) => getAssetIntelligence(input.assetId, input.timeframe, ctx.user ? await getUserScoringConfig(ctx.user.id) : undefined)),
   providerMonitorSummary: publicProcedure.query(() => getProviderMonitorSummary()),
   providerMonitorHistory: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional()).query(({ input }) => listProviderMonitorHistory(input?.limit ?? 20)),
   researchSummary: publicProcedure.query(() => getLatestResearchReport()),

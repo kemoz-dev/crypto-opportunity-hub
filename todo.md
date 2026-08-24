@@ -123,3 +123,10 @@
 - [x] Add durable provider-monitor configuration and execution-history persistence for provider/capability/status/classification/latency/timeframes/symbols/fallback/data-quality evidence, plus a safe migration.
 - [x] Implement the read-only Binance/Kraken monitor and protected current/history dashboard, documenting verified Kraken mappings, intervals, freshness, request constraints, and unknown limits.
 - [ ] Deploy the authenticated scheduled callback, create the owner-level recurring provider-health schedule, verify its first evidence record, and run full test, TypeScript, and production-build validation without touching protected product behavior.
+- [x] Perform a read-only Manus hosting/WebDev billing-usage, scheduled-job, persistence, and Preview-versus-production diagnosis; report only the required owner action and do not invoke the provider monitor.
+- [x] Audit and document the existing Opportunity Engine, scoring, technical indicators, market regime, providers, Paper Trading, Research Lab, navigation, chart infrastructure, and tests; publish an internal implementation map before changes.
+- [x] Add a data-bound Asset Intelligence and score-explainability layer that derives positive, neutral, risk, and unavailable evidence from existing scanner/technical/regime values without changing the Opportunity Score formula or thresholds.
+- [x] Present existing technical, multi-timeframe, chart, risk, market context, catalyst-unavailable, provider, timestamp, data-quality, and provenance information with explicit unavailable states and no fabricated values.
+- [x] Unify asset drill-down entry points across Dashboard, Scanner, Paper Trading, and relevant Alerts; reuse existing paper-only confirmation and immutable entry snapshots without changing execution logic.
+- [x] Improve the existing Research Lab inspection experience into a responsive workspace using persisted experiment data only, without starting experiments or changing methodology.
+- [x] Add traceability, no-mutation, navigation, snapshot, responsive-layout, and unavailable-data tests; run the full suite, TypeScript, production build, publish, and report remaining limitations.

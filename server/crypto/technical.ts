@@ -77,6 +77,46 @@ function calculateMacd(closes: number[], fast = 12, slow = 26, signal = 9) {
   };
 }
 
+export type TechnicalChartPoint = Candle & {
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+  rsi: number | null;
+  macdLine: number | null;
+  macdSignal: number | null;
+  macdHistogram: number | null;
+};
+
+/** Presentation-only overlay series. It reuses the same indicator parameters and completed candles used by the existing technical engine. */
+export function buildTechnicalChartSeries(candles: Candle[], config: ScoringConfig, limit = 120): TechnicalChartPoint[] {
+  const closes = candles.map(candle => candle.close);
+  const ema20 = calculateEma(closes, config.indicator.emaFast);
+  const ema50 = calculateEma(closes, config.indicator.emaMedium);
+  const ema200 = calculateEma(closes, config.indicator.emaSlow);
+  const rsi = calculateRsiSeries(closes, config.indicator.rsiPeriod);
+  const fastEma = calculateEma(closes, config.indicator.macdFast);
+  const slowEma = calculateEma(closes, config.indicator.macdSlow);
+  const macdLine = closes.map((_, index) => Number.isFinite(fastEma[index]) && Number.isFinite(slowEma[index]) ? fastEma[index] - slowEma[index] : Number.NaN);
+  const compactMacd = macdLine.filter(Number.isFinite);
+  const signalSeries = calculateEma(compactMacd, config.indicator.macdSignal);
+  let compactIndex = -1;
+  return candles.map((candle, index) => {
+    const line = macdLine[index];
+    const signal = Number.isFinite(line) ? signalSeries[++compactIndex] : Number.NaN;
+    const nullable = (value: number | undefined) => value !== undefined && Number.isFinite(value) ? round(value, 6) : null;
+    return {
+      ...candle,
+      ema20: nullable(ema20[index]),
+      ema50: nullable(ema50[index]),
+      ema200: nullable(ema200[index]),
+      rsi: nullable(rsi[index] ?? undefined),
+      macdLine: nullable(line),
+      macdSignal: nullable(signal),
+      macdHistogram: Number.isFinite(line) && Number.isFinite(signal) ? round(line - signal, 6) : null,
+    };
+  }).slice(-limit);
+}
+
 function calculateBollinger(closes: number[], period = 20) {
   if (closes.length < period) return null;
   const window = closes.slice(-period);
