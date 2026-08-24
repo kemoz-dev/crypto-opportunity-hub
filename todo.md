@@ -130,3 +130,9 @@
 - [x] Unify asset drill-down entry points across Dashboard, Scanner, Paper Trading, and relevant Alerts; reuse existing paper-only confirmation and immutable entry snapshots without changing execution logic.
 - [x] Improve the existing Research Lab inspection experience into a responsive workspace using persisted experiment data only, without starting experiments or changing methodology.
 - [x] Add traceability, no-mutation, navigation, snapshot, responsive-layout, and unavailable-data tests; run the full suite, TypeScript, production build, publish, and report remaining limitations.
+- [x] Audit and document the current Paper Trading engine, portfolio/trade snapshot fields, navigation, and all information-dense dialogs before implementing Paper Trading 2.0 or workspace changes.
+- [x] Add read-only, data-bound portfolio metrics, equity-curve derivation, open-position/current-state comparison, and trade-detail contracts from existing immutable records without duplicating trading logic or fabricating values.
+- [x] Build a dedicated full-width Paper Trading workspace with portfolio dashboard, simulated-only entry confirmation, open positions, trade history, filters, responsive mobile cards, and large immutable trade-detail inspection.
+- [x] Reuse and display immutable entry snapshots for "Why this trade?" while clearly separating entry state from current live state and keeping real trading unavailable.
+- [x] Audit and upgrade dense dialog/workspace UX across Paper Trading, Asset Intelligence, and Research results using responsive dimensions, internal scroll, clear navigation, and no content clipping.
+- [x] Add deterministic tests for portfolio calculations, equity derivation, filtering, immutable snapshots, current-versus-entry separation, no-mutation boundaries, responsive UI states, full validation, publishing, and final reporting.

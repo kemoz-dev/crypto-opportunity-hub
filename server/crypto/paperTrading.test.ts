@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPaperTradeSnapshot, calculatePaperEntryTerms, cloneImmutableEntrySnapshot } from "./paperTrading";
+import { buildPaperPortfolioPresentation, buildPaperTradeSnapshot, calculatePaperEntryTerms, cloneImmutableEntrySnapshot } from "./paperTrading";
 import { DEFAULT_SCORING_CONFIG, type MarketRegime, type ScannerRow } from "../../shared/crypto";
 
 describe("paper trading integrity", () => {
@@ -32,7 +32,31 @@ describe("paper trading integrity", () => {
     const marketRegime: MarketRegime = { score: 72, classification: "RISK ON", reasons: [], btcDominance: 50, breadth: 60 };
     const snapshot = buildPaperTradeSnapshot(row, marketRegime, 123, DEFAULT_SCORING_CONFIG, { stopLoss: 97, takeProfit: 106 });
     expect(snapshot.observation).toMatchObject({ timestamp: 123, asset: "BTC", sector: "Large Cap", timeframes: ["1h"], opportunityScore: 76, confidenceScore: 81, technicalScore: 31, setupType: "Breakout", entryPrice: 100, stopLoss: 97, target: 106 });
+    expect(snapshot.dataStatus).toEqual([]);
     expect(snapshot.observation.exactScoringComponents).toHaveLength(1);
     expect(snapshot.observation.missingConditions).toEqual(["No catalyst source."]);
+  });
+
+  it("derives portfolio P&L, cash estimate, win/loss metrics, and an equity curve from immutable trade records", () => {
+    const at = new Date("2026-08-24T00:00:00Z");
+    const presentation = buildPaperPortfolioPresentation(1_000, [
+      { id: 1, assetId: "btc", status: "closed", side: "long", entryPrice: 100, positionSize: 2, realizedPnl: 40, exitPrice: 120, entryAt: at, exitAt: new Date("2026-08-24T01:00:00Z") },
+      { id: 2, assetId: "eth", status: "closed", side: "short", entryPrice: 50, positionSize: 2, realizedPnl: -20, exitPrice: 60, entryAt: at, exitAt: new Date("2026-08-24T02:00:00Z") },
+      { id: 3, assetId: "sol", status: "open", side: "long", entryPrice: 10, positionSize: 10, realizedPnl: null, exitPrice: null, entryAt: at, exitAt: null },
+    ], new Map([["sol", 12]]));
+    expect(presentation.realizedPnl).toBe(20);
+    expect(presentation.unrealizedPnl).toBe(20);
+    expect(presentation.totalPnl).toBe(40);
+    expect(presentation.availableCash).toBe(920);
+    expect(presentation.averageWin).toBe(40);
+    expect(presentation.averageLoss).toBe(-20);
+    expect(presentation.equityCurve.map(point => point.kind)).toEqual(["INITIAL", "CLOSED_TRADE", "CLOSED_TRADE", "CURRENT"]);
+  });
+
+  it("does not invent an open-position mark when the current price is unavailable", () => {
+    const presentation = buildPaperPortfolioPresentation(1_000, [{ assetId: "sol", status: "open", side: "long", entryPrice: 10, positionSize: 10, realizedPnl: null, exitPrice: null, entryAt: new Date(), exitAt: null }], new Map());
+    expect(presentation.unrealizedPnl).toBe(0);
+    expect(presentation.equityCurve).toHaveLength(2);
+    expect(presentation.equityCurve.at(-1)?.equity).toBe(1_000);
   });
 });

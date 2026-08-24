@@ -7,6 +7,7 @@ import { buildLiveScanner } from "./marketService";
 export type PaperTradeSnapshot = {
   scannerGeneratedAt: number;
   asset: { id: string; symbol: string; name: string; sector: string; price: number };
+  dataStatus: ScannerRow["dataStatus"];
   opportunity: OpportunityScore;
   marketRegime: ScannerResponse["marketRegime"];
   configuration: ScoringConfig;
@@ -46,6 +47,7 @@ export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerRe
   return cloneImmutableEntrySnapshot({
     scannerGeneratedAt: generatedAt,
     asset: { id: row.asset.id, symbol: row.asset.symbol, name: row.asset.name, sector: row.asset.sector, price: row.asset.price },
+    dataStatus: row.dataStatus,
     opportunity: row.score,
     marketRegime,
     configuration,
@@ -67,27 +69,59 @@ export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerRe
   });
 }
 
-function calculateMetrics(startingCapital: number, trades: Array<{ status: string; side: string; entryPrice: number; positionSize: number; realizedPnl: number | null; exitPrice: number | null; entryAt: Date; exitAt: Date | null }>, currentPrices: Map<string, number>) {
+export type PaperTradePresentationInput = { id?: number; assetId: string; status: string; side: string; entryPrice: number; positionSize: number; realizedPnl: number | null; exitPrice: number | null; entryAt: Date; exitAt: Date | null };
+
+export function buildPaperPortfolioPresentation(startingCapital: number, trades: PaperTradePresentationInput[], currentPrices: Map<string, number>) {
   const closed = trades.filter(trade => trade.status === "closed" && trade.realizedPnl !== null);
   const open = trades.filter(trade => trade.status === "open");
   const realizedPnl = closed.reduce((sum, trade) => sum + (trade.realizedPnl ?? 0), 0);
   const unrealizedPnl = open.reduce((sum, trade) => {
-    const price = currentPrices.get((trade as typeof trade & { assetId?: string }).assetId ?? "");
+    const price = currentPrices.get(trade.assetId);
     if (!price) return sum;
     return sum + (trade.side === "long" ? price - trade.entryPrice : trade.entryPrice - price) * trade.positionSize;
   }, 0);
   const returns = closed.map(trade => (trade.realizedPnl ?? 0) / Math.max(trade.entryPrice * trade.positionSize, Number.EPSILON));
   const wins = closed.filter(trade => (trade.realizedPnl ?? 0) > 0);
+  const losses = closed.filter(trade => (trade.realizedPnl ?? 0) < 0);
   const grossProfit = wins.reduce((sum, trade) => sum + (trade.realizedPnl ?? 0), 0);
-  const grossLoss = Math.abs(closed.filter(trade => (trade.realizedPnl ?? 0) < 0).reduce((sum, trade) => sum + (trade.realizedPnl ?? 0), 0));
+  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + (trade.realizedPnl ?? 0), 0));
   let peak = startingCapital;
   let equity = startingCapital;
   let maxDrawdown = 0;
-  closed.sort((left, right) => (left.exitAt?.getTime() ?? 0) - (right.exitAt?.getTime() ?? 0)).forEach(trade => { equity += trade.realizedPnl ?? 0; peak = Math.max(peak, equity); maxDrawdown = Math.max(maxDrawdown, (peak - equity) / peak * 100); });
+  const equityCurve: Array<{ timestamp: number; equity: number; kind: "INITIAL" | "CLOSED_TRADE" | "CURRENT" }> = [{ timestamp: 0, equity: round(startingCapital), kind: "INITIAL" }];
+  [...closed].sort((left, right) => (left.exitAt?.getTime() ?? 0) - (right.exitAt?.getTime() ?? 0)).forEach(trade => {
+    equity += trade.realizedPnl ?? 0;
+    peak = Math.max(peak, equity);
+    maxDrawdown = Math.max(maxDrawdown, (peak - equity) / peak * 100);
+    equityCurve.push({ timestamp: trade.exitAt?.getTime() ?? trade.entryAt.getTime(), equity: round(equity), kind: "CLOSED_TRADE" as const });
+  });
+  const currentEquity = round(startingCapital + realizedPnl + unrealizedPnl);
+  if (open.length) equityCurve.push({ timestamp: Date.now(), equity: currentEquity, kind: "CURRENT" as const });
   const mean = returns.length ? returns.reduce((sum, value) => sum + value, 0) / returns.length : 0;
   const variance = returns.length > 1 ? returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length - 1) : 0;
   const sharpe = variance > 0 ? mean / Math.sqrt(variance) * Math.sqrt(returns.length) : null;
-  return { startingCapital, currentEquity: round(startingCapital + realizedPnl + unrealizedPnl), realizedPnl: round(realizedPnl), unrealizedPnl: round(unrealizedPnl), winRate: closed.length ? round(wins.length / closed.length * 100) : null, openPositions: open.length, closedPositions: closed.length, tradeCount: trades.length, averageReturn: returns.length ? round(mean * 100) : null, averageR: returns.length ? round(mean * 100) : null, maxDrawdown: round(maxDrawdown), profitFactor: grossLoss > 0 ? round(grossProfit / grossLoss) : grossProfit > 0 ? null : 0, sharpeRatio: sharpe === null ? null : round(sharpe) };
+  const openNotional = open.reduce((sum, trade) => sum + trade.entryPrice * trade.positionSize, 0);
+  return {
+    startingCapital,
+    currentEquity,
+    availableCash: round(startingCapital + realizedPnl - openNotional),
+    realizedPnl: round(realizedPnl),
+    unrealizedPnl: round(unrealizedPnl),
+    totalPnl: round(realizedPnl + unrealizedPnl),
+    totalReturnPercent: startingCapital > 0 ? round((realizedPnl + unrealizedPnl) / startingCapital * 100) : null,
+    winRate: closed.length ? round(wins.length / closed.length * 100) : null,
+    averageWin: wins.length ? round(grossProfit / wins.length) : null,
+    averageLoss: losses.length ? round(losses.reduce((sum, trade) => sum + (trade.realizedPnl ?? 0), 0) / losses.length) : null,
+    openPositions: open.length,
+    closedPositions: closed.length,
+    tradeCount: trades.length,
+    averageReturn: returns.length ? round(mean * 100) : null,
+    averageR: returns.length ? round(mean * 100) : null,
+    maxDrawdown: round(maxDrawdown),
+    profitFactor: grossLoss > 0 ? round(grossProfit / grossLoss) : grossProfit > 0 ? null : 0,
+    sharpeRatio: sharpe === null ? null : round(sharpe),
+    equityCurve,
+  };
 }
 
 async function getOrCreatePortfolio(userId: number, paperCapital: number) {
@@ -138,7 +172,25 @@ export async function getPaperPortfolio(userId: number, configuration: ScoringCo
   if (!db) throw new Error("Database is unavailable; the paper portfolio cannot be loaded.");
   const rows = await db.select().from(paperTrades).where(eq(paperTrades.portfolioId, portfolio.id)).orderBy(asc(paperTrades.entryAt));
   const scan = await buildLiveScanner(false, configuration);
+  const byAsset = new Map(scan.rows.map(row => [row.asset.id, row] as const));
   const prices = new Map(scan.rows.flatMap(row => row.asset.price === null ? [] : [[row.asset.id, row.asset.price] as const]));
-  const metrics = calculateMetrics(portfolio.startingCapital, rows as Array<typeof paperTrades.$inferSelect & { assetId: string }>, prices);
-  return { portfolio, metrics, trades: rows, generatedAt: scan.generatedAt };
+  const metrics = buildPaperPortfolioPresentation(portfolio.startingCapital, rows as Array<typeof paperTrades.$inferSelect & { assetId: string }>, prices);
+  const trades = rows.map(trade => {
+    const current = byAsset.get(trade.assetId);
+    const currentPrice = current?.asset.price ?? null;
+    const unrealizedPnl = trade.status === "open" && currentPrice !== null ? round((trade.side === "long" ? currentPrice - trade.entryPrice : trade.entryPrice - currentPrice) * trade.positionSize) : null;
+    const basis = trade.entryPrice * trade.positionSize;
+    return {
+      ...trade,
+      entryNotional: round(basis),
+      currentPrice,
+      currentNotional: currentPrice === null ? null : round(currentPrice * trade.positionSize),
+      unrealizedPnl,
+      unrealizedReturnPercent: unrealizedPnl === null || basis <= 0 ? null : round(unrealizedPnl / basis * 100),
+      realizedReturnPercent: trade.realizedPnl === null || basis <= 0 ? null : round(trade.realizedPnl / basis * 100),
+      entrySnapshot: trade.immutableEntrySnapshot as PaperTradeSnapshot,
+      currentState: current ? { score: current.score, dataStatus: current.dataStatus, marketRegime: scan.marketRegime, generatedAt: scan.generatedAt } : null,
+    };
+  });
+  return { portfolio, metrics, trades, generatedAt: scan.generatedAt };
 }
