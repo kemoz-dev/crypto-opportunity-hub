@@ -158,6 +158,11 @@ export type NormalizedLiveOhlcvSeries = {
 };
 
 export type LiveOhlcvFetchResult = { series: NormalizedLiveOhlcvSeries | null; statuses: DataStatus[] };
+export type LiveOhlcvMonitorOptions = { forceBinance451?: boolean; forceKrakenUnavailable?: boolean };
+
+export function getApprovedKrakenMappings() {
+  return { mappings: { ...KRAKEN_PAIR_BY_SYMBOL }, intervals: { ...KRAKEN_INTERVAL_BY_TIMEFRAME }, historicalDepth: "UP_TO_720_RECENT_CANDLES", freshnessLimit: "VALIDATED_BY_COMPLETE_CANDLE_TIMESTAMP", requestConstraint: "PUBLIC_ENDPOINT_RATE_LIMITS_UNKNOWN_AT_RUNTIME" };
+}
 
 function ohlcvStatus(input: Omit<DataStatus, "fetchedAt" | "normalizationVersion" | "capability"> & { fetchedAt?: number }): DataStatus {
   return { fetchedAt: input.fetchedAt ?? Date.now(), capability: "OHLCV", normalizationVersion: LIVE_OHLCV_NORMALIZATION_VERSION, ...input };
@@ -209,10 +214,11 @@ function validOhlcvStatus(series: NormalizedLiveOhlcvSeries): DataStatus {
   return ohlcvStatus({ source: `${series.provider} OHLCV`, provider: series.provider, symbol: series.symbol, timeframe: series.timeframe, status: "live", dataQuality: "VALID", fetchedAt: series.retrievedAt });
 }
 
-export async function fetchValidatedLiveOhlcv(symbol: string, timeframe: Timeframe, minimumCandles: number, limit = 240): Promise<LiveOhlcvFetchResult> {
+export async function fetchValidatedLiveOhlcv(symbol: string, timeframe: Timeframe, minimumCandles: number, limit = 240, monitorOptions: LiveOhlcvMonitorOptions = {}): Promise<LiveOhlcvFetchResult> {
   const retrievedAt = Date.now();
   const statuses: DataStatus[] = [];
   try {
+    if (monitorOptions.forceBinance451) throw new ProviderError("Binance Futures OHLCV", "Controlled monitor classification: Binance Futures HTTP 451.", "PROVIDER_UNAVAILABLE_REGION_RESTRICTION");
     const candles = validateNormalizedLiveOhlcv(await fetchBinanceCandles(`${symbol}USDT`, timeframe, limit), timeframe, retrievedAt, minimumCandles);
     const series: NormalizedLiveOhlcvSeries = { provider: "Binance Futures", symbol: `${symbol}USDT`, timeframe, retrievedAt, normalizationVersion: LIVE_OHLCV_NORMALIZATION_VERSION, dataQuality: "VALID", candles };
     statuses.push(validOhlcvStatus(series));
@@ -227,6 +233,7 @@ export async function fetchValidatedLiveOhlcv(symbol: string, timeframe: Timefra
     return { series: null, statuses };
   }
   try {
+    if (monitorOptions.forceKrakenUnavailable) throw new ProviderError("Kraken Spot OHLCV", "Controlled monitor classification: Kraken unavailable.");
     const params = new URLSearchParams({ pair, interval: String(KRAKEN_INTERVAL_BY_TIMEFRAME[timeframe]), assetVersion: "1" });
     const payload = await getJson<KrakenOhlcPayload>(`${KRAKEN_BASE_URL}/OHLC?${params}`, "Kraken Spot OHLCV");
     const candles = validateNormalizedLiveOhlcv(normalizeKrakenCandles(payload, pair, timeframe), timeframe, retrievedAt, minimumCandles);

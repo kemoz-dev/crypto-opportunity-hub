@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { scheduledAlertHandler } from "../crypto/alertHandler";
 import { scheduledHistoricalIngestionHandler } from "../crypto/historicalScheduleHandler";
+import { scheduledProviderMonitorHandler } from "../crypto/providerMonitorHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -40,6 +41,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   app.post("/api/scheduled/evaluate-alert", scheduledAlertHandler);
   app.post("/api/scheduled/ingest-historical-data", scheduledHistoricalIngestionHandler);
+  app.post("/api/scheduled/provider-health-monitor", scheduledProviderMonitorHandler);
   // tRPC API
   app.use(
     "/api/trpc",

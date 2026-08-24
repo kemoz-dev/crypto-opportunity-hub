@@ -1,0 +1,2 @@
+ALTER TABLE `providerMonitorExecutions` ADD `idempotencyKey` varchar(128) NOT NULL;--> statement-breakpoint
+ALTER TABLE `providerMonitorExecutions` ADD CONSTRAINT `provider_monitor_execution_idempotency_unique` UNIQUE(`monitorId`,`idempotencyKey`);

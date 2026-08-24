@@ -36,6 +36,52 @@ export const dataSources = mysqlTable("dataSources", {
   metadata: json("metadata"),
 });
 
+export const providerMonitors = mysqlTable("providerMonitors", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 128 }).notNull(),
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
+  cronExpression: varchar("cronExpression", { length: 64 }).notNull(),
+  isEnabled: boolean("isEnabled").notNull().default(true),
+  configuration: json("configuration").notNull(),
+  lastRunAt: timestamp("lastRunAt"),
+  lastStatus: mysqlEnum("lastStatus", ["SUCCESS", "PARTIAL", "FAILED", "SKIPPED"]),
+  lastError: text("lastError"),
+  nextRunAt: timestamp("nextRunAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [uniqueIndex("provider_monitor_name_unique").on(table.name), uniqueIndex("provider_monitor_task_unique").on(table.scheduleCronTaskUid)]);
+
+export const providerMonitorExecutions = mysqlTable("providerMonitorExecutions", {
+  id: int("id").autoincrement().primaryKey(),
+  monitorId: int("monitorId").notNull().references(() => providerMonitors.id, { onDelete: "cascade" }),
+  taskUid: varchar("taskUid", { length: 65 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  executionKind: mysqlEnum("executionKind", ["SCHEDULED"]).notNull(),
+  status: mysqlEnum("status", ["SUCCESS", "PARTIAL", "FAILED", "SKIPPED"]).notNull(),
+  startedAt: timestamp("startedAt").notNull(),
+  completedAt: timestamp("completedAt"),
+  durationMs: int("durationMs"),
+  summary: json("summary").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("provider_monitor_execution_idempotency_unique").on(table.monitorId, table.idempotencyKey), index("provider_monitor_execution_monitor_time_idx").on(table.monitorId, table.createdAt), index("provider_monitor_execution_task_time_idx").on(table.taskUid, table.createdAt)]);
+
+export const providerMonitorChecks = mysqlTable("providerMonitorChecks", {
+  id: int("id").autoincrement().primaryKey(),
+  executionId: int("executionId").notNull().references(() => providerMonitorExecutions.id, { onDelete: "cascade" }),
+  provider: varchar("provider", { length: 96 }).notNull(),
+  capability: varchar("capability", { length: 32 }).notNull(),
+  status: mysqlEnum("status", ["live", "stale", "unavailable"]).notNull(),
+  httpStatus: int("httpStatus"),
+  classification: varchar("classification", { length: 96 }),
+  latencyMs: int("latencyMs").notNull(),
+  timeframe: varchar("timeframe", { length: 12 }),
+  symbolsTested: json("symbolsTested").notNull(),
+  fallbackUsed: boolean("fallbackUsed").notNull().default(false),
+  dataQuality: mysqlEnum("dataQuality", ["VALID", "UNAVAILABLE"]).notNull(),
+  details: json("details").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("provider_monitor_check_execution_idx").on(table.executionId), index("provider_monitor_check_provider_time_idx").on(table.provider, table.createdAt)]);
+
 export const marketData = mysqlTable("marketData", {
   id: int("id").autoincrement().primaryKey(),
   assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
