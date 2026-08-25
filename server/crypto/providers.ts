@@ -50,17 +50,32 @@ export class ProviderError extends Error {
   }
 }
 
+export type LiveDataQualityState = NonNullable<DataStatus["dataQuality"]>;
+
+function qualityForErrorClass(errorClass: NonNullable<DataStatus["errorClass"]>): LiveDataQualityState {
+  if (errorClass === "STALE_DATA") return "STALE";
+  if (errorClass === "INSUFFICIENT_CANDLES") return "INSUFFICIENT";
+  if (errorClass === "MIXED_PROVIDER_PREVENTED") return "INCOHERENT";
+  if (errorClass === "PROVIDER_UNAVAILABLE_REGION_RESTRICTION") return "PROVIDER_UNAVAILABLE";
+  if (errorClass === "PROVIDER_TIMEOUT" || errorClass === "PROVIDER_RATE_LIMITED" || errorClass === "PROVIDER_REQUEST_FAILED") return "NO_DATA";
+  return "INVALID";
+}
+
 async function getJson<T>(url: string, source: string): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
-    if (!response.ok) throw new ProviderError(source, `${source} returned HTTP ${response.status}.`, response.status === 451 ? "PROVIDER_UNAVAILABLE_REGION_RESTRICTION" : "PROVIDER_REQUEST_FAILED");
-    return await response.json() as T;
+    if (!response.ok) throw new ProviderError(source, `${source} returned HTTP ${response.status}.`, response.status === 451 ? "PROVIDER_UNAVAILABLE_REGION_RESTRICTION" : response.status === 429 ? "PROVIDER_RATE_LIMITED" : "PROVIDER_REQUEST_FAILED");
+    try {
+      return await response.json() as T;
+    } catch {
+      throw new ProviderError(source, `${source} returned an invalid JSON response.`, "PROVIDER_INVALID_RESPONSE");
+    }
   } catch (error) {
     if (error instanceof ProviderError) throw error;
     const message = error instanceof Error ? error.message : "Unknown provider error.";
-    throw new ProviderError(source, message.includes("abort") ? `${source} timed out.` : message);
+    throw new ProviderError(source, message.includes("abort") ? `${source} timed out.` : message, message.includes("abort") ? "PROVIDER_TIMEOUT" : "PROVIDER_REQUEST_FAILED");
   } finally {
     clearTimeout(timeout);
   }
@@ -159,6 +174,34 @@ export type NormalizedLiveOhlcvSeries = {
 
 export type LiveOhlcvFetchResult = { series: NormalizedLiveOhlcvSeries | null; statuses: DataStatus[] };
 export type LiveOhlcvMonitorOptions = { forceBinance451?: boolean; forceKrakenUnavailable?: boolean };
+export type LiveOhlcvTimeframeStatus = {
+  timeframe: Timeframe;
+  provider: "Binance Futures" | "Kraken Spot" | null;
+  symbol: string | null;
+  state: LiveDataQualityState;
+  status: DataStatus["status"];
+  fetchedAt: number | null;
+  candleCount: number;
+  oldestCandleAt: number | null;
+  newestCandleAt: number | null;
+  freshnessMs: number | null;
+  eligibleForScoring: boolean;
+  message: string | null;
+  errorClass: DataStatus["errorClass"] | null;
+};
+export type LiveOhlcvBundle = {
+  symbol: string;
+  requiredTimeframes: Timeframe[];
+  provider: "Binance Futures" | "Kraken Spot" | null;
+  providerSymbol: string | null;
+  state: LiveDataQualityState;
+  coherent: boolean;
+  eligibleForScoring: boolean;
+  statusMessage: string;
+  seriesByTimeframe: Partial<Record<Timeframe, NormalizedLiveOhlcvSeries>>;
+  timeframes: LiveOhlcvTimeframeStatus[];
+  statuses: DataStatus[];
+};
 
 export function getApprovedKrakenMappings() {
   return { mappings: { ...KRAKEN_PAIR_BY_SYMBOL }, intervals: { ...KRAKEN_INTERVAL_BY_TIMEFRAME }, historicalDepth: "UP_TO_720_RECENT_CANDLES", freshnessLimit: "VALIDATED_BY_COMPLETE_CANDLE_TIMESTAMP", requestConstraint: "PUBLIC_ENDPOINT_RATE_LIMITS_UNKNOWN_AT_RUNTIME" };
@@ -175,7 +218,7 @@ function validationError(errorClass: NonNullable<DataStatus["errorClass"]>, mess
 export function validateNormalizedLiveOhlcv(candles: Candle[], timeframe: Timeframe, retrievedAt: number, minimumCandles: number): Candle[] {
   const interval = TIMEFRAME_MS[timeframe];
   const completed = candles.filter(candle => candle.closeTime < retrievedAt);
-  if (completed.length < minimumCandles) throw validationError("VALIDATION_FAILED", `Only ${completed.length} complete ${timeframe} candles were returned; ${minimumCandles} are required.`);
+  if (completed.length < minimumCandles) throw validationError("INSUFFICIENT_CANDLES", `Only ${completed.length} complete ${timeframe} candles were returned; ${minimumCandles} are required.`);
   let previousOpen = -1;
   for (const candle of completed) {
     if (![candle.openTime, candle.closeTime, candle.open, candle.high, candle.low, candle.close, candle.volume].every(Number.isFinite)) throw validationError("VALIDATION_FAILED", "A candle contains a non-finite field.");
@@ -185,7 +228,10 @@ export function validateNormalizedLiveOhlcv(candles: Candle[], timeframe: Timefr
     if (previousOpen >= 0 && candle.openTime !== previousOpen + interval) throw validationError("TIMEFRAME_MISMATCH", "The candle series spacing does not match the requested timeframe.");
     previousOpen = candle.openTime;
   }
-  return completed.slice(-minimumCandles);
+  const retained = completed.slice(-minimumCandles);
+  const newest = retained.at(-1);
+  if (!newest || retrievedAt - newest.closeTime > interval * 3) throw validationError("STALE_DATA", `The newest complete ${timeframe} candle is older than the existing three-interval freshness allowance.`);
+  return retained;
 }
 
 type KrakenOhlcPayload = { error?: string[]; result?: Record<string, unknown> };
@@ -207,7 +253,8 @@ export function normalizeKrakenCandles(payload: KrakenOhlcPayload, expectedPair:
 
 function unavailableOhlcvStatus(provider: string, symbol: string, timeframe: Timeframe, error: unknown): DataStatus {
   const typed = error instanceof ProviderError ? error : new ProviderError(provider, error instanceof Error ? error.message : "Provider request failed.");
-  return ohlcvStatus({ source: `${provider} OHLCV`, provider, symbol, timeframe, status: "unavailable", message: typed.message, errorClass: typed.errorClass, dataQuality: "UNAVAILABLE" });
+  const dataQuality = qualityForErrorClass(typed.errorClass);
+  return ohlcvStatus({ source: `${provider} OHLCV`, provider, symbol, timeframe, status: dataQuality === "STALE" ? "stale" : "unavailable", message: typed.message, errorClass: typed.errorClass, dataQuality });
 }
 
 function validOhlcvStatus(series: NormalizedLiveOhlcvSeries): DataStatus {
@@ -229,7 +276,7 @@ export async function fetchValidatedLiveOhlcv(symbol: string, timeframe: Timefra
   }
   const pair = KRAKEN_PAIR_BY_SYMBOL[symbol];
   if (!pair) {
-    statuses.push(ohlcvStatus({ source: "Kraken Spot OHLCV", provider: "Kraken Spot", symbol, timeframe, status: "unavailable", message: `No approved Kraken mapping exists for ${symbol}.`, errorClass: "SYMBOL_MAPPING_MISMATCH", dataQuality: "UNAVAILABLE" }));
+    statuses.push(ohlcvStatus({ source: "Kraken Spot OHLCV", provider: "Kraken Spot", symbol, timeframe, status: "unavailable", message: `No approved Kraken mapping exists for ${symbol}.`, errorClass: "SYMBOL_MAPPING_MISMATCH", dataQuality: "INVALID" }));
     return { series: null, statuses };
   }
   try {
@@ -244,6 +291,87 @@ export async function fetchValidatedLiveOhlcv(symbol: string, timeframe: Timefra
     statuses.push(unavailableOhlcvStatus("Kraken Spot", pair, timeframe, error));
     return { series: null, statuses };
   }
+}
+
+function describeTimeframe(timeframe: Timeframe, series: NormalizedLiveOhlcvSeries | null, status: DataStatus | undefined, now: number): LiveOhlcvTimeframeStatus {
+  const candles = series?.candles ?? [];
+  const newest = candles.at(-1) ?? null;
+  return {
+    timeframe,
+    provider: series?.provider ?? (status?.provider === "Binance Futures" || status?.provider === "Kraken Spot" ? status.provider : null),
+    symbol: series?.symbol ?? status?.symbol ?? null,
+    state: series ? "VALID" : status?.dataQuality ?? "NO_DATA",
+    status: series ? "live" : status?.status ?? "unavailable",
+    fetchedAt: series?.retrievedAt ?? status?.fetchedAt ?? null,
+    candleCount: candles.length,
+    oldestCandleAt: candles[0]?.openTime ?? null,
+    newestCandleAt: newest?.closeTime ?? null,
+    freshnessMs: newest ? Math.max(0, now - newest.closeTime) : null,
+    eligibleForScoring: Boolean(series),
+    message: series ? null : status?.message ?? "No validated provider response was available.",
+    errorClass: series ? null : status?.errorClass ?? null,
+  };
+}
+
+function bundleFromAttempts(symbol: string, requiredTimeframes: Timeframe[], provider: "Binance Futures" | "Kraken Spot", attempts: Array<{ timeframe: Timeframe; result: LiveOhlcvFetchResult }>, statuses: DataStatus[], now: number, successMessage: string): LiveOhlcvBundle {
+  const seriesByTimeframe: Partial<Record<Timeframe, NormalizedLiveOhlcvSeries>> = {};
+  for (const attempt of attempts) if (attempt.result.series?.provider === provider) seriesByTimeframe[attempt.timeframe] = attempt.result.series;
+  const allValid = requiredTimeframes.every(timeframe => Boolean(seriesByTimeframe[timeframe]));
+  const timeframes = requiredTimeframes.map(timeframe => {
+    const attempt = attempts.find(item => item.timeframe === timeframe)?.result;
+    const matchingStatus = attempt?.statuses.find(item => item.provider === provider && item.status !== "live") ?? attempt?.statuses.at(-1);
+    return describeTimeframe(timeframe, seriesByTimeframe[timeframe] ?? null, matchingStatus, now);
+  });
+  const firstUnavailable = timeframes.find(item => !item.eligibleForScoring);
+  return {
+    symbol,
+    requiredTimeframes,
+    provider: allValid ? provider : null,
+    providerSymbol: allValid ? seriesByTimeframe[requiredTimeframes[0]]?.symbol ?? null : null,
+    state: allValid ? "VALID" : firstUnavailable?.state ?? "NO_DATA",
+    coherent: allValid,
+    eligibleForScoring: allValid,
+    statusMessage: allValid ? successMessage : firstUnavailable?.message ?? "The required provider bundle was unavailable.",
+    seriesByTimeframe: allValid ? seriesByTimeframe : {},
+    timeframes,
+    statuses,
+  };
+}
+
+async function fetchKrakenOnly(symbol: string, timeframe: Timeframe, minimumCandles: number, limit: number): Promise<LiveOhlcvFetchResult> {
+  const retrievedAt = Date.now();
+  const pair = KRAKEN_PAIR_BY_SYMBOL[symbol];
+  if (!pair) return { series: null, statuses: [ohlcvStatus({ source: "Kraken Spot OHLCV", provider: "Kraken Spot", symbol, timeframe, status: "unavailable", message: `No approved Kraken mapping exists for ${symbol}.`, errorClass: "SYMBOL_MAPPING_MISMATCH", dataQuality: "INVALID" })] };
+  try {
+    const params = new URLSearchParams({ pair, interval: String(KRAKEN_INTERVAL_BY_TIMEFRAME[timeframe]), assetVersion: "1" });
+    const payload = await getJson<KrakenOhlcPayload>(`${KRAKEN_BASE_URL}/OHLC?${params}`, "Kraken Spot OHLCV");
+    const candles = validateNormalizedLiveOhlcv(normalizeKrakenCandles(payload, pair, timeframe), timeframe, retrievedAt, minimumCandles);
+    const series: NormalizedLiveOhlcvSeries = { provider: "Kraken Spot", symbol: pair, timeframe, retrievedAt, normalizationVersion: LIVE_OHLCV_NORMALIZATION_VERSION, dataQuality: "VALID", candles };
+    return { series, statuses: [validOhlcvStatus(series)] };
+  } catch (error) {
+    return { series: null, statuses: [unavailableOhlcvStatus("Kraken Spot", pair, timeframe, error)] };
+  }
+}
+
+export async function fetchValidatedLiveOhlcvBundle(symbol: string, requiredTimeframes: Timeframe[], minimumCandles: number, limit = 240): Promise<LiveOhlcvBundle> {
+  const now = Date.now();
+  const primaryAttempts = await Promise.all(requiredTimeframes.map(async timeframe => ({ timeframe, result: await fetchValidatedLiveOhlcv(symbol, timeframe, minimumCandles, limit) })));
+  const primaryStatuses = primaryAttempts.flatMap(item => item.result.statuses);
+  const primarySeries = primaryAttempts.filter(item => item.result.series?.provider === "Binance Futures");
+  if (primarySeries.length === requiredTimeframes.length) return bundleFromAttempts(symbol, requiredTimeframes, "Binance Futures", primaryAttempts, primaryStatuses, now, "All required timeframes were validated from Binance Futures.");
+  const hasRegionRestriction = primaryStatuses.some(status => status.provider === "Binance Futures" && status.errorClass === "PROVIDER_UNAVAILABLE_REGION_RESTRICTION");
+  if (primarySeries.length === 0 && hasRegionRestriction) {
+    const bundle = bundleFromAttempts(symbol, requiredTimeframes, "Kraken Spot", primaryAttempts, primaryStatuses, now, "Binance Futures was regionally unavailable and Kraken Spot supplied the complete validated fallback bundle.");
+    return bundle.eligibleForScoring ? bundle : { ...bundle, coherent: false, eligibleForScoring: false, statusMessage: "Binance Futures was regionally unavailable and Kraken Spot could not supply every required validated timeframe; no cross-provider series was constructed." };
+  }
+  if (!hasRegionRestriction) {
+    const bundle = bundleFromAttempts(symbol, requiredTimeframes, "Binance Futures", primaryAttempts, primaryStatuses, now, "All required timeframes were validated from Binance Futures.");
+    return { ...bundle, coherent: false, eligibleForScoring: false, state: bundle.state === "VALID" ? "INCOHERENT" : bundle.state, statusMessage: "A complete single-provider technical bundle was not available; no fallback is permitted for this failure class." };
+  }
+  const krakenAttempts = await Promise.all(requiredTimeframes.map(async timeframe => ({ timeframe, result: await fetchKrakenOnly(symbol, timeframe, minimumCandles, limit) })));
+  const statuses = [...primaryStatuses, ...krakenAttempts.flatMap(item => item.result.statuses)];
+  const bundle = bundleFromAttempts(symbol, requiredTimeframes, "Kraken Spot", krakenAttempts, statuses, now, "Binance Futures was regionally unavailable and Kraken Spot supplied the complete validated fallback bundle.");
+  return bundle.eligibleForScoring ? bundle : { ...bundle, coherent: false, eligibleForScoring: false, statusMessage: "Binance Futures was regionally unavailable and Kraken Spot could not supply every required validated timeframe; no cross-provider series was constructed." };
 }
 
 function archiveMonths(endAt: number | undefined, timeframe: Timeframe, limit: number) {

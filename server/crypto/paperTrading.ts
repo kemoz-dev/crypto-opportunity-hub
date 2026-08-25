@@ -2,7 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { paperPortfolios, paperTradeMonitoringEvents, paperTrades } from "../../drizzle/schema";
 import type { OpportunityScore, ScannerResponse, ScoringConfig, ScannerRow } from "../../shared/crypto";
 import { getDb } from "../db";
-import { buildLiveScanner } from "./marketService";
+import { buildLiveScanner, getScannerLiveOhlcvBundle } from "./marketService";
 import { buildTradeHealth, getTradeSetupForRow, type TradeSetupMode, type TradeSetupPlan } from "./tradeSetup";
 
 export type PaperTradeSnapshot = {
@@ -147,7 +147,7 @@ export async function openLivePaperTrade(userId: number, assetId: string, side: 
   if (atrPercent === null) throw new Error("ATR is unavailable, so a risk-normalized stop cannot be calculated.");
   const entryPrice = row.asset.price;
   const terms = calculatePaperEntryTerms(entryPrice, atrPercent, side, portfolio.currentEquity, riskPercent);
-  const setupPlan = setupMode ? await getTradeSetupForRow(setupMode, row, scan.marketRegime, configuration) : undefined;
+  const setupPlan = setupMode ? await getTradeSetupForRow(setupMode, row, scan.marketRegime, configuration, undefined, getScannerLiveOhlcvBundle(scan, row.asset.symbol)) : undefined;
   if (setupPlan && (!setupPlan.actionable || setupPlan.direction.toLowerCase() !== side)) throw new Error("The current validated setup plan is unavailable or does not support the selected simulated direction.");
   const snapshot = buildPaperTradeSnapshot(row, scan.marketRegime, scan.generatedAt, configuration, terms, setupPlan);
   const db = await getDb();

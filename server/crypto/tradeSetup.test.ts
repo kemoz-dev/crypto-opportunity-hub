@@ -1,4 +1,5 @@
 import { DEFAULT_SCORING_CONFIG, type MarketRegime, type ScannerRow } from "../../shared/crypto";
+import type { LiveOhlcvBundle } from "./providers";
 import { buildTradeHealth, buildTradeSetupPlan, summarizeDiagnostics } from "./tradeSetup";
 import { describe, expect, it } from "vitest";
 
@@ -12,10 +13,14 @@ const row = (): ScannerRow => ({
 
 const regime: MarketRegime = { score: 70, classification: "RISK ON", reasons: [], btcDominance: 50, breadth: 60 };
 const candles = Array.from({ length: 80 }, (_, index) => ({ openTime: index * 900_000, closeTime: index * 900_000 + 899_999, open: 140, high: 150, low: index === 70 ? 130 : 135, close: 140, volume: 100 }));
+const bundle = (): LiveOhlcvBundle => ({
+  symbol: "SOL", requiredTimeframes: ["15m", "1h", "4h"], provider: "Binance Futures", providerSymbol: "SOLUSDT", state: "VALID", coherent: true, eligibleForScoring: true, statusMessage: "All required timeframes were validated from Binance Futures.", seriesByTimeframe: {}, statuses: [],
+  timeframes: ["15m", "1h", "4h"].map(timeframe => ({ timeframe: timeframe as "15m" | "1h" | "4h", provider: "Binance Futures", symbol: "SOLUSDT", state: "VALID", status: "live", fetchedAt: 123, candleCount: 202, oldestCandleAt: 1, newestCandleAt: 2, freshnessMs: 500, eligibleForScoring: true, message: null, errorClass: null })),
+});
 
 describe("trade setup intelligence", () => {
   it("creates a separate, explainable 15M scalp plan from validated technical inputs without changing the Opportunity score", () => {
-    const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123);
+    const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123, bundle());
     expect(plan.minimumValidatedTimeframe).toContain("15M");
     expect(plan.timeframes).toEqual({ execution: "15m", confirmation: "1h", context: "4h" });
     expect(plan.opportunityScore).toBe(74);
@@ -23,6 +28,8 @@ describe("trade setup intelligence", () => {
     expect(plan.tradeSetupQuality).not.toBeNull();
     expect(plan.stop?.price).toBeLessThan(plan.entryZone!.preferred);
     expect(plan.targets[0]?.price).toBeGreaterThan(plan.entryZone!.preferred);
+    expect(plan.dataBundle).toMatchObject({ provider: "Binance Futures", coherent: true, eligibleForScoring: true, state: "VALID" });
+    expect(plan.diagnostics.find(condition => condition.key === "provider_bundle")).toMatchObject({ status: "PASSED" });
   });
 
   it("returns NO TRADE rather than inventing a plan when structure cannot yield a valid target", () => {
@@ -48,12 +55,13 @@ describe("trade setup intelligence", () => {
   it("aggregates actual diagnostic states across plans without creating a setup", () => {
     const neutral = row();
     neutral.score!.direction = "neutral";
-    const neutralPlan = buildTradeSetupPlan("SCALP", neutral, regime, candles, "Binance Futures", 123);
-    const unavailablePlan = buildTradeSetupPlan("SCALP", row(), regime, candles.map(candle => ({ ...candle, high: 141, low: 139 })), "Binance Futures", 123);
+    const neutralPlan = buildTradeSetupPlan("SCALP", neutral, regime, candles, "Binance Futures", 123, bundle());
+    const unavailablePlan = buildTradeSetupPlan("SCALP", row(), regime, candles.map(candle => ({ ...candle, high: 141, low: 139 })), "Binance Futures", 123, bundle());
     const summary = summarizeDiagnostics([neutralPlan, unavailablePlan]);
     expect(summary).toMatchObject({ evaluatedAssets: 2, noTradeAssets: 2 });
     expect(summary.byCondition.find(condition => condition.key === "opportunity_direction")?.failed).toBe(1);
     expect(summary.topNoTradeReasons.length).toBeGreaterThan(0);
+    expect(summary.classification).toEqual({ lackOfMarketSetups: 1, missingData: 0, staleData: 0, existingSetupRequirement: 1 });
   });
 
   it("keeps current Trade Health separate from immutable entry evidence and never implies auto-close", () => {

@@ -1,7 +1,7 @@
 import type { Candle, MarketRegime, ScannerResponse, ScannerRow, ScoringConfig, Timeframe, TimeframeAnalysis } from "../../shared/crypto";
 import { calculateAtr } from "./technical";
-import { fetchValidatedLiveOhlcv } from "./providers";
-import { buildLiveScanner } from "./marketService";
+import { fetchValidatedLiveOhlcvBundle, type LiveOhlcvBundle } from "./providers";
+import { buildLiveScanner, getScannerLiveOhlcvBundle } from "./marketService";
 
 export type TradeSetupMode = "SCALP" | "SWING";
 export type TradeSetupDirection = "LONG" | "SHORT" | "NO TRADE";
@@ -9,7 +9,7 @@ export type TradeHealthState = "HEALTHY" | "CAUTION" | "THREATENED" | "INVALIDAT
 export type TradeSetupDiagnosticStatus = "PASSED" | "FAILED" | "UNAVAILABLE" | "STALE";
 
 export type TradeSetupCondition = {
-  key: "live_price" | "freshness" | "execution_analysis" | "confirmation_analysis" | "context_analysis" | "opportunity_direction" | "atr" | "entry_zone" | "structural_stop" | "target_structure" | "risk_reward";
+  key: "provider_bundle" | "live_price" | "freshness" | "execution_analysis" | "confirmation_analysis" | "context_analysis" | "opportunity_direction" | "atr" | "entry_zone" | "structural_stop" | "target_structure" | "risk_reward";
   label: string;
   status: TradeSetupDiagnosticStatus;
   actual: string;
@@ -23,6 +23,17 @@ export type TradeSetupDiagnosticSummary = {
   byCondition: Array<{ key: TradeSetupCondition["key"]; label: string; passed: number; failed: number; unavailable: number; stale: number }>;
   topNoTradeReasons: Array<{ key: TradeSetupCondition["key"]; label: string; count: number; status: Exclude<TradeSetupDiagnosticStatus, "PASSED"> }>;
   classification: { lackOfMarketSetups: number; missingData: number; staleData: number; existingSetupRequirement: number };
+};
+
+export type TradeSetupProviderHealth = {
+  provider: "Binance Futures" | "Kraken Spot" | "CoinGecko";
+  status: "LIVE" | "PARTIAL" | "UNAVAILABLE";
+  lastSuccessfulAt: number | null;
+  lastFailureAt: number | null;
+  failureClassification: string | null;
+  supportedTimeframes: Timeframe[];
+  validatedSymbols: string[];
+  note: string;
 };
 
 type SetupProfile = { execution: Timeframe; confirmation: Timeframe; context: Timeframe; horizon: "SHORT" | "MEDIUM" | "EXTENDED"; minimumLabel: string };
@@ -53,6 +64,14 @@ export type TradeSetupPlan = {
   expectedHorizon: SetupProfile["horizon"] | "UNAVAILABLE";
   dataTimestamp: number | null;
   provider: string | null;
+  dataBundle: {
+    provider: string | null;
+    state: "VALID" | "STALE" | "INSUFFICIENT" | "INCOHERENT" | "PROVIDER_UNAVAILABLE" | "INVALID" | "NO_DATA" | null;
+    coherent: boolean;
+    eligibleForScoring: boolean;
+    statusMessage: string;
+    timeframes: Array<{ timeframe: Timeframe; provider: string | null; symbol: string | null; state: string; status: "live" | "stale" | "unavailable"; fetchedAt: number | null; candleCount: number; oldestCandleAt: number | null; newestCandleAt: number | null; freshnessMs: number | null; eligibleForScoring: boolean; message: string | null; errorClass: string | null }>;
+  };
   timeframes: { execution: Timeframe; confirmation: Timeframe; context: Timeframe };
   opportunityScore: number | null;
   regimeScore: number | null;
@@ -77,7 +96,18 @@ type DerivedLevels = Pick<TradeSetupPlan, "entryZone" | "stop" | "invalidation" 
 type LevelDerivation = { state: "VALID" | "NO_PIVOT" | "INVALID_STOP" | "NO_TARGET" | "RR_BELOW_MINIMUM"; levels: DerivedLevels | null; preferred: number | null; pivot: number | null; stopPrice: number | null; firstTarget: number | null; rewardRisk: number | null };
 const MINIMUM_REWARD_RISK = 1;
 
-function emptyPlan(mode: TradeSetupMode, row: ScannerRow | null, regime: MarketRegime | null, reason: string, availability: TradeSetupPlan["availability"] = "UNAVAILABLE"): TradeSetupPlan {
+function dataBundleForPlan(bundle: LiveOhlcvBundle | null): TradeSetupPlan["dataBundle"] {
+  return bundle ? {
+    provider: bundle.provider,
+    state: bundle.state,
+    coherent: bundle.coherent,
+    eligibleForScoring: bundle.eligibleForScoring,
+    statusMessage: bundle.statusMessage,
+    timeframes: bundle.timeframes.map(timeframe => ({ ...timeframe, errorClass: timeframe.errorClass ?? null })),
+  } : { provider: null, state: null, coherent: false, eligibleForScoring: false, statusMessage: "No validated provider bundle was available.", timeframes: [] };
+}
+
+function emptyPlan(mode: TradeSetupMode, row: ScannerRow | null, regime: MarketRegime | null, reason: string, availability: TradeSetupPlan["availability"] = "UNAVAILABLE", bundle: LiveOhlcvBundle | null = null): TradeSetupPlan {
   const profile = PROFILES[mode];
   return {
     engineVersion: TRADE_SETUP_ENGINE_VERSION,
@@ -92,6 +122,7 @@ function emptyPlan(mode: TradeSetupMode, row: ScannerRow | null, regime: MarketR
     expectedHorizon: "UNAVAILABLE",
     dataTimestamp: null,
     provider: null,
+    dataBundle: dataBundleForPlan(bundle),
     timeframes: { execution: profile.execution, confirmation: profile.confirmation, context: profile.context },
     opportunityScore: row?.score?.score ?? null,
     regimeScore: regime?.score ?? null,
@@ -209,7 +240,10 @@ function buildDiagnostics(plan: TradeSetupPlan, row: ScannerRow, regime: MarketR
   const stopStatus: TradeSetupDiagnosticStatus = derivation?.state === "VALID" || derivation?.state === "NO_TARGET" || derivation?.state === "RR_BELOW_MINIMUM" ? "PASSED" : derivation?.state === "INVALID_STOP" ? "FAILED" : "UNAVAILABLE";
   const targetStatus: TradeSetupDiagnosticStatus = derivation?.state === "VALID" || derivation?.state === "RR_BELOW_MINIMUM" ? "PASSED" : derivation?.state === "NO_TARGET" ? "FAILED" : "UNAVAILABLE";
   const rrStatus: TradeSetupDiagnosticStatus = derivation?.state === "VALID" ? "PASSED" : derivation?.state === "RR_BELOW_MINIMUM" ? "FAILED" : "UNAVAILABLE";
+  const bundleStatus: TradeSetupDiagnosticStatus = plan.dataBundle.eligibleForScoring && plan.dataBundle.coherent ? "PASSED" : plan.dataBundle.state === "STALE" ? "STALE" : "UNAVAILABLE";
+  const bundleActual = plan.dataBundle.timeframes.length ? plan.dataBundle.timeframes.map(item => `${item.timeframe.toUpperCase()}: ${item.provider ?? "UNAVAILABLE"} · ${item.state}${item.errorClass ? ` (${item.errorClass})` : ""}`).join(" | ") : "UNAVAILABLE";
   return [
+    diagnostic("provider_bundle", "Provider coherence and data quality", bundleStatus, bundleActual, `One validated provider bundle is required across ${plan.timeframes.execution.toUpperCase()} / ${plan.timeframes.confirmation.toUpperCase()} / ${plan.timeframes.context.toUpperCase()}.`, plan.dataBundle.eligibleForScoring && plan.dataBundle.coherent ? `Provider bundle validated: ${plan.dataBundle.provider ?? "UNAVAILABLE"}.` : plan.dataBundle.statusMessage),
     diagnostic("live_price", "Validated live price", row.asset.price == null ? "UNAVAILABLE" : "PASSED", row.asset.price == null ? "UNAVAILABLE" : `Price ${numberLabel(row.asset.price, 8)}.`, "A validated live price is required.", row.asset.price == null ? "No validated price is available for this asset." : "The current plan used the existing scanner price."),
     diagnostic("freshness", "Input freshness", plan.availability === "STALE" ? "STALE" : plan.dataTimestamp == null ? "UNAVAILABLE" : "PASSED", plan.dataTimestamp == null ? "UNAVAILABLE" : `${new Date(plan.dataTimestamp).toISOString()} · ${plan.availability}.`, "Provider inputs must be marked live with a timestamp.", plan.availability === "STALE" ? "Existing provider freshness marked this result stale; no plan is treated as current." : plan.dataTimestamp == null ? "No live execution-series timestamp was available." : "The validated execution series carried a live retrieval timestamp."),
     analysisCondition("execution_analysis", `${plan.timeframes.execution.toUpperCase()} execution analysis`, plan.executionState, plan.timeframes.execution),
@@ -231,6 +265,7 @@ function withDiagnostics(plan: TradeSetupPlan, row: ScannerRow, regime: MarketRe
 export function summarizeDiagnostics(plans: TradeSetupPlan[]): TradeSetupDiagnosticSummary {
   const byCondition = new Map<TradeSetupCondition["key"], { key: TradeSetupCondition["key"]; label: string; passed: number; failed: number; unavailable: number; stale: number }>();
   const reasons = new Map<string, { key: TradeSetupCondition["key"]; label: string; count: number; status: Exclude<TradeSetupDiagnosticStatus, "PASSED"> }>();
+  const rootDataKeys = new Set<TradeSetupCondition["key"]>(["provider_bundle", "live_price", "freshness", "execution_analysis", "confirmation_analysis", "context_analysis"]);
   let lackOfMarketSetups = 0;
   let missingData = 0;
   let staleData = 0;
@@ -243,7 +278,8 @@ export function summarizeDiagnostics(plans: TradeSetupPlan[]): TradeSetupDiagnos
       if (condition.status === "UNAVAILABLE") current.unavailable += 1;
       if (condition.status === "STALE") current.stale += 1;
       byCondition.set(condition.key, current);
-      if (!plan.actionable && condition.status !== "PASSED") {
+      const skippedDownstreamEvaluation = condition.status === "UNAVAILABLE" && (condition.actual.startsWith("Not evaluated because") || condition.actual.startsWith("Not derived because") || condition.detail.startsWith("No ATR-based") || condition.detail.startsWith("No entry zone") || condition.detail.startsWith("Stop evaluation") || condition.detail.startsWith("Target evaluation") || condition.detail.startsWith("R:R was not evaluated"));
+      if (!plan.actionable && condition.status !== "PASSED" && !skippedDownstreamEvaluation) {
         const reasonKey = `${condition.key}:${condition.status}`;
         const reason = reasons.get(reasonKey) ?? { key: condition.key, label: condition.label, count: 0, status: condition.status };
         reason.count += 1;
@@ -251,10 +287,11 @@ export function summarizeDiagnostics(plans: TradeSetupPlan[]): TradeSetupDiagnos
       }
     }
     if (!plan.actionable) {
-      const statuses = plan.diagnostics.map(condition => condition.status);
+      const rootDataConditions = plan.diagnostics.filter(condition => rootDataKeys.has(condition.key));
+      const rootStatuses = rootDataConditions.map(condition => condition.status);
       const failedKeys = new Set(plan.diagnostics.filter(condition => condition.status === "FAILED").map(condition => condition.key));
-      if (statuses.includes("UNAVAILABLE")) missingData += 1;
-      else if (statuses.includes("STALE")) staleData += 1;
+      if (rootStatuses.includes("STALE")) staleData += 1;
+      else if (rootStatuses.includes("UNAVAILABLE")) missingData += 1;
       else if (failedKeys.has("risk_reward")) existingSetupRequirement += 1;
       else lackOfMarketSetups += 1;
     }
@@ -268,19 +305,50 @@ export function summarizeDiagnostics(plans: TradeSetupPlan[]): TradeSetupDiagnos
   };
 }
 
-export function buildTradeSetupPlan(mode: TradeSetupMode, row: ScannerRow, regime: MarketRegime | null, candles: Candle[], provider: string, timestamp: number): TradeSetupPlan {
+function providerName(status: ScannerRow["dataStatus"][number]) {
+  if (status.provider === "Binance Futures" || status.provider === "Kraken Spot") return status.provider;
+  if (status.provider === "CoinGecko" || status.source.startsWith("CoinGecko")) return "CoinGecko";
+  return null;
+}
+
+function summarizeProviderHealth(scan: ScannerResponse): TradeSetupProviderHealth[] {
+  const allStatuses = [...scan.dataStatus, ...scan.rows.flatMap(row => row.dataStatus)];
+  return (["Binance Futures", "Kraken Spot", "CoinGecko"] as const).map(provider => {
+    const statuses = allStatuses.filter(status => providerName(status) === provider);
+    const successful = statuses.filter(status => status.status === "live");
+    const failures = statuses.filter(status => status.status !== "live");
+    const lastSuccess = successful.reduce((latest, status) => Math.max(latest, status.fetchedAt), 0) || null;
+    const lastFailure = failures.reduce((latest, status) => Math.max(latest, status.fetchedAt), 0) || null;
+    const latestFailure = failures.sort((left, right) => right.fetchedAt - left.fetchedAt)[0];
+    const timeframes = Array.from(new Set(statuses.flatMap(status => status.timeframe ? [status.timeframe] : []))).sort((left, right) => ["15m", "1h", "4h", "1d"].indexOf(left) - ["15m", "1h", "4h", "1d"].indexOf(right));
+    const validatedSymbols = Array.from(new Set(successful.filter(status => status.capability === "OHLCV" && status.symbol).map(status => status.symbol!))).sort();
+    const status = successful.length && !failures.length ? "LIVE" : successful.length ? "PARTIAL" : "UNAVAILABLE";
+    return {
+      provider,
+      status,
+      lastSuccessfulAt: lastSuccess,
+      lastFailureAt: lastFailure,
+      failureClassification: latestFailure?.errorClass ?? null,
+      supportedTimeframes: timeframes,
+      validatedSymbols,
+      note: provider === "CoinGecko" ? "Market context only; it is not a technical OHLCV provider." : provider === "Binance Futures" ? "Primary technical provider. HTTP 451 is explicitly ineligible and is not bypassed." : "Fallback technical provider used only after Binance Futures HTTP 451 and only with a complete validated bundle.",
+    };
+  });
+}
+
+export function buildTradeSetupPlan(mode: TradeSetupMode, row: ScannerRow, regime: MarketRegime | null, candles: Candle[], provider: string, timestamp: number, bundle: LiveOhlcvBundle | null = null): TradeSetupPlan {
   const profile = PROFILES[mode];
   const execution = analysisFor(row, profile.execution);
   const confirmation = analysisFor(row, profile.confirmation);
   const context = analysisFor(row, profile.context);
-  if (!row.score || row.asset.price === null) return withDiagnostics(emptyPlan(mode, row, regime, "Validated live price and Opportunity inputs are required."), row, regime);
-  if (!execution || !confirmation || !context) return withDiagnostics(emptyPlan(mode, row, regime, "Required validated multi-timeframe analysis is unavailable."), row, regime);
+  if (!row.score || row.asset.price === null) return withDiagnostics(emptyPlan(mode, row, regime, "Validated live price and Opportunity inputs are required.", "UNAVAILABLE", bundle), row, regime);
+  if (!execution || !confirmation || !context) return withDiagnostics(emptyPlan(mode, row, regime, "Required validated multi-timeframe analysis is unavailable.", "UNAVAILABLE", bundle), row, regime);
   const direction = directionFrom(row.score, regime);
-  if (direction === "NO TRADE") return withDiagnostics({ ...emptyPlan(mode, row, regime, regime?.classification === "RISK OFF" ? "Market context is hostile; no actionable plan is presented." : "Existing Opportunity direction is neutral; no trade plan is presented.", "LIVE"), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime);
+  if (direction === "NO TRADE") return withDiagnostics({ ...emptyPlan(mode, row, regime, regime?.classification === "RISK OFF" ? "Market context is hostile; no actionable plan is presented." : "Existing Opportunity direction is neutral; no trade plan is presented.", "LIVE", bundle), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime);
   const atr = calculateAtr(candles);
-  if (atr === null || atr <= 0) return withDiagnostics({ ...emptyPlan(mode, row, regime, "ATR is unavailable on the validated execution timeframe, so technical levels cannot be derived."), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime, atr);
+  if (atr === null || atr <= 0) return withDiagnostics({ ...emptyPlan(mode, row, regime, "ATR is unavailable on the validated execution timeframe, so technical levels cannot be derived.", "UNAVAILABLE", bundle), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime, atr);
   const derivation = buildLevels(direction, candles, row.asset.price, atr);
-  if (!derivation.levels) return withDiagnostics({ ...emptyPlan(mode, row, regime, "A structurally valid stop and at least one positive risk/reward target could not be derived; NO TRADE."), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime, atr, derivation);
+  if (!derivation.levels) return withDiagnostics({ ...emptyPlan(mode, row, regime, "A structurally valid stop and at least one positive risk/reward target could not be derived; NO TRADE.", "UNAVAILABLE", bundle), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime, atr, derivation);
   const levels = derivation.levels;
   const setupQuality = quality(direction, execution, confirmation, context, levels.rewardRisk!, regime);
   const evidence = [
@@ -306,6 +374,7 @@ export function buildTradeSetupPlan(mode: TradeSetupMode, row: ScannerRow, regim
     expectedHorizon: profile.horizon,
     dataTimestamp: timestamp,
     provider,
+    dataBundle: dataBundleForPlan(bundle),
     timeframes: { execution: profile.execution, confirmation: profile.confirmation, context: profile.context },
     opportunityScore: row.score.score,
     regimeScore: regime?.score ?? null,
@@ -327,17 +396,18 @@ export async function getTradeSetups(mode: TradeSetupMode, configuration: Scorin
   const scan = await buildLiveScanner(false, configuration);
   const profile = PROFILES[mode];
   const minimumCandles = Math.max(configuration.indicator.emaSlow + 2, configuration.indicator.macdSlow + configuration.indicator.macdSignal + 2, 60);
-  const setups = await Promise.all(scan.rows.map(row => getTradeSetupForRow(mode, row, scan.marketRegime, configuration, minimumCandles)));
+  const setups = await Promise.all(scan.rows.map(row => getTradeSetupForRow(mode, row, scan.marketRegime, configuration, minimumCandles, getScannerLiveOhlcvBundle(scan, row.asset.symbol))));
   const ordered = setups.sort((left, right) => Number(right.actionable) - Number(left.actionable) || (right.tradeSetupQuality ?? -1) - (left.tradeSetupQuality ?? -1) || (right.opportunityScore ?? -1) - (left.opportunityScore ?? -1));
-  return { mode, generatedAt: scan.generatedAt, lowerTimeframeDataReady: LOWER_TIMEFRAME_DATA_READY, minimumValidatedTimeframe: PROFILES[mode].minimumLabel, marketRegime: scan.marketRegime, diagnostics: summarizeDiagnostics(ordered), setups: ordered };
+  return { mode, generatedAt: scan.generatedAt, lowerTimeframeDataReady: LOWER_TIMEFRAME_DATA_READY, minimumValidatedTimeframe: PROFILES[mode].minimumLabel, marketRegime: scan.marketRegime, providerHealth: summarizeProviderHealth(scan), diagnostics: summarizeDiagnostics(ordered), setups: ordered };
 }
 
-export async function getTradeSetupForRow(mode: TradeSetupMode, row: ScannerRow, regime: MarketRegime | null, configuration: ScoringConfig, minimumCandles = Math.max(configuration.indicator.emaSlow + 2, configuration.indicator.macdSlow + configuration.indicator.macdSignal + 2, 60)) {
+export async function getTradeSetupForRow(mode: TradeSetupMode, row: ScannerRow, regime: MarketRegime | null, configuration: ScoringConfig, minimumCandles = Math.max(configuration.indicator.emaSlow + 2, configuration.indicator.macdSlow + configuration.indicator.macdSignal + 2, 60), existingBundle: LiveOhlcvBundle | null = null) {
   const profile = PROFILES[mode];
-  const ohlcv = await fetchValidatedLiveOhlcv(row.asset.symbol, profile.execution, minimumCandles);
-  const expectedProvider = row.dataStatus.find(status => status.capability === "OHLCV" && status.timeframe === profile.execution && status.status === "live")?.provider ?? null;
-  if (!ohlcv.series || (expectedProvider !== null && expectedProvider !== ohlcv.series.provider)) return withDiagnostics(emptyPlan(mode, row, regime, expectedProvider ? "Execution OHLCV provider coherence could not be verified." : "Validated execution OHLCV is unavailable."), row, regime);
-  return buildTradeSetupPlan(mode, row, regime, ohlcv.series.candles, ohlcv.series.provider, ohlcv.series.retrievedAt);
+  const required = [profile.execution, profile.confirmation, profile.context];
+  const bundle = existingBundle ?? await fetchValidatedLiveOhlcvBundle(row.asset.symbol, required, minimumCandles);
+  const execution = bundle.seriesByTimeframe[profile.execution] ?? null;
+  if (!bundle.eligibleForScoring || !bundle.coherent || !bundle.provider || !execution) return withDiagnostics(emptyPlan(mode, row, regime, bundle.statusMessage, bundle.state === "STALE" ? "STALE" : "UNAVAILABLE", bundle), row, regime);
+  return buildTradeSetupPlan(mode, row, regime, execution.candles, execution.provider, execution.retrievedAt, bundle);
 }
 
 export function buildTradeHealth(plan: TradeSetupPlan | null | undefined, current: { price: number | null; execution: TimeframeAnalysis | null; confirmation: TimeframeAnalysis | null; context: TimeframeAnalysis | null; generatedAt: number | null }) {

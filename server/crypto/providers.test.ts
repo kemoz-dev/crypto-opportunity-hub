@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { strToU8, zipSync } from "fflate";
-import { fetchBinanceHistoricalArchiveRange, fetchValidatedLiveOhlcv, normalizeBinanceCandles } from "./providers";
+import { fetchBinanceHistoricalArchiveRange, fetchValidatedLiveOhlcv, fetchValidatedLiveOhlcvBundle, normalizeBinanceCandles, validateNormalizedLiveOhlcv } from "./providers";
 import { hasMixedLiveOhlcvProviders } from "./marketService";
 import { analyzeTimeframe } from "./technical";
 import { buildOpportunityScore } from "./scoring";
@@ -11,7 +11,7 @@ function archiveResponse(fileName: string, csv: string) {
 }
 
 function krakenRows(timeframeMs = 15 * 60_000, count = 202, volume = "2") {
-  const start = Math.floor((Date.now() - (count + 4) * timeframeMs) / timeframeMs) * timeframeMs;
+  const start = Math.floor((Date.now() - (count + 1) * timeframeMs) / timeframeMs) * timeframeMs;
   return Array.from({ length: count }, (_, index) => {
     const openTime = start + index * timeframeMs;
     const price = 100 + index / 10;
@@ -47,7 +47,7 @@ describe("validated live OHLCV fallback", () => {
     const result = await fetchValidatedLiveOhlcv("BTC", "15m", 202);
     expect(result.series).toMatchObject({ provider: "Kraken Spot", symbol: "BTC/USD", timeframe: "15m", normalizationVersion: "live-ohlcv-normalization-v1", dataQuality: "VALID" });
     expect(result.statuses).toEqual(expect.arrayContaining([
-      expect.objectContaining({ provider: "Binance Futures", errorClass: "PROVIDER_UNAVAILABLE_REGION_RESTRICTION", dataQuality: "UNAVAILABLE" }),
+      expect.objectContaining({ provider: "Binance Futures", errorClass: "PROVIDER_UNAVAILABLE_REGION_RESTRICTION", dataQuality: "PROVIDER_UNAVAILABLE" }),
       expect.objectContaining({ provider: "Kraken Spot", status: "live", dataQuality: "VALID", capability: "OHLCV" }),
     ]));
     const analysis = analyzeTimeframe(result.series!.candles, "15m", DEFAULT_SCORING_CONFIG);
@@ -63,7 +63,7 @@ describe("validated live OHLCV fallback", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => String(input).includes("fapi.binance.com") ? new Response("restricted", { status: 451 }) : new Response(JSON.stringify({ error: ["EGeneral:Unavailable"], result: {} }), { status: 200 })));
     const result = await fetchValidatedLiveOhlcv("BTC", "1h", 202);
     expect(result.series).toBeNull();
-    expect(result.statuses.at(-1)).toMatchObject({ provider: "Kraken Spot", status: "unavailable", dataQuality: "UNAVAILABLE" });
+    expect(result.statuses.at(-1)).toMatchObject({ provider: "Kraken Spot", status: "unavailable", dataQuality: "NO_DATA" });
   });
 
   it.each([
@@ -75,12 +75,73 @@ describe("validated live OHLCV fallback", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => String(input).includes("fapi.binance.com") ? new Response("restricted", { status: 451 }) : krakenResponse(pair as string, rows as any)));
     const result = await fetchValidatedLiveOhlcv("BTC", "15m", 202);
     expect(result.series).toBeNull();
-    expect(result.statuses.at(-1)).toMatchObject({ provider: "Kraken Spot", errorClass: expectedErrorClass, dataQuality: "UNAVAILABLE" });
+    expect(result.statuses.at(-1)).toMatchObject({ provider: "Kraken Spot", errorClass: expectedErrorClass, dataQuality: "INVALID" });
   });
 
   it("prevents a scoring window from mixing Binance and Kraken timeframes", () => {
     expect(hasMixedLiveOhlcvProviders([{ series: { provider: "Binance Futures" } }, { series: { provider: "Kraken Spot" } }])).toBe(true);
     expect(hasMixedLiveOhlcvProviders([{ series: { provider: "Kraken Spot" } }, { series: { provider: "Kraken Spot" } }])).toBe(false);
+  });
+
+  it("classifies a stale completed series distinctly from invalid or unavailable data", () => {
+    const interval = 15 * 60_000;
+    const start = Math.floor((Date.now() - 10 * interval) / interval) * interval;
+    const candles = Array.from({ length: 202 }, (_, index) => ({ openTime: start - (201 - index) * interval, closeTime: start - (201 - index) * interval + interval - 1, open: 100, high: 102, low: 99, close: 101, volume: 1 }));
+    expect(() => validateNormalizedLiveOhlcv(candles, "15m", Date.now(), 202)).toThrow(/three-interval freshness allowance/i);
+  });
+
+  it("classifies Binance rate limiting without attempting a Kraken fallback", async () => {
+    const fetchMock = vi.fn(async () => new Response("limited", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await fetchValidatedLiveOhlcv("BTC", "15m", 202);
+    expect(result.series).toBeNull();
+    expect(result.statuses).toEqual([expect.objectContaining({ provider: "Binance Futures", errorClass: "PROVIDER_RATE_LIMITED", dataQuality: "NO_DATA" })]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("revalidates the complete Kraken bundle after Binance HTTP 451 instead of retaining any mixed primary timeframe", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.includes("fapi.binance.com")) return new Response("restricted", { status: 451 });
+      const interval = Number(new URL(url).searchParams.get("interval"));
+      return krakenResponse("BTC/USD", krakenRows(interval * 60_000));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const bundle = await fetchValidatedLiveOhlcvBundle("BTC", ["15m", "1h", "4h"], 202);
+    expect(bundle).toMatchObject({ provider: "Kraken Spot", state: "VALID", coherent: true, eligibleForScoring: true });
+    expect(bundle.timeframes.map(item => item.provider)).toEqual(["Kraken Spot", "Kraken Spot", "Kraken Spot"]);
+    expect(bundle.timeframes.every(item => item.eligibleForScoring)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it("revalidates all required Kraken timeframes when a primary/fallback mix is observed during the first pass", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.includes("fapi.binance.com")) {
+        const timeframe = new URL(url).searchParams.get("interval");
+        if (timeframe === "15m") return new Response(JSON.stringify(krakenRows(15 * 60_000).map(row => [Number(row[0]) * 1_000, row[1], row[2], row[3], row[4], row[6], Number(row[0]) * 1_000 + 15 * 60_000 - 1])), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response("restricted", { status: 451 });
+      }
+      const interval = Number(new URL(url).searchParams.get("interval"));
+      return krakenResponse("BTC/USD", krakenRows(interval * 60_000));
+    }));
+    const bundle = await fetchValidatedLiveOhlcvBundle("BTC", ["15m", "1h", "4h"], 202);
+    expect(bundle).toMatchObject({ provider: "Kraken Spot", coherent: true, eligibleForScoring: true });
+    expect(bundle.timeframes.map(item => item.provider)).toEqual(["Kraken Spot", "Kraken Spot", "Kraken Spot"]);
+  });
+
+  it("labels insufficient complete candles explicitly and does not invent a fallback without HTTP 451", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(krakenRows(15 * 60_000, 20).map(row => [Number(row[0]) * 1_000, row[1], row[2], row[3], row[4], row[6], Number(row[0]) * 1_000 + 15 * 60_000 - 1])), { status: 200, headers: { "Content-Type": "application/json" } })));
+    const result = await fetchValidatedLiveOhlcv("BTC", "15m", 202);
+    expect(result.series).toBeNull();
+    expect(result.statuses).toEqual([expect.objectContaining({ errorClass: "INSUFFICIENT_CANDLES", dataQuality: "INSUFFICIENT" })]);
+  });
+
+  it("labels an aborted provider request as timeout and does not route around it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("The operation was aborted"); }));
+    const result = await fetchValidatedLiveOhlcv("BTC", "15m", 202);
+    expect(result.series).toBeNull();
+    expect(result.statuses).toEqual([expect.objectContaining({ errorClass: "PROVIDER_TIMEOUT", dataQuality: "NO_DATA" })]);
   });
 });
 

@@ -1,10 +1,15 @@
 import { DEFAULT_ASSET_UNIVERSE, DEFAULT_SCORING_CONFIG, SUPPORTED_TIMEFRAMES, type DataStatus, type MarketAsset, type ScannerResponse, type ScoringConfig, type TimeframeAnalysis } from "../../shared/crypto";
 import { analyzeTimeframe } from "./technical";
-import { fetchBinanceDerivatives, fetchCoinGeckoGlobal, fetchCoinGeckoMarkets, fetchValidatedLiveOhlcv, unavailableStatus } from "./providers";
+import { fetchBinanceDerivatives, fetchCoinGeckoGlobal, fetchCoinGeckoMarkets, fetchValidatedLiveOhlcvBundle, type LiveOhlcvBundle, unavailableStatus } from "./providers";
 import { assetFromProfile, buildOpportunityScore, calculateMarketRegime } from "./scoring";
 import { persistScannerSnapshot } from "./persistence";
 
 const cachedScans = new Map<string, { value: ScannerResponse; expiresAt: number }>();
+const scannerBundles = new WeakMap<ScannerResponse, Map<string, LiveOhlcvBundle>>();
+
+export function getScannerLiveOhlcvBundle(scan: ScannerResponse, symbol: string) {
+  return scannerBundles.get(scan)?.get(symbol) ?? null;
+}
 
 async function mapConcurrent<T, R>(items: T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> {
   const results = Array<R>(items.length);
@@ -49,22 +54,35 @@ export async function buildLiveScanner(forceRefresh = false, config: ScoringConf
   const provisional = await mapConcurrent(universe, 3, async asset => {
     const dataStatus: DataStatus[] = [];
     const minimumCandles = Math.max(config.indicator.emaSlow + 2, config.indicator.macdSlow + config.indicator.macdSignal + 2, 60);
-    const timeframeResults = await Promise.all(SUPPORTED_TIMEFRAMES.map(timeframe => fetchValidatedLiveOhlcv(asset.symbol, timeframe, minimumCandles)));
-    const analyses: TimeframeAnalysis[] = [];
-    const mixedProviders = hasMixedLiveOhlcvProviders(timeframeResults);
-    if (mixedProviders) dataStatus.push({ source: "Live OHLCV provider consistency", provider: "Provider-neutral validation", symbol: asset.symbol, capability: "OHLCV", status: "unavailable", fetchedAt: generatedAt, message: "Validated OHLCV was available from more than one provider across required timeframes; cross-provider scoring was prevented.", errorClass: "MIXED_PROVIDER_PREVENTED", normalizationVersion: "live-ohlcv-normalization-v1", dataQuality: "UNAVAILABLE" });
-    timeframeResults.forEach((result, index) => {
-      const timeframe = SUPPORTED_TIMEFRAMES[index];
-      dataStatus.push(...result.statuses);
-      if (result.series && !mixedProviders) {
-        const analysis = analyzeTimeframe(result.series.candles, timeframe, config);
-        if (analysis) analyses.push(analysis);
-        else dataStatus.push({ source: `${result.series.provider} OHLCV`, provider: result.series.provider, symbol: result.series.symbol, timeframe, capability: "OHLCV", normalizationVersion: result.series.normalizationVersion, dataQuality: "UNAVAILABLE", errorClass: "VALIDATION_FAILED", status: "unavailable", fetchedAt: generatedAt, message: "Validated candles were insufficient for the configured indicators." });
-      }
+    const bundle = await fetchValidatedLiveOhlcvBundle(asset.symbol, [...SUPPORTED_TIMEFRAMES], minimumCandles);
+    dataStatus.push(...bundle.statuses);
+    const firstUnavailable = bundle.timeframes.find(timeframe => !timeframe.eligibleForScoring);
+    dataStatus.push({
+      source: "Live OHLCV provider bundle",
+      provider: bundle.provider ?? "Provider-neutral validation",
+      symbol: asset.symbol,
+      capability: "OHLCV",
+      status: bundle.state === "VALID" ? "live" : bundle.state === "STALE" ? "stale" : "unavailable",
+      fetchedAt: generatedAt,
+      message: bundle.statusMessage,
+      errorClass: bundle.state === "INCOHERENT" ? "MIXED_PROVIDER_PREVENTED" : firstUnavailable?.errorClass ?? undefined,
+      normalizationVersion: "live-ohlcv-normalization-v1",
+      dataQuality: bundle.state,
     });
+    const analyses: TimeframeAnalysis[] = [];
+    if (bundle.eligibleForScoring) {
+      SUPPORTED_TIMEFRAMES.forEach(timeframe => {
+        const series = bundle.seriesByTimeframe[timeframe];
+        if (series) {
+          const analysis = analyzeTimeframe(series.candles, timeframe, config);
+        if (analysis) analyses.push(analysis);
+          else dataStatus.push({ source: `${series.provider} OHLCV`, provider: series.provider, symbol: series.symbol, timeframe, capability: "OHLCV", normalizationVersion: series.normalizationVersion, dataQuality: "INSUFFICIENT", errorClass: "INSUFFICIENT_CANDLES", status: "unavailable", fetchedAt: generatedAt, message: "Validated candles were insufficient for the configured indicators." });
+        }
+      });
+    }
     const derivatives = await fetchBinanceDerivatives(asset.binanceSymbol);
     dataStatus.push(...derivatives.statuses);
-    return { asset, analyses, dataStatus, fundingRate: derivatives.fundingRate, openInterest: derivatives.openInterest };
+    return { asset, analyses, dataStatus, bundle, fundingRate: derivatives.fundingRate, openInterest: derivatives.openInterest };
   });
   const btc = universe.find(asset => asset.symbol === "BTC");
   const rows = provisional.map(item => ({
@@ -78,6 +96,7 @@ export async function buildLiveScanner(forceRefresh = false, config: ScoringConf
     generatedAt, dataStatus: statuses, marketRegime, rows,
     note: "Scores are derived from the visible live inputs and current configuration. They are research signals, not forecasts or trading instructions.",
   };
+  scannerBundles.set(scan, new Map(provisional.map(item => [item.asset.symbol, item.bundle])));
   cachedScans.set(cacheKey, { value: scan, expiresAt: Date.now() + 60_000 });
   void persistScannerSnapshot(scan);
   return scan;
