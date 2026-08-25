@@ -2,7 +2,7 @@ import { z } from "zod";
 import { adminProcedure, router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { buildLiveScanner } from "../crypto/marketService";
 import { getUserScoringConfig, saveUserScoringConfig, scoringConfigSchema } from "../crypto/settings";
-import { closeLivePaperTrade, getPaperPortfolio, openLivePaperTrade, recordPaperTradeMonitoring } from "../crypto/paperTrading";
+import { closeLivePaperTrade, getPaperPortfolio, openLivePaperTrade, recordPaperTradeMonitoring, refreshLowTimeframePaperTradeHealth } from "../crypto/paperTrading";
 import { runAndPersistBacktest } from "../crypto/backtesting";
 import { alertInputSchema, createAlert, evaluateAlert, getAlertExecution, listAlertExecutions, listAlerts, setAlertEnabled } from "../crypto/alerts";
 import { getLatestResearchReport } from "../crypto/researchSummary";
@@ -16,6 +16,7 @@ import { createDisasterRecoveryArchive, getDisasterRecoveryArchive, getDisasterR
 import { getProviderMonitorSummary, listProviderMonitorHistory } from "../crypto/providerMonitor";
 import { getAssetIntelligence } from "../crypto/assetIntelligence";
 import { getTradeSetups } from "../crypto/tradeSetup";
+import { getLowTimeframeScalpingIntelligence } from "../crypto/lowTimeframeScalping";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
 import { DEFAULT_SCORING_CONFIG } from "../../shared/crypto";
@@ -42,6 +43,7 @@ export const cryptoRouter = router({
     return buildLiveScanner(input?.forceRefresh ?? false, configuration);
   }),
   tradeSetups: publicProcedure.input(z.object({ mode: z.enum(["SCALP", "SWING"]) })).query(async ({ ctx, input }) => getTradeSetups(input.mode, ctx.user ? await getUserScoringConfig(ctx.user.id) : DEFAULT_SCORING_CONFIG)),
+  lowTimeframeScalping: publicProcedure.input(z.object({ assetIds: z.array(z.string().min(1).max(96)).max(12).optional() }).optional()).query(async ({ ctx, input }) => getLowTimeframeScalpingIntelligence(ctx.user ? await getUserScoringConfig(ctx.user.id) : DEFAULT_SCORING_CONFIG, input?.assetIds)),
   assetIntelligence: publicProcedure.input(z.object({ assetId: z.string().min(1), timeframe: z.enum(["15m", "1h", "4h", "1d"]).default("4h") })).query(async ({ ctx, input }) => getAssetIntelligence(input.assetId, input.timeframe, ctx.user ? await getUserScoringConfig(ctx.user.id) : undefined)),
   providerMonitorSummary: publicProcedure.query(() => getProviderMonitorSummary()),
   providerMonitorHistory: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional()).query(({ input }) => listProviderMonitorHistory(input?.limit ?? 20)),
@@ -72,9 +74,10 @@ export const cryptoRouter = router({
   settings: protectedProcedure.query(({ ctx }) => getUserScoringConfig(ctx.user.id)),
   saveSettings: protectedProcedure.input(scoringConfigSchema).mutation(({ ctx, input }) => saveUserScoringConfig(ctx.user.id, input)),
   paperPortfolio: protectedProcedure.query(async ({ ctx }) => getPaperPortfolio(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
-  openPaperTrade: protectedProcedure.input(z.object({ assetId: z.string().min(1), side: z.enum(["long", "short"]), riskPercent: z.number().min(0.1).max(5), setupMode: z.enum(["SCALP", "SWING"]).optional() })).mutation(async ({ ctx, input }) => openLivePaperTrade(ctx.user.id, input.assetId, input.side, input.riskPercent, await getUserScoringConfig(ctx.user.id), input.setupMode)),
+  openPaperTrade: protectedProcedure.input(z.object({ assetId: z.string().min(1), side: z.enum(["long", "short"]), riskPercent: z.number().min(0.1).max(5), setupMode: z.enum(["SCALP", "SWING", "LOW_TIMEFRAME_SCALPING"]).optional() })).mutation(async ({ ctx, input }) => openLivePaperTrade(ctx.user.id, input.assetId, input.side, input.riskPercent, await getUserScoringConfig(ctx.user.id), input.setupMode)),
   closePaperTrade: protectedProcedure.input(z.object({ tradeId: z.number().int().positive() })).mutation(async ({ ctx, input }) => closeLivePaperTrade(ctx.user.id, input.tradeId, await getUserScoringConfig(ctx.user.id))),
   recordPaperTradeMonitoring: protectedProcedure.input(z.object({ tradeId: z.number().int().positive() })).mutation(async ({ ctx, input }) => recordPaperTradeMonitoring(ctx.user.id, input.tradeId, await getUserScoringConfig(ctx.user.id))),
+  refreshLowTimeframePaperTradeHealth: protectedProcedure.input(z.object({ tradeId: z.number().int().positive() })).mutation(async ({ ctx, input }) => refreshLowTimeframePaperTradeHealth(ctx.user.id, input.tradeId, await getUserScoringConfig(ctx.user.id))),
   runBacktest: protectedProcedure.input(z.object({ assetId: z.string().min(1), timeframe: z.enum(["15m", "1h", "4h", "1d"]), minimumScore: z.number().min(0).max(100), minimumConfidence: z.number().min(0).max(100), holdingBars: z.number().int().min(1).max(100), riskPercent: z.number().min(0.1).max(5), maximumConcurrent: z.number().int().min(1).max(20), entryRule: z.enum(["bullish", "bullish-volume"]), stopRule: z.enum(["atr", "percent"]), stopAtrMultiplier: z.number().min(0.25).max(10), stopPercent: z.number().min(0.1).max(50), takeProfitRule: z.enum(["risk-reward", "holding-close"]), targetRiskReward: z.number().min(0.25).max(20), candleLimit: z.number().int().min(250).max(1_000), startAt: z.number().optional(), endAt: z.number().optional() })).mutation(async ({ ctx, input }) => runAndPersistBacktest(ctx.user.id, input, await getUserScoringConfig(ctx.user.id))),
   alerts: protectedProcedure.query(({ ctx }) => listAlerts(ctx.user.id)),
   alertExecutions: protectedProcedure.input(z.object({ alertId: z.number().int().positive() })).query(({ ctx, input }) => listAlertExecutions(ctx.user.id, input.alertId)),

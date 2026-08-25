@@ -51,11 +51,19 @@ describe("Phase 2 secure PWA contract", () => {
   it("blocks offline account/trading writes and clearly preserves Paper Trading as online-only", () => {
     const main = read("client/src/main.tsx");
     const paper = read("client/src/components/crypto/PaperTradingWorkspace.tsx");
+    const lowTimeframe = read("client/src/components/crypto/LowTimeframeScalpingWorkspace.tsx");
     expect(main).toContain('Offline read-only mode blocks account and trading changes.');
     expect(paper).toContain("Paper Trading requires a live connection to Crypto Hub.");
     expect(paper).toContain("disabled={pending || asset.asset.price === null || !online}");
     expect(paper).toContain("disabled={closing || !online}");
     expect(paper).toContain("Close unavailable offline");
+    expect(paper).toContain("Refresh 1M / 3M / 5M Health");
+    expect(paper).toContain("disabled={lowMonitoring || !online}");
+    expect(lowTimeframe).toContain("trpc.crypto.lowTimeframeScalping.useQuery");
+    expect(lowTimeframe).toContain("enabled: online");
+    expect(lowTimeframe).toContain("OFFLINE · READ ONLY");
+    expect(lowTimeframe).not.toContain("api.bybit.com");
+    expect(lowTimeframe).not.toContain("fetch(");
   });
 
   it("does not retain the client-side user mirror after logout and avoids server secret references", () => {

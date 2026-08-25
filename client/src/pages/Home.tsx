@@ -167,7 +167,7 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paperOpen, setPaperOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("workspace") === "paper-trading");
   const [paperAsset, setPaperAsset] = useState<ScannerRow | null>(null);
-  const [paperSetupMode, setPaperSetupMode] = useState<"SCALP" | "SWING" | undefined>();
+  const [paperSetupMode, setPaperSetupMode] = useState<"SCALP" | "SWING" | "LOW_TIMEFRAME_SCALPING" | undefined>();
   const [setupMode, setSetupMode] = useState<"SCALP" | "SWING" | null>(null);
   const [backtestingOpen, setBacktestingOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -190,7 +190,7 @@ export default function Home() {
   useEffect(() => { if (online && error) markLiveDataUnavailable(); }, [online, error, markLiveDataUnavailable]);
   useEffect(() => { if (selectedId) setAssetIntelligenceOpen(true); }, [selectedId]);
   const scrollToScanner = () => { requestAnimationFrame(() => document.getElementById("market-scanner")?.scrollIntoView({ behavior: "smooth", block: "start" })); };
-  const openPaperWorkspace = (asset: ScannerRow | null, mode?: "SCALP" | "SWING") => { setPaperAsset(asset); setPaperSetupMode(mode); setSetupMode(null); setActiveNav("Paper Trading"); setPaperOpen(true); if (typeof window !== "undefined") window.history.replaceState(null, "", `${window.location.pathname}?workspace=paper-trading`); };
+  const openPaperWorkspace = (asset: ScannerRow | null, mode?: "SCALP" | "SWING" | "LOW_TIMEFRAME_SCALPING") => { setPaperAsset(asset); setPaperSetupMode(mode); setSetupMode(null); setActiveNav("Paper Trading"); setPaperOpen(true); if (typeof window !== "undefined") window.history.replaceState(null, "", `${window.location.pathname}?workspace=paper-trading`); };
   const closePaperWorkspace = () => { setPaperOpen(false); setPaperSetupMode(undefined); setActiveNav("Dashboard"); if (typeof window !== "undefined") window.history.replaceState(null, "", window.location.pathname); };
   const openSetupWorkspace = (mode: "SCALP" | "SWING") => { setPaperOpen(false); setSetupMode(mode); setActiveNav(mode === "SCALP" ? "Scalping" : "Swing"); };
   const handleNav = (item: NavItem) => { if (item.label === "Settings") { setSettingsOpen(true); return; } if (item.label === "Paper Trading") { openPaperWorkspace(selected); return; } if (item.label === "Scalping") { openSetupWorkspace("SCALP"); return; } if (item.label === "Swing") { openSetupWorkspace("SWING"); return; } if (item.label === "Market Scanner") { setActiveNav(item.label); scrollToScanner(); return; } if (item.label === "Backtesting") { setBacktestingOpen(true); return; } if (item.label === "Alerts") { setAlertsOpen(true); return; } if (item.label === "Research Summary") { setResearchSummaryOpen(true); return; } if (item.label === "Research Lab") { setResearchLabOpen(true); return; } if (item.label === "Historical Data") { setHistoricalDataOpen(true); return; } if (item.label === "Execution Cost Lab") { setExecutionCostLabOpen(true); return; } if (item.label === "Backup & Recovery") { setBackupRecoveryOpen(true); return; } if (item.phase === "planned") { toast.message(`${item.label} is planned after the verified Phase 1 scanner milestone.`, { description: "No placeholder data has been added for this feature." }); return; } setActiveNav(item.label); };

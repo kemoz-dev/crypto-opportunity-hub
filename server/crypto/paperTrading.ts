@@ -4,6 +4,9 @@ import type { OpportunityScore, ScannerResponse, ScoringConfig, ScannerRow } fro
 import { getDb } from "../db";
 import { buildLiveScanner, getScannerLiveOhlcvBundle } from "./marketService";
 import { buildTradeHealth, getTradeSetupForRow, type TradeSetupMode, type TradeSetupPlan } from "./tradeSetup";
+import { buildLowTimeframeTradeHealth, getLowTimeframeScalpingIntelligence, type LowTimeframeScalpingPlan } from "./lowTimeframeScalping";
+
+export type PaperTradeSetupMode = TradeSetupMode | "LOW_TIMEFRAME_SCALPING";
 
 export type PaperTradeSnapshot = {
   scannerGeneratedAt: number;
@@ -28,6 +31,7 @@ export type PaperTradeSnapshot = {
     missingConditions: string[];
   };
   setupPlan?: TradeSetupPlan;
+  lowTimeframeScalpingPlan?: LowTimeframeScalpingPlan;
 };
 
 function round(value: number, digits = 2) { return Number(value.toFixed(digits)); }
@@ -44,7 +48,7 @@ export function cloneImmutableEntrySnapshot<T>(snapshot: T): T {
   return JSON.parse(JSON.stringify(snapshot)) as T;
 }
 
-export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerResponse["marketRegime"], generatedAt: number, configuration: ScoringConfig, terms: { stopLoss: number; takeProfit: number }, setupPlan?: TradeSetupPlan): PaperTradeSnapshot {
+export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerResponse["marketRegime"], generatedAt: number, configuration: ScoringConfig, terms: { stopLoss: number; takeProfit: number }, setupPlan?: TradeSetupPlan, lowTimeframeScalpingPlan?: LowTimeframeScalpingPlan): PaperTradeSnapshot {
   if (!row.score || row.asset.price === null) throw new Error("A score and live price are required to create a paper-trade observation snapshot.");
   return cloneImmutableEntrySnapshot({
     scannerGeneratedAt: generatedAt,
@@ -69,6 +73,7 @@ export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerRe
       missingConditions: row.score.missingConditions,
     },
     ...(setupPlan ? { setupPlan } : {}),
+    ...(lowTimeframeScalpingPlan ? { lowTimeframeScalpingPlan } : {}),
   });
 }
 
@@ -138,7 +143,7 @@ async function getOrCreatePortfolio(userId: number, paperCapital: number) {
   return created;
 }
 
-export async function openLivePaperTrade(userId: number, assetId: string, side: "long" | "short", riskPercent: number, configuration: ScoringConfig, setupMode?: TradeSetupMode) {
+export async function openLivePaperTrade(userId: number, assetId: string, side: "long" | "short", riskPercent: number, configuration: ScoringConfig, setupMode?: PaperTradeSetupMode) {
   const scan = await buildLiveScanner(false, configuration);
   const row = scan.rows.find(candidate => candidate.asset.id === assetId);
   if (!row?.score || row.asset.price === null) throw new Error("A current live score and price are required before opening a paper trade.");
@@ -147,13 +152,27 @@ export async function openLivePaperTrade(userId: number, assetId: string, side: 
   if (atrPercent === null) throw new Error("ATR is unavailable, so a risk-normalized stop cannot be calculated.");
   const entryPrice = row.asset.price;
   const terms = calculatePaperEntryTerms(entryPrice, atrPercent, side, portfolio.currentEquity, riskPercent);
-  const setupPlan = setupMode ? await getTradeSetupForRow(setupMode, row, scan.marketRegime, configuration, undefined, getScannerLiveOhlcvBundle(scan, row.asset.symbol)) : undefined;
+  const setupPlan = setupMode && setupMode !== "LOW_TIMEFRAME_SCALPING" ? await getTradeSetupForRow(setupMode, row, scan.marketRegime, configuration, undefined, getScannerLiveOhlcvBundle(scan, row.asset.symbol)) : undefined;
   if (setupPlan && (!setupPlan.actionable || setupPlan.direction.toLowerCase() !== side)) throw new Error("The current validated setup plan is unavailable or does not support the selected simulated direction.");
-  const snapshot = buildPaperTradeSnapshot(row, scan.marketRegime, scan.generatedAt, configuration, terms, setupPlan);
+  const lowTimeframeScalpingPlan = setupMode === "LOW_TIMEFRAME_SCALPING" ? (await getLowTimeframeScalpingIntelligence(configuration, [assetId])).setups[0] : undefined;
+  if (lowTimeframeScalpingPlan && (!lowTimeframeScalpingPlan.actionable || lowTimeframeScalpingPlan.direction.toLowerCase() !== side)) throw new Error("The current validated low-timeframe Scalping plan is unavailable or does not support the selected simulated direction.");
+  const snapshot = buildPaperTradeSnapshot(row, scan.marketRegime, scan.generatedAt, configuration, terms, setupPlan, lowTimeframeScalpingPlan);
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; the paper trade cannot be recorded.");
   await db.insert(paperTrades).values({ portfolioId: portfolio.id, assetId, status: "open", side, entryAt: new Date(scan.generatedAt), entryPrice, stopLoss: terms.stopLoss, takeProfit: [{ label: "2R", price: terms.takeProfit }], positionSize: terms.positionSize, riskPercent, rewardRisk: terms.rewardRisk, immutableEntrySnapshot: snapshot });
   return { entryPrice: round(entryPrice, 8), stopLoss: terms.stopLoss, takeProfit: terms.takeProfit, positionSize: terms.positionSize, portfolioId: portfolio.id, snapshot };
+}
+
+/** Manual-only low-timeframe observation. It performs no automatic close, event write, target edit, or alert action. */
+export async function refreshLowTimeframePaperTradeHealth(userId: number, tradeId: number, configuration: ScoringConfig) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; the paper trade cannot be checked.");
+  const matched = (await db.select().from(paperTrades).innerJoin(paperPortfolios, eq(paperTrades.portfolioId, paperPortfolios.id)).where(and(eq(paperTrades.id, tradeId), eq(paperPortfolios.userId, userId))).limit(1))[0];
+  if (!matched) throw new Error("Paper trade not found in this portfolio.");
+  const entrySnapshot = matched.paperTrades.immutableEntrySnapshot as PaperTradeSnapshot;
+  const entryPlan = entrySnapshot.lowTimeframeScalpingPlan;
+  const current = entryPlan ? (await getLowTimeframeScalpingIntelligence(configuration, [matched.paperTrades.assetId])).setups[0] : null;
+  return { health: buildLowTimeframeTradeHealth(entryPlan, current), observedAt: Date.now(), manualOnly: true as const };
 }
 
 export async function closeLivePaperTrade(userId: number, tradeId: number, configuration: ScoringConfig) {

@@ -1,9 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { usePwaStatus } from "@/pwa/PwaStatus";
+import { LowTimeframeScalpingWorkspace } from "@/components/crypto/LowTimeframeScalpingWorkspace";
 import { ArrowLeft, ArrowUpRight, CircleAlert, CircleCheck, CircleX, Clock3, Eye, Loader2, Target } from "lucide-react";
+import { useState } from "react";
 
 type Mode = "SCALP" | "SWING";
+type PaperSetupMode = Mode | "LOW_TIMEFRAME_SCALPING";
 type Condition = { key: string; label: string; status: "PASSED" | "FAILED" | "UNAVAILABLE" | "STALE"; actual: string; required: string; detail: string };
 type DiagnosticSummary = { evaluatedAssets: number; noTradeAssets: number; byCondition: Array<{ key: string; label: string; passed: number; failed: number; unavailable: number; stale: number }>; topNoTradeReasons: Array<{ key: string; label: string; count: number; status: "FAILED" | "UNAVAILABLE" | "STALE" }>; classification: { lackOfMarketSetups: number; missingData: number; staleData: number; existingSetupRequirement: number } };
 type ProviderHealth = { provider: "Binance Futures" | "Kraken Spot" | "CoinGecko"; status: "LIVE" | "PARTIAL" | "UNAVAILABLE"; lastSuccessfulAt: number | null; lastFailureAt: number | null; failureClassification: string | null; supportedTimeframes: string[]; validatedSymbols: string[]; note: string };
@@ -17,17 +20,20 @@ const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD
 const timestamp = (value: number | null) => value ? new Date(value).toLocaleString() : "UNAVAILABLE";
 const directionTone = (direction: Plan["direction"]) => direction === "LONG" ? "text-emerald-200 border-emerald-300/25 bg-emerald-300/[.07]" : direction === "SHORT" ? "text-rose-200 border-rose-300/25 bg-rose-300/[.07]" : "text-slate-300 border-slate-500/25 bg-slate-500/[.07]";
 
-export function TradeSetupWorkspace({ mode, onBack, onInspectAsset, onPaperTrade }: { mode: Mode; onBack: () => void; onInspectAsset: (assetId: string) => void; onPaperTrade: (assetId: string, mode: Mode) => void }) {
+export function TradeSetupWorkspace({ mode, onBack, onInspectAsset, onPaperTrade }: { mode: Mode; onBack: () => void; onInspectAsset: (assetId: string) => void; onPaperTrade: (assetId: string, mode: PaperSetupMode) => void }) {
   const { online } = usePwaStatus();
-  const setups = trpc.crypto.tradeSetups.useQuery({ mode }, { staleTime: 30_000, refetchOnWindowFocus: false, enabled: online });
+  const [scalpingView, setScalpingView] = useState<"LOW_TIMEFRAME" | "ESTABLISHED">("LOW_TIMEFRAME");
+  const showingLowTimeframe = mode === "SCALP" && scalpingView === "LOW_TIMEFRAME";
+  const setups = trpc.crypto.tradeSetups.useQuery({ mode }, { staleTime: 30_000, refetchOnWindowFocus: false, enabled: online && !showingLowTimeframe });
   const data = setups.data as SetupResponse | undefined;
+  if (showingLowTimeframe) return <LowTimeframeScalpingWorkspace onBack={onBack} onInspectAsset={onInspectAsset} onPaperTrade={assetId => onPaperTrade(assetId, "LOW_TIMEFRAME_SCALPING")} onShowEstablished={() => setScalpingView("ESTABLISHED")} />;
   const title = mode === "SCALP" ? "Scalping" : "Swing";
   return <div className="space-y-6 pb-20">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[.07] pb-5">
       <div className="flex items-start gap-3"><span className={`grid h-10 w-10 place-items-center rounded-xl ${mode === "SCALP" ? "bg-cyan-300/[.12] text-cyan-200" : "bg-violet-300/[.12] text-violet-200"}`}><Target className="h-5 w-5" /></span><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-slate-500">Validated research intelligence</p><h2 className="mt-1 text-xl font-semibold tracking-tight">{title}</h2><p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400">Find → explain → plan → monitor. Qualification, Watch, and No Trade are descriptive states built from existing validated inputs; they do not change Opportunity or Regime scoring.</p></div></div>
       <Button variant="outline" onClick={onBack} className="border-white/[.1] bg-white/[.025] text-slate-200"><ArrowLeft className="mr-2 h-4 w-4" />Back to Dashboard</Button>
     </header>
-    <section className="grid gap-3 sm:grid-cols-3"><StatusCard label="Validated timeframes" value={mode === "SCALP" ? "15M · 1H · 4H" : "1H · 4H · 1D"} tone="cyan" /><StatusCard label="Lower timeframe capability" value={data?.lowerTimeframeDataReady ? "READY" : "1M / 3M / 5M — UNAVAILABLE"} tone="amber" /><StatusCard label="Market context" value={data?.marketRegime ? `${data.marketRegime.classification} · ${data.marketRegime.score}/100` : "UNAVAILABLE"} tone="violet" /></section>
+    <section className="grid gap-3 sm:grid-cols-3"><StatusCard label="Validated timeframes" value={mode === "SCALP" ? "15M · 1H · 4H" : "1H · 4H · 1D"} tone="cyan" /><div className="rounded-xl border border-amber-300/15 bg-amber-300/[.035] p-4 text-amber-100"><span className="text-[9px] font-semibold uppercase tracking-[.14em] opacity-70">Low-timeframe layer</span><p className="mt-2 text-xs font-medium">1M / 3M / 5M is isolated from this established view.</p>{mode === "SCALP" ? <Button size="sm" variant="outline" onClick={() => setScalpingView("LOW_TIMEFRAME")} className="mt-3 h-7 border-amber-300/25 px-2 text-[10px] text-amber-100">Open Scalping Intelligence</Button> : null}</div><StatusCard label="Market context" value={data?.marketRegime ? `${data.marketRegime.classification} · ${data.marketRegime.score}/100` : "UNAVAILABLE"} tone="violet" /></section>
     {data?.providerHealth ? <ProviderHealthPanel providers={data.providerHealth} /> : null}
     {!online ? <div role="status" className="rounded-xl border border-amber-300/25 bg-amber-300/[.06] p-4 text-xs text-amber-100"><strong>OFFLINE · READ ONLY.</strong> Current setup refresh and Paper Trading actions remain unavailable until a live connection is restored.</div> : null}
     {setups.isLoading ? <Loading /> : setups.error ? <ErrorPanel detail={setups.error.message} /> : data ? <section className="space-y-4"><SetupOverview summary={data.diagnostics} plans={data.setups} />{data.setups.map((plan, index) => <SetupCard key={`${plan.mode}-${plan.assetId}`} plan={plan} ordinal={plan.rank ?? index + 1} online={online} onInspect={() => onInspectAsset(plan.assetId)} onPaperTrade={() => onPaperTrade(plan.assetId, mode)} />)}</section> : <Empty />}
