@@ -18,7 +18,7 @@ describe("Phase 2 secure PWA contract", () => {
     expect(html).toContain("apple-mobile-web-app-capable");
     expect(html).toContain("apple-touch-icon");
     expect(html).toContain("viewport-fit=cover");
-    expect(html).toContain("crypto-hub-pwa-r2-20260825");
+    expect(html).toContain("crypto-hub-pwa-r3-20260825");
   });
 
   it("keeps the service worker static-shell-only and excludes API and mutations from caches", () => {
@@ -35,13 +35,17 @@ describe("Phase 2 secure PWA contract", () => {
     expect(worker).not.toContain("closePaperTrade");
   });
 
-  it("registers service workers without cache reuse and presents a controlled update action", () => {
+  it("registers service workers without cache reuse and presents truthful connection and update states", () => {
     const status = read("client/src/pwa/PwaStatus.tsx");
     expect(status).toContain('register("/sw.js", { scope: "/", updateViaCache: "none" })');
     expect(status).toContain("UPDATE READY");
     expect(status).toContain("Reload to update");
     expect(status).toContain("OFFLINE · READ ONLY");
     expect(status).toContain("LIVE DATA UNAVAILABLE");
+    expect(status).toContain('"RECONNECTING"');
+    expect(status).toContain('"DATA UNAVAILABLE"');
+    expect(status).toContain("markLiveDataUnavailable");
+    expect(status).toContain("server-validated live-data response");
   });
 
   it("blocks offline account/trading writes and clearly preserves Paper Trading as online-only", () => {
@@ -68,13 +72,32 @@ describe("Phase 2 secure PWA contract", () => {
     }
   });
 
-  it("applies safe-area and full-screen mobile dialog rules without introducing a native wrapper", () => {
+  it("applies safe-area, scrollable mobile dialog, and overflow rules without introducing a native wrapper", () => {
     const css = read("client/src/index.css");
     const manifest = read("client/public/manifest.webmanifest");
     expect(css).toContain("env(safe-area-inset-top)");
     expect(css).toContain('[data-slot="dialog-content"]');
-    expect(css).toContain("height: 100dvh !important");
+    expect(css).toContain("inset: env(safe-area-inset-top)");
+    expect(css).toContain("overflow-y: auto !important");
+    expect(css).toContain("overflow-x: hidden");
     expect(manifest).not.toContain("tauri");
     expect(manifest).not.toContain("electron");
+  });
+
+  it("uses an accessible primary-plus-secondary mobile navigation pattern and mobile scanner cards", () => {
+    const navigation = read("client/src/pwa/PwaMobileNavigation.tsx");
+    const css = read("client/src/index.css");
+    const home = read("client/src/pages/Home.tsx");
+    expect(navigation).toContain('label: "Scalp"');
+    expect(navigation).toContain('label: "Swing"');
+    expect(navigation).toContain('label: "Paper"');
+    expect(navigation).toContain('id="pwa-mobile-more"');
+    expect(navigation).toContain('aria-controls="pwa-mobile-more"');
+    expect(css).toContain("grid-template-columns: minmax(0,1fr) max-content !important");
+    expect(css).toContain("orientation: landscape");
+    expect(home).toContain('document.getElementById("market-scanner")?.scrollIntoView');
+    expect(home).toContain('id="market-scanner"');
+    expect(home).toContain('connectionState !== "ONLINE" || updateReady');
+    expect(home).toContain('pwaBannerVisible && "pt-16"');
   });
 });

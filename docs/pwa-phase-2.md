@@ -1,8 +1,10 @@
 # Phase 2 — Secure PWA Implementation
 
+> Phase 5 extends this foundation with the current `crypto-hub-pwa-r3-20260825` connection-state model, mobile navigation, responsive hardening, and physical-device procedure in [`pwa-phase-5.md`](./pwa-phase-5.md).
+
 ## Scope and build identity
 
-Crypto Hub now exposes a **same-origin, installable PWA shell** with build identifier `crypto-hub-pwa-r2-20260825`. The normal web client and the installed PWA use the same React application, API-origin abstraction, authentication session, user account, database, and server-authoritative business services. This phase does not add Tauri, Electron, a Windows installer, a new OIDC provider, a client database, or any new market or trading authority.
+Crypto Hub now exposes a **same-origin, installable PWA shell** with current build identifier `crypto-hub-pwa-r3-20260825`. The normal web client and the installed PWA use the same React application, API-origin abstraction, authentication session, user account, database, and server-authoritative business services. This phase does not add Tauri, Electron, a Windows installer, a new OIDC provider, a client database, or any new market or trading authority.
 
 The manifest defines the root start URL and root scope, standalone display, theme/background colours, and the PWA icon. It is connected from the existing HTML shell alongside iOS standalone and Apple touch-icon metadata. A web manifest supplies install metadata to supported browsers. [1]
 

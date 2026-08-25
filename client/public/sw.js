@@ -1,4 +1,4 @@
-const BUILD_ID = "crypto-hub-pwa-r2-20260825";
+const BUILD_ID = "crypto-hub-pwa-r3-20260825";
 const CACHE_NAME = `crypto-hub-shell-${BUILD_ID}`;
 const SHELL_URLS = ["/", "/manifest.webmanifest", "/build-info.json", "/offline.html", "/manus-storage/crypto-hub-pwa-icon_bc898f39.png"];
 
