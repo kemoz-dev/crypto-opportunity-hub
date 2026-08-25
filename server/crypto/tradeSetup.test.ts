@@ -1,5 +1,5 @@
 import { DEFAULT_SCORING_CONFIG, type MarketRegime, type ScannerRow } from "../../shared/crypto";
-import { buildTradeHealth, buildTradeSetupPlan } from "./tradeSetup";
+import { buildTradeHealth, buildTradeSetupPlan, summarizeDiagnostics } from "./tradeSetup";
 import { describe, expect, it } from "vitest";
 
 const analysis = (timeframe: "15m" | "1h" | "4h" | "1d", bias: "bullish" | "neutral" | "bearish") => ({ timeframe, score: 8, maxScore: 10, bias, rsi: 58, macdHistogram: 1, ema20: 139, ema50: 135, ema200: 120, bollinger: null, atrPercent: 2, volumeExpansion: 1.2, priceStructure: ["Higher low"], reasons: [{ key: "ema", label: "Bullish EMA alignment", score: 2, maxScore: 2, direction: "positive" as const, detail: "Validated alignment." }] });
@@ -30,6 +30,30 @@ describe("trade setup intelligence", () => {
     expect(unavailable.actionable).toBe(false);
     expect(unavailable.direction).toBe("NO TRADE");
     expect(unavailable.targets).toEqual([]);
+    expect(unavailable.diagnostics.find(condition => condition.key === "structural_stop")?.status).toBe("PASSED");
+    expect(unavailable.diagnostics.find(condition => condition.key === "risk_reward")).toMatchObject({ status: "FAILED" });
+    expect(unavailable.diagnostics.find(condition => condition.key === "risk_reward")?.required).toContain("1:1");
+  });
+
+  it("explains an existing neutral-direction rejection without changing the rejection", () => {
+    const neutral = row();
+    neutral.score!.direction = "neutral";
+    const plan = buildTradeSetupPlan("SCALP", neutral, regime, candles, "Binance Futures", 123);
+    expect(plan.actionable).toBe(false);
+    expect(plan.direction).toBe("NO TRADE");
+    expect(plan.diagnostics.find(condition => condition.key === "opportunity_direction")).toMatchObject({ status: "FAILED", actual: "Existing Opportunity direction is neutral." });
+    expect(plan.diagnostics.find(condition => condition.key === "entry_zone")?.status).toBe("UNAVAILABLE");
+  });
+
+  it("aggregates actual diagnostic states across plans without creating a setup", () => {
+    const neutral = row();
+    neutral.score!.direction = "neutral";
+    const neutralPlan = buildTradeSetupPlan("SCALP", neutral, regime, candles, "Binance Futures", 123);
+    const unavailablePlan = buildTradeSetupPlan("SCALP", row(), regime, candles.map(candle => ({ ...candle, high: 141, low: 139 })), "Binance Futures", 123);
+    const summary = summarizeDiagnostics([neutralPlan, unavailablePlan]);
+    expect(summary).toMatchObject({ evaluatedAssets: 2, noTradeAssets: 2 });
+    expect(summary.byCondition.find(condition => condition.key === "opportunity_direction")?.failed).toBe(1);
+    expect(summary.topNoTradeReasons.length).toBeGreaterThan(0);
   });
 
   it("keeps current Trade Health separate from immutable entry evidence and never implies auto-close", () => {

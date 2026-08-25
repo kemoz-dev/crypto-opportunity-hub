@@ -31,4 +31,12 @@ The same visual verification opened the Swing workspace using the explicit **1H 
 
 Once the Swing response completed, it showed the same data-bound behavior: neutral existing directions were rendered as **NO TRADE**, while assets lacking a structurally valid stop and positive first target were rendered as **UNAVAILABLE**. The UI displayed the validated Binance Futures provenance and 1H/4H/1D profile for every row. No confirmation or Paper Trading action was selected during this check.
 
+## NO TRADE diagnostics
+
+The current diagnostic layer is read-only. It presents the unchanged setup branches as per-condition **Passed**, **Failed**, **Unavailable**, or **Stale** states, including the actual input, the existing requirement, and a short explanation. It does not alter the Opportunity/Regime scores, setup minimum R:R, provider validation, Paper Trading, alerts, or provider policy.
+
+During the 2026-08-25 live Scalping verification, **12 assets were evaluated and 12 returned NO TRADE**. All 12 were classified as missing required current inputs. The leading diagnostic counts were 12 unavailable each for 15M execution analysis, 1H confirmation analysis, 4H context analysis, execution ATR, and first technical target. This was an input-availability result; no price level, stop, target, probability, or trade action was fabricated.
+
+The paired Swing verification evaluated **12 assets and returned 12 NO TRADE** results. All 12 were likewise classified as missing required current inputs. The leading counts were 12 unavailable each for 1H execution analysis, 4H confirmation analysis, 1D context analysis, execution ATR, and first technical target. Both views explicitly reported zero stale-data and zero existing-R:R-requirement rejections in that live response.
+
 Tauri remains **BLOCKED — AUTH HANDOFF DESIGN REQUIRED**. The separate lower-timeframe data phase remains required before 1M, 3M, or 5M can be introduced.

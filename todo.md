@@ -162,3 +162,7 @@
 - [x] Implement validated 15M/1H/4H Scalping and 1H/4H/1D Swing intelligence from existing server inputs only, with explicit unavailable/no-trade outcomes whenever a technical level or required data cannot be derived.
 - [x] Integrate user-confirmed Paper Trading from a setup, immutable setup context at entry, separate current Trade Health, non-automated target events, and no automatic close, reversal, stop movement, or alert-logic change.
 - [x] Add responsive Scalping, Swing, and monitoring workspaces with Asset Intelligence reuse, provenance/freshness, readable mobile/desktop layout, deterministic tests, full validation, and a reversible published release.
+- [x] Audit the existing Scalping/Swing NO TRADE paths and capture the exact validated evidence available for every required setup condition without changing decision rules.
+- [x] Add a read-only per-condition diagnostic contract and aggregate failure summary that identifies passed, failed, unavailable, and stale inputs with actual values and configured requirements where available.
+- [x] Present a responsive "NO TRADE — WHY?" inspector for every Scalping/Swing result, including transparent no-data and stale-data states, without adding trade actions or modifying setup eligibility.
+- [x] Add deterministic tests and no-change regression coverage, run full test/TypeScript/build validation, report the live diagnostic totals and top NO TRADE causes, then stop.
