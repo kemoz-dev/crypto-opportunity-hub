@@ -137,6 +137,20 @@ Potential alerts expose only `potentialAlertEligible: false`; no alert, notifica
 
 On 2026-08-25, a bounded read-only local Swing query returned **12 evaluated assets, 0 Qualified, 11 Potential, 1 Watch, 0 No Trade, and 0 Data Unavailable**. The existing provider was Binance Futures with valid coherent `1H / 4H / 1D` bundles. The current regime was `RISK OFF`, therefore every observation remained restricted and no Paper Trade, alert, setting, schedule, provider-policy change, or data write occurred. For BTC, ETH, SOL, AAVE, and DOT, Phase 9 exposed their exact readiness score, missing completed-candle confirmation, and unavailable conditional-plan fields rather than inventing entries, targets, or invalidations.
 
+### Phase 9 Published Evidence Record
+
+After ordinary propagation, the public `crypto.tradeSetups({ mode: "SWING" })` response returned `OPPORTUNITY_DISCOVERY_V2` with all readiness and conditional-plan fields. Its current regime was `RISK OFF` at 31.2/100, with 0% tracked-asset breadth. The returned distribution was **12 evaluated, 0 Qualified, 10 Potential, 1 Watch, 0 No Trade, and 1 Data Unavailable**; 11 available observations were `RESTRICTED` by the existing regime gate. No conditional entry, target, or invalidation was shown for the sampled assets because the unchanged level engine did not derive every prerequisite under those current restricted signals.
+
+| Asset | Provider / timeframes | Data state | Status / readiness | Missing confirmation or data reason | Conditional plan |
+|---|---|---|---|---|---|
+| BTC | Kraken Spot; 1H / 4H / 1D | `LIVE`, `VALID` | `POTENTIAL`, `NEAR_READY` 11.7/100 | Exit RISK OFF; confirm existing direction; confirm 4H and 1D bearish bias. | Unavailable; no derived candidate. |
+| ETH | Kraken Spot; 1H / 4H / 1D | `LIVE`, `VALID` | `POTENTIAL`, `NEAR_READY` 11.7/100 | Exit RISK OFF; confirm existing direction; confirm 4H and 1D bearish bias. | Unavailable; no derived candidate. |
+| SOL | Kraken Spot; 1H / 4H / 1D | `LIVE`, `VALID` | `WATCH`, `WATCH` 0/100 | Exit RISK OFF; confirm existing direction; confirm 1H and 1D bearish bias. | Unavailable; early evidence only. |
+| AAVE | No coherent provider bundle | `UNAVAILABLE`, `INVALID` | `DATA_UNAVAILABLE`, score unavailable | Required validated bundle was unavailable, stale, invalid, or incoherent. | Unavailable; no technical evaluation. |
+| DOT | Kraken Spot; 1H / 4H / 1D | `LIVE`, `VALID` | `POTENTIAL`, `NEAR_READY` 23.3/100 | Exit RISK OFF; confirm existing direction; confirm 1D bearish bias. | Unavailable; no derived candidate. |
+
+Each sampled production item included the existing provider, UTC-derived response timestamp, timeframe profile, freshness, and validation state. A separate unauthenticated read-only `crypto.paperPortfolio` request returned **HTTP 401**. The public browser shell was still limited by the pre-existing hosting/billing condition and displayed `RECONNECTING` with a loading Discovery query; it did not render fabricated rows. The direct public V2 API response is the authoritative Phase 9 production evidence.
+
 ## Provenance and Current Limitations
 
 Each setup displays provider, retrieval timestamp, timeframe configuration, market context, and current minimum timeframe. The visual verification on 2026-08-25 showed the live Scalping workspace ranking all 12 supported assets but correctly presenting **NO TRADE** for neutral/unsupported directions or unavailable technical levels. No Paper Trade was opened during validation.
