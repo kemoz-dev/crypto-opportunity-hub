@@ -1,6 +1,6 @@
-import { BellRing, FlaskConical, Gauge, ScanSearch, WalletCards } from "lucide-react";
+import { BellRing, FlaskConical, Gauge, ScanSearch, Target, TrendingUp, WalletCards } from "lucide-react";
 
-type PwaNavTarget = "dashboard" | "scanner" | "paper" | "alerts" | "research";
+type PwaNavTarget = "dashboard" | "scanner" | "scalping" | "swing" | "paper" | "alerts" | "research";
 
 function navigate(target: PwaNavTarget) {
   window.dispatchEvent(new CustomEvent<PwaNavTarget>("crypto-hub:navigate", { detail: target }));
@@ -10,6 +10,8 @@ export function PwaMobileNavigation() {
   const items = [
     { label: "Home", target: "dashboard" as const, icon: Gauge },
     { label: "Scanner", target: "scanner" as const, icon: ScanSearch },
+    { label: "Scalp", target: "scalping" as const, icon: Target },
+    { label: "Swing", target: "swing" as const, icon: TrendingUp },
     { label: "Paper", target: "paper" as const, icon: WalletCards },
     { label: "Alerts", target: "alerts" as const, icon: BellRing },
     { label: "Research", target: "research" as const, icon: FlaskConical },

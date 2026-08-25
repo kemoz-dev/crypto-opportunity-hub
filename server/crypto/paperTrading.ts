@@ -1,8 +1,9 @@
 import { and, asc, eq } from "drizzle-orm";
-import { paperPortfolios, paperTrades } from "../../drizzle/schema";
+import { paperPortfolios, paperTradeMonitoringEvents, paperTrades } from "../../drizzle/schema";
 import type { OpportunityScore, ScannerResponse, ScoringConfig, ScannerRow } from "../../shared/crypto";
 import { getDb } from "../db";
 import { buildLiveScanner } from "./marketService";
+import { buildTradeHealth, getTradeSetupForRow, type TradeSetupMode, type TradeSetupPlan } from "./tradeSetup";
 
 export type PaperTradeSnapshot = {
   scannerGeneratedAt: number;
@@ -26,6 +27,7 @@ export type PaperTradeSnapshot = {
     exactScoringComponents: OpportunityScore["reasons"];
     missingConditions: string[];
   };
+  setupPlan?: TradeSetupPlan;
 };
 
 function round(value: number, digits = 2) { return Number(value.toFixed(digits)); }
@@ -42,7 +44,7 @@ export function cloneImmutableEntrySnapshot<T>(snapshot: T): T {
   return JSON.parse(JSON.stringify(snapshot)) as T;
 }
 
-export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerResponse["marketRegime"], generatedAt: number, configuration: ScoringConfig, terms: { stopLoss: number; takeProfit: number }): PaperTradeSnapshot {
+export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerResponse["marketRegime"], generatedAt: number, configuration: ScoringConfig, terms: { stopLoss: number; takeProfit: number }, setupPlan?: TradeSetupPlan): PaperTradeSnapshot {
   if (!row.score || row.asset.price === null) throw new Error("A score and live price are required to create a paper-trade observation snapshot.");
   return cloneImmutableEntrySnapshot({
     scannerGeneratedAt: generatedAt,
@@ -66,6 +68,7 @@ export function buildPaperTradeSnapshot(row: ScannerRow, marketRegime: ScannerRe
       exactScoringComponents: row.score.reasons,
       missingConditions: row.score.missingConditions,
     },
+    ...(setupPlan ? { setupPlan } : {}),
   });
 }
 
@@ -135,7 +138,7 @@ async function getOrCreatePortfolio(userId: number, paperCapital: number) {
   return created;
 }
 
-export async function openLivePaperTrade(userId: number, assetId: string, side: "long" | "short", riskPercent: number, configuration: ScoringConfig) {
+export async function openLivePaperTrade(userId: number, assetId: string, side: "long" | "short", riskPercent: number, configuration: ScoringConfig, setupMode?: TradeSetupMode) {
   const scan = await buildLiveScanner(false, configuration);
   const row = scan.rows.find(candidate => candidate.asset.id === assetId);
   if (!row?.score || row.asset.price === null) throw new Error("A current live score and price are required before opening a paper trade.");
@@ -144,7 +147,9 @@ export async function openLivePaperTrade(userId: number, assetId: string, side: 
   if (atrPercent === null) throw new Error("ATR is unavailable, so a risk-normalized stop cannot be calculated.");
   const entryPrice = row.asset.price;
   const terms = calculatePaperEntryTerms(entryPrice, atrPercent, side, portfolio.currentEquity, riskPercent);
-  const snapshot = buildPaperTradeSnapshot(row, scan.marketRegime, scan.generatedAt, configuration, terms);
+  const setupPlan = setupMode ? await getTradeSetupForRow(setupMode, row, scan.marketRegime, configuration) : undefined;
+  if (setupPlan && (!setupPlan.actionable || setupPlan.direction.toLowerCase() !== side)) throw new Error("The current validated setup plan is unavailable or does not support the selected simulated direction.");
+  const snapshot = buildPaperTradeSnapshot(row, scan.marketRegime, scan.generatedAt, configuration, terms, setupPlan);
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; the paper trade cannot be recorded.");
   await db.insert(paperTrades).values({ portfolioId: portfolio.id, assetId, status: "open", side, entryAt: new Date(scan.generatedAt), entryPrice, stopLoss: terms.stopLoss, takeProfit: [{ label: "2R", price: terms.takeProfit }], positionSize: terms.positionSize, riskPercent, rewardRisk: terms.rewardRisk, immutableEntrySnapshot: snapshot });
@@ -180,6 +185,8 @@ export async function getPaperPortfolio(userId: number, configuration: ScoringCo
     const currentPrice = current?.asset.price ?? null;
     const unrealizedPnl = trade.status === "open" && currentPrice !== null ? round((trade.side === "long" ? currentPrice - trade.entryPrice : trade.entryPrice - currentPrice) * trade.positionSize) : null;
     const basis = trade.entryPrice * trade.positionSize;
+    const entrySnapshot = trade.immutableEntrySnapshot as PaperTradeSnapshot;
+    const setupPlan = entrySnapshot.setupPlan;
     return {
       ...trade,
       entryNotional: round(basis),
@@ -188,9 +195,35 @@ export async function getPaperPortfolio(userId: number, configuration: ScoringCo
       unrealizedPnl,
       unrealizedReturnPercent: unrealizedPnl === null || basis <= 0 ? null : round(unrealizedPnl / basis * 100),
       realizedReturnPercent: trade.realizedPnl === null || basis <= 0 ? null : round(trade.realizedPnl / basis * 100),
-      entrySnapshot: trade.immutableEntrySnapshot as PaperTradeSnapshot,
+      entrySnapshot,
       currentState: current ? { score: current.score, dataStatus: current.dataStatus, marketRegime: scan.marketRegime, generatedAt: scan.generatedAt } : null,
+      tradeHealth: buildTradeHealth(setupPlan, {
+        price: currentPrice,
+        execution: setupPlan ? current?.score?.technicalByTimeframe.find(item => item.timeframe === setupPlan.timeframes.execution) ?? null : null,
+        confirmation: setupPlan ? current?.score?.technicalByTimeframe.find(item => item.timeframe === setupPlan.timeframes.confirmation) ?? null : null,
+        context: setupPlan ? current?.score?.technicalByTimeframe.find(item => item.timeframe === setupPlan.timeframes.context) ?? null : null,
+        generatedAt: current ? scan.generatedAt : null,
+      }),
     };
   });
   return { portfolio, metrics, trades, generatedAt: scan.generatedAt };
+}
+
+export async function recordPaperTradeMonitoring(userId: number, tradeId: number, configuration: ScoringConfig) {
+  const presentation = await getPaperPortfolio(userId, configuration);
+  const trade = presentation.trades.find(item => item.id === tradeId);
+  if (!trade) throw new Error("Paper trade not found in this private portfolio.");
+  if (trade.status !== "open") throw new Error("Only open simulated positions can be monitored.");
+  const candidates = [
+    ...trade.tradeHealth.targetProgress.filter(target => target.reached).map(target => ({ eventKey: `TARGET_REACHED:${target.label}:${target.price}`, eventType: "TARGET_REACHED" as const, observation: { target, health: trade.tradeHealth, observedAt: presentation.generatedAt } })),
+    ...(trade.tradeHealth.state === "THREATENED" ? [{ eventKey: "REVERSAL_WARNING:THREATENED", eventType: "REVERSAL_WARNING" as const, observation: { health: trade.tradeHealth, observedAt: presentation.generatedAt } }] : []),
+    ...(trade.tradeHealth.state === "INVALIDATED" ? [{ eventKey: "SETUP_INVALIDATED:INVALIDATED", eventType: "SETUP_INVALIDATED" as const, observation: { health: trade.tradeHealth, observedAt: presentation.generatedAt } }] : []),
+  ];
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; monitoring events cannot be recorded.");
+  const existing = await db.select({ eventKey: paperTradeMonitoringEvents.eventKey }).from(paperTradeMonitoringEvents).where(eq(paperTradeMonitoringEvents.tradeId, tradeId));
+  const known = new Set(existing.map(item => item.eventKey));
+  const inserted = candidates.filter(candidate => !known.has(candidate.eventKey));
+  if (inserted.length) await db.insert(paperTradeMonitoringEvents).values(inserted.map(candidate => ({ tradeId, ...candidate })));
+  return { health: trade.tradeHealth, recordedEvents: inserted.map(item => ({ eventKey: item.eventKey, eventType: item.eventType })), observedAt: presentation.generatedAt };
 }

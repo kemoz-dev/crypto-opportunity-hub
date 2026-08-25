@@ -200,6 +200,18 @@ export const paperTrades = mysqlTable("paperTrades", {
   index("paper_trades_asset_time_idx").on(table.assetId, table.entryAt),
 ]);
 
+export const paperTradeMonitoringEvents = mysqlTable("paperTradeMonitoringEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  tradeId: int("tradeId").notNull().references(() => paperTrades.id, { onDelete: "cascade" }),
+  eventKey: varchar("eventKey", { length: 160 }).notNull(),
+  eventType: mysqlEnum("eventType", ["TARGET_REACHED", "REVERSAL_WARNING", "SETUP_INVALIDATED"]).notNull(),
+  observation: json("observation").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("paper_trade_monitoring_event_unique").on(table.tradeId, table.eventKey),
+  index("paper_trade_monitoring_trade_time_idx").on(table.tradeId, table.createdAt),
+]);
+
 export const backtestRuns = mysqlTable("backtestRuns", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
