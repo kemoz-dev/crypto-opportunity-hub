@@ -48,6 +48,14 @@ The low-timeframe engine shows each 1M/3M/5M bias, EMA state, RSI, momentum, vol
 
 Bybit publishes the V5 Kline interval contract, Spot instrument information, and public rate-limit documentation. The implementation uses a bounded 20-second server-side cache plus in-flight request deduplication and a conservative **one-asset outer request concurrency cap** (each asset still obtains only the three independently native intervals); no secret or provider request is exposed to the browser/PWA. Operators must review Bybit’s live terms directly; the application does not interpret them.[1] [2] [3] [4]
 
+## Phase 6 Validation Record and Production Stop Decision
+
+Local server validation on 2026-08-25 confirmed the complete contract. With the conservative cadence, the all-asset public query returned eight coherent `VALID` Bybit Spot bundles, eight `WATCH` results with neutral alignment, zero qualified plans, and four `PARTIAL` / **NO TRADE — DATA UNAVAILABLE** results caused by observed invalid 1M volume. The partial series were not analyzed. Deterministic coverage passed for valid and malformed provider responses, zero volume, symbol mapping, stale/future/duplicate/missing candles, alignment, qualified levels, forward target/R:R rules, health states, immutable snapshots, and PWA offline boundaries.
+
+The published `crypto.lowTimeframeScalping` route propagated after the Phase 6 checkpoint, but the production runtime returned HTTP 403 from Bybit Spot for all native 1M, 3M, and 5M requests. The all-asset response therefore correctly returned **0 VALID, 0 QUALIFIED, 0 WATCH, and 12 NO TRADE / DATA UNAVAILABLE**; a separate BTC-only query produced the same three HTTP 403 provider failures. This is an exact production provider-reachability blocker, not an Opportunity/Regime, core provider, or setup-engine failure.
+
+> **Production stop decision:** No current trustworthy low-timeframe provider bundle exists in the published runtime. The production layer must remain at **NO TRADE — DATA UNAVAILABLE**. No Binance/Kraken fallback, resampling, cache substitution, cross-provider combination, stale-data reuse, Paper Trade, scheduled task, alert, setting, or real-trading action was attempted. The implementation is retained because it fails closed with explicit provenance and diagnostics; enabling live Phase 6 plans requires future production-approved Bybit reachability or a newly authorized equivalent single-provider validation process.
+
 ## Provenance and Current Limitations
 
 Each setup displays provider, retrieval timestamp, timeframe configuration, market context, and current minimum timeframe. The visual verification on 2026-08-25 showed the live Scalping workspace ranking all 12 supported assets but correctly presenting **NO TRADE** for neutral/unsupported directions or unavailable technical levels. No Paper Trade was opened during validation.
