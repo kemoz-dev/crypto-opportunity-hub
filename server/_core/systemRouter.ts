@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { notifyOwner } from "./notification";
+import { getApiContractMetadata } from "@shared/apiContract";
+import { getAuthAdapter } from "./authAdapter";
+import { getNotificationAdapter } from "../adapters/notifications";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 
 export const systemRouter = router({
@@ -13,6 +15,11 @@ export const systemRouter = router({
       ok: true,
     })),
 
+  contract: publicProcedure.query(() => ({
+    ...getApiContractMetadata(),
+    authentication: getAuthAdapter().getOidcReadiness(),
+  })),
+
   notifyOwner: adminProcedure
     .input(
       z.object({
@@ -21,7 +28,7 @@ export const systemRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const delivered = await notifyOwner(input);
+      const delivered = (await getNotificationAdapter().notifyOwner(input)).accepted;
       return {
         success: delivered,
       } as const;

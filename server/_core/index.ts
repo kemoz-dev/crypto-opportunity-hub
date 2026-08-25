@@ -42,14 +42,12 @@ async function startServer() {
   app.post("/api/scheduled/evaluate-alert", scheduledAlertHandler);
   app.post("/api/scheduled/ingest-historical-data", scheduledHistoricalIngestionHandler);
   app.post("/api/scheduled/provider-health-monitor", scheduledProviderMonitorHandler);
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
+  // `/api/trpc` remains the compatibility endpoint. `/api/v1/trpc` is an
+  // alias of the same typed contract for future clients; it does not fork any
+  // business procedure or scoring implementation.
+  const trpcMiddleware = createExpressMiddleware({ router: appRouter, createContext });
+  app.use("/api/trpc", trpcMiddleware);
+  app.use("/api/v1/trpc", trpcMiddleware);
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

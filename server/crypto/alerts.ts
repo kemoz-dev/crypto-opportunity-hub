@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { alertExecutions, alerts } from "../../drizzle/schema";
 import type { DataStatus, ScannerResponse, ScoringConfig, Timeframe } from "../../shared/crypto";
-import { createHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
-import { notifyOwner } from "../_core/notification";
+import { getNotificationAdapter } from "../adapters/notifications";
+import { getSchedulerAdapter } from "../adapters/scheduler";
 import { getDb } from "../db";
 import { buildLiveScanner } from "./marketService";
 import { getUserScoringConfig } from "./settings";
@@ -171,7 +171,7 @@ export async function createAlert(userId: number, input: z.infer<typeof alertInp
   if (!alert) throw new Error("Alert creation failed.");
   const canSchedule = process.env.NODE_ENV === "production";
   if (!canSchedule) return { alert, scheduleState: "publish-required" as const };
-  const job = await createHeartbeatJob({ name: `crypto-alert-${userId}-${alert.id}`, cron: input.cron, path: "/api/scheduled/evaluate-alert", payload: {}, description: `Evaluate Crypto Opportunity Hub alert ${alert.name}` }, userSession);
+  const job = await getSchedulerAdapter().create({ name: `crypto-alert-${userId}-${alert.id}`, cron: input.cron, path: "/api/scheduled/evaluate-alert", payload: {}, description: `Evaluate Crypto Opportunity Hub alert ${alert.name}` }, userSession);
   await db.update(alerts).set({ isEnabled: true, scheduleCronTaskUid: job.taskUid }).where(eq(alerts.id, alert.id));
   return { alert: await getAlert(alert.id, userId), scheduleState: "scheduled" as const, nextExecutionAt: job.nextExecutionAt ?? null };
 }
@@ -182,7 +182,7 @@ export async function setAlertEnabled(userId: number, alertId: number, enabled: 
     if (process.env.NODE_ENV !== "production") throw new Error("This project must be published before alert schedules can be activated.");
     throw new Error("This alert has no schedule identifier; recreate it after publishing.");
   }
-  await updateHeartbeatJob(alert.scheduleCronTaskUid, { enable: enabled }, userSession);
+  await getSchedulerAdapter().update(alert.scheduleCronTaskUid, { enable: enabled }, userSession);
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; alert cannot be updated.");
   await db.update(alerts).set({ isEnabled: enabled }).where(eq(alerts.id, alert.id));
@@ -243,7 +243,7 @@ export async function evaluateAlert(alertId: number, expectedTaskUid?: string) {
     let notificationStatus: NotificationStatus = "not_requested";
     if (conditions.notificationEnabled) {
       try {
-        notificationStatus = await notifyOwner({ title: `Crypto alert: ${alert.name}`, content: `${matches.length} configured opportunity match(es) at ${new Date(scan.generatedAt).toISOString()}. No paper or real trade was created.` }) ? "sent" : "failed";
+        notificationStatus = (await getNotificationAdapter().notifyOwner({ title: `Crypto alert: ${alert.name}`, content: `${matches.length} configured opportunity match(es) at ${new Date(scan.generatedAt).toISOString()}. No paper or real trade was created.` })).accepted ? "sent" : "failed";
       } catch {
         notificationStatus = "failed";
       }

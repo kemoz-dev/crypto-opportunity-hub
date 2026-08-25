@@ -42,7 +42,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
-import { storageGetSignedUrl, storagePut } from "../storage";
+import { getStorageAdapter } from "../adapters/storage";
 
 export const DISASTER_RECOVERY_ARCHIVE_VERSION = "crypto-opportunity-hub-dr-v2";
 export const DISASTER_RECOVERY_ARCHIVE_FORMAT = "zip-json";
@@ -396,7 +396,7 @@ export async function createDisasterRecoveryArchive(userId: number) {
   const created = (await db.select().from(disasterRecoveryArchives).where(eq(disasterRecoveryArchives.exportId, exportId)).limit(1))[0];
   if (!created) throw new Error("Backup metadata persistence failed.");
   try {
-    const stored = await storagePut(`disaster-recovery/${userId}/${exportId}.zip`, Buffer.from(archiveBytes), "application/zip");
+    const stored = await getStorageAdapter().put(`disaster-recovery/${userId}/${exportId}.zip`, Buffer.from(archiveBytes), "application/zip");
     await db.update(disasterRecoveryArchives).set({ status: "verified", storageKey: stored.key, storageUrl: null, verification, verifiedAt: new Date() }).where(eq(disasterRecoveryArchives.id, created.id));
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Archive storage failed.";
@@ -432,10 +432,10 @@ export async function getVerifiedPrimaryDisasterRecoveryArchive(userId: number) 
 export async function getDisasterRecoveryArchiveDownload(userId: number, archiveId: number) {
   const archive = await getDisasterRecoveryArchive(userId, archiveId);
   if (archive.status !== "verified" || !archive.storageKey) throw new Error("A verified stored archive is not available for download.");
-  return { exportId: archive.exportId, filename: `${archive.exportId}.zip`, url: await storageGetSignedUrl(archive.storageKey), expires: "provider-signed URL" };
+  return { exportId: archive.exportId, filename: `${archive.exportId}.zip`, url: await getStorageAdapter().createDownloadUrl(archive.storageKey), expires: "provider-signed URL" };
 }
 
 export async function getVerifiedPrimaryDisasterRecoveryArchiveDownload(userId: number) {
   const archive = await getVerifiedPrimaryDisasterRecoveryArchive(userId);
-  return { exportId: archive.exportId, filename: `${archive.exportId}.zip`, url: await storageGetSignedUrl(archive.storageKey!), expires: "provider-signed URL", archiveSizeBytes: archive.archiveSizeBytes, archiveChecksum: archive.archiveChecksum };
+  return { exportId: archive.exportId, filename: `${archive.exportId}.zip`, url: await getStorageAdapter().createDownloadUrl(archive.storageKey!), expires: "provider-signed URL", archiveSizeBytes: archive.archiveSizeBytes, archiveChecksum: archive.archiveChecksum };
 }

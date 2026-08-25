@@ -136,3 +136,14 @@
 - [x] Reuse and display immutable entry snapshots for "Why this trade?" while clearly separating entry state from current live state and keeping real trading unavailable.
 - [x] Audit and upgrade dense dialog/workspace UX across Paper Trading, Asset Intelligence, and Research results using responsive dimensions, internal scroll, clear navigation, and no content clipping.
 - [x] Add deterministic tests for portfolio calculations, equity derivation, filtering, immutable snapshots, current-versus-entry separation, no-mutation boundaries, responsive UI states, full validation, publishing, and final reporting.
+- [x] Perform a read-only repository, runtime, infrastructure, and Manus-dependency audit for a shared web/Windows/iPhone architecture.
+- [x] Trace the authoritative state, API/authentication boundaries, live-data flow, Paper Trading, Research Lab, alerts, secrets, and scheduled server workloads without changing them.
+- [x] Evaluate responsive web/PWA, Tauri, Electron, and native-mobile paths; document a phased recommendation, migration boundaries, risk register, and no-change audit report.
+- [x] Produce a design-only API/Auth Portability Specification covering API origin/versioning, OIDC with PKCE, server-derived authorization, and a provider-independent scheduler adapter.
+- [x] Specify design-only storage and notification adapters, canonical provider and feature contracts, PWA constraints, and least-privilege Tauri/release requirements without implementation.
+- [x] Verify and deliver the Phase 1 specification without modifying code, schema, schedules, providers, authentication, dependencies, infrastructure, or production behavior.
+- [x] Establish a no-regression baseline and implement a single configurable API-origin/version metadata boundary while keeping same-origin web behavior as the default.
+- [x] Introduce server-side authentication, authorization, OIDC/PKCE-readiness, error-normalization, and public-versus-secret configuration abstractions without replacing current Manus authentication.
+- [x] Route existing Manus scheduler, storage, and owner-notification integrations through provider-independent server adapters while retaining current production adapters and scheduled callback protections.
+- [x] Formalize portable server contracts for Paper Trading, Asset Intelligence, and Research Lab without changing their authoritative calculations, records, or business rules.
+- [x] Add focused tests, security checks, documentation, full validation, visual verification, and a reversible published Phase 1 release with no schema migration.
