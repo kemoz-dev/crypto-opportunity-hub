@@ -182,6 +182,8 @@ export async function getPaperPortfolio(userId: number, configuration: ScoringCo
   const metrics = buildPaperPortfolioPresentation(portfolio.startingCapital, rows as Array<typeof paperTrades.$inferSelect & { assetId: string }>, prices);
   const trades = rows.map(trade => {
     const current = byAsset.get(trade.assetId);
+    const currentBundle = current ? getScannerLiveOhlcvBundle(scan, current.asset.symbol) : null;
+    const currentAvailability = currentBundle?.state === "STALE" ? "STALE" as const : currentBundle?.eligibleForScoring && currentBundle.coherent ? "LIVE" as const : "UNAVAILABLE" as const;
     const currentPrice = current?.asset.price ?? null;
     const unrealizedPnl = trade.status === "open" && currentPrice !== null ? round((trade.side === "long" ? currentPrice - trade.entryPrice : trade.entryPrice - currentPrice) * trade.positionSize) : null;
     const basis = trade.entryPrice * trade.positionSize;
@@ -203,6 +205,8 @@ export async function getPaperPortfolio(userId: number, configuration: ScoringCo
         confirmation: setupPlan ? current?.score?.technicalByTimeframe.find(item => item.timeframe === setupPlan.timeframes.confirmation) ?? null : null,
         context: setupPlan ? current?.score?.technicalByTimeframe.find(item => item.timeframe === setupPlan.timeframes.context) ?? null : null,
         generatedAt: current ? scan.generatedAt : null,
+        provider: currentBundle?.provider ?? null,
+        availability: currentAvailability,
       }),
     };
   });
@@ -216,7 +220,7 @@ export async function recordPaperTradeMonitoring(userId: number, tradeId: number
   if (trade.status !== "open") throw new Error("Only open simulated positions can be monitored.");
   const candidates = [
     ...trade.tradeHealth.targetProgress.filter(target => target.reached).map(target => ({ eventKey: `TARGET_REACHED:${target.label}:${target.price}`, eventType: "TARGET_REACHED" as const, observation: { target, health: trade.tradeHealth, observedAt: presentation.generatedAt } })),
-    ...(trade.tradeHealth.state === "THREATENED" ? [{ eventKey: "REVERSAL_WARNING:THREATENED", eventType: "REVERSAL_WARNING" as const, observation: { health: trade.tradeHealth, observedAt: presentation.generatedAt } }] : []),
+    ...(trade.tradeHealth.state === "REVERSAL RISK" ? [{ eventKey: "REVERSAL_WARNING:REVERSAL_RISK", eventType: "REVERSAL_WARNING" as const, observation: { health: trade.tradeHealth, observedAt: presentation.generatedAt } }] : []),
     ...(trade.tradeHealth.state === "INVALIDATED" ? [{ eventKey: "SETUP_INVALIDATED:INVALIDATED", eventType: "SETUP_INVALIDATED" as const, observation: { health: trade.tradeHealth, observedAt: presentation.generatedAt } }] : []),
   ];
   const db = await getDb();

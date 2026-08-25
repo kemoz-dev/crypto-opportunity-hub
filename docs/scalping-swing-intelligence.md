@@ -15,13 +15,13 @@ This additive layer is a server-authoritative research and simulated-trading pla
 
 If direction is neutral, regime is risk-off, provider coherence fails, a required timeframe is unavailable, ATR is unavailable, or a structurally valid stop/target cannot be calculated, the result is **NO TRADE** or **UNAVAILABLE**. The workspace never manufactures an entry, target, probability, or lower-timeframe candle.
 
-> Setup Quality is a transparent presentation ranking derived from directional alignment, volume, R:R, and existing regime context. It is not a replacement for, input to, or modification of the Opportunity or Regime engines.
+> Setup Quality remains an explainable technical-evidence field. Phase 4 workspace ranking uses the existing **Opportunity Score** only; Setup Quality is not a competing score, an input to Opportunity/Regime, or a modification of either engine.
 
 ## Paper Trading and Monitoring
 
 Opening a Paper Trade from a setup passes the selected `SCALP` or `SWING` mode to the server. The server revalidates the setup, confirms the requested simulated direction, and writes the setup plan inside the immutable entry snapshot. Existing server-side Paper Trading position sizing, stop/target economics, and manual close behavior remain authoritative and unchanged.
 
-Current Trade Health is separately derived from live validated price plus execution/confirmation analyses. It reports **HEALTHY**, **CAUTION**, **THREATENED**, **INVALIDATED**, or **DATA UNAVAILABLE** with reasons and target progress. The manual **Refresh Trade Health** action may deduplicate and persist only material target-reached, reversal-warning, or invalidated events in `paperTradeMonitoringEvents`; it never closes, reverses, trails, or modifies a simulated trade and creates no scheduled alert.
+Current Trade Health is separately derived from live validated price plus execution/confirmation analyses. It reports **HEALTHY**, **CAUTION**, **REVERSAL RISK**, **INVALIDATED**, or **HEALTH UNKNOWN** with reasons, target-path explanation, and direction-correct target distance. **HEALTH UNKNOWN** is shown for unavailable or stale current validated data rather than inferring a state. The manual **Refresh Trade Health** action may deduplicate and persist only material target-reached, reversal-warning, or invalidated events in `paperTradeMonitoringEvents`; it never closes, reverses, trails, or modifies a simulated trade and creates no scheduled alert.
 
 ## Provenance and Current Limitations
 

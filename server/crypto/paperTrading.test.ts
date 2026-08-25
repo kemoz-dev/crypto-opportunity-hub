@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildPaperPortfolioPresentation, buildPaperTradeSnapshot, calculatePaperEntryTerms, cloneImmutableEntrySnapshot } from "./paperTrading";
 import { DEFAULT_SCORING_CONFIG, type MarketRegime, type ScannerRow } from "../../shared/crypto";
+import type { TradeSetupPlan } from "./tradeSetup";
 
 describe("paper trading integrity", () => {
   it("derives symmetric 2R long and short terms from a recorded entry and ATR", () => {
@@ -35,6 +36,19 @@ describe("paper trading integrity", () => {
     expect(snapshot.dataStatus).toEqual([]);
     expect(snapshot.observation.exactScoringComponents).toHaveLength(1);
     expect(snapshot.observation.missingConditions).toEqual(["No catalyst source."]);
+  });
+
+  it("keeps an optional validated setup plan immutable inside the entry snapshot", () => {
+    const row = {
+      asset: { id: "solana", symbol: "SOL", name: "Solana", sector: "Layer 1", price: 100, change24h: 1, marketCap: 1_000, volume24h: 500 },
+      score: { score: 76, confidence: 81, technicalScore: 31, setupType: "Momentum", reasons: [], missingConditions: [], technicalByTimeframe: [] },
+      dataStatus: [],
+    } as unknown as ScannerRow;
+    const marketRegime: MarketRegime = { score: 72, classification: "RISK ON", reasons: [], btcDominance: 50, breadth: 60 };
+    const plan = { mode: "SCALP", actionable: true, symbol: "SOL", entryZone: { low: 99, high: 101, preferred: 100, reason: "Validated zone" }, stop: { price: 95 }, targets: [{ label: "TP1", price: 110, reason: "Validated structure" }], provider: "Binance Futures", dataTimestamp: 123 } as unknown as TradeSetupPlan;
+    const snapshot = buildPaperTradeSnapshot(row, marketRegime, 123, DEFAULT_SCORING_CONFIG, { stopLoss: 97, takeProfit: 106 }, plan);
+    plan.targets[0]!.price = 999;
+    expect(snapshot.setupPlan).toMatchObject({ mode: "SCALP", entryZone: { preferred: 100 }, stop: { price: 95 }, targets: [{ label: "TP1", price: 110 }] });
   });
 
   it("derives portfolio P&L, cash estimate, win/loss metrics, and an equity curve from immutable trade records", () => {

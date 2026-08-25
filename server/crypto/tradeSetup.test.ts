@@ -25,6 +25,7 @@ describe("trade setup intelligence", () => {
     expect(plan.timeframes).toEqual({ execution: "15m", confirmation: "1h", context: "4h" });
     expect(plan.opportunityScore).toBe(74);
     expect(plan.actionable).toBe(true);
+    expect(plan.presentationStatus).toBe("QUALIFIED");
     expect(plan.tradeSetupQuality).not.toBeNull();
     expect(plan.stop?.price).toBeLessThan(plan.entryZone!.preferred);
     expect(plan.targets[0]?.price).toBeGreaterThan(plan.entryZone!.preferred);
@@ -45,9 +46,11 @@ describe("trade setup intelligence", () => {
   it("explains an existing neutral-direction rejection without changing the rejection", () => {
     const neutral = row();
     neutral.score!.direction = "neutral";
-    const plan = buildTradeSetupPlan("SCALP", neutral, regime, candles, "Binance Futures", 123);
+    const plan = buildTradeSetupPlan("SCALP", neutral, regime, candles, "Binance Futures", 123, bundle());
     expect(plan.actionable).toBe(false);
     expect(plan.direction).toBe("NO TRADE");
+    expect(plan.presentationStatus).toBe("WATCH");
+    expect(plan.watch?.missing).toContain("Existing Opportunity direction");
     expect(plan.diagnostics.find(condition => condition.key === "opportunity_direction")).toMatchObject({ status: "FAILED", actual: "Existing Opportunity direction is neutral." });
     expect(plan.diagnostics.find(condition => condition.key === "entry_zone")?.status).toBe("UNAVAILABLE");
   });
@@ -66,14 +69,37 @@ describe("trade setup intelligence", () => {
 
   it("keeps current Trade Health separate from immutable entry evidence and never implies auto-close", () => {
     const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123);
-    const health = buildTradeHealth(plan, { price: plan.invalidation!.price - 1, execution: analysis("15m", "bearish"), confirmation: analysis("1h", "bearish"), context: analysis("4h", "bullish"), generatedAt: 456 });
+    const health = buildTradeHealth(plan, { price: plan.invalidation!.price - 1, execution: analysis("15m", "bearish"), confirmation: analysis("1h", "bearish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "LIVE" });
     expect(health.state).toBe("INVALIDATED");
     expect(health.reversalWarning).toContain("Potential reversal warning");
-    expect(health.targetProgress[0]).toMatchObject({ label: "TP1", reached: false });
+    expect(health.targetProgress[0]).toMatchObject({ label: "TP1", reached: false, status: "PENDING" });
+    expect(health.targetPath.state).toBe("INVALIDATED");
+  });
+
+  it("derives Healthy, Caution, Reversal Risk, and Health Unknown from immutable setup evidence without an automatic action", () => {
+    const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123, bundle());
+    const healthy = buildTradeHealth(plan, { price: plan.entryZone!.preferred, execution: analysis("15m", "bullish"), confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "LIVE" });
+    const caution = buildTradeHealth(plan, { price: plan.entryZone!.preferred, execution: { ...analysis("15m", "bullish"), rsi: 51, macdHistogram: 0.2 }, confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "LIVE" });
+    const reversal = buildTradeHealth(plan, { price: plan.entryZone!.preferred, execution: analysis("15m", "bearish"), confirmation: analysis("1h", "bearish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "LIVE" });
+    const stale = buildTradeHealth(plan, { price: plan.entryZone!.preferred, execution: analysis("15m", "bullish"), confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "STALE" });
+    expect(healthy).toMatchObject({ state: "HEALTHY", targetPath: { state: "HEALTHY" } });
+    expect(caution).toMatchObject({ state: "CAUTION", targetPath: { state: "WEAKENING" } });
+    expect(reversal).toMatchObject({ state: "REVERSAL RISK", targetPath: { state: "AT RISK" } });
+    expect(stale).toMatchObject({ state: "HEALTH UNKNOWN", targetPath: { state: "UNAVAILABLE" } });
+  });
+
+  it("reports one, two, or three immutable targets only when supplied and keeps target distance direction-correct", () => {
+    const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123, bundle());
+    const current = { price: plan.entryZone!.preferred, execution: analysis("15m", "bullish"), confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "LIVE" as const };
+    expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 1) }, current).targetProgress).toHaveLength(1);
+    expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 2) }, current).targetProgress).toHaveLength(2);
+    const three = buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 3) }, current).targetProgress;
+    expect(three).toHaveLength(3);
+    expect(three.every(target => target.distancePercent !== null && target.distancePercent! >= 0)).toBe(true);
   });
 
   it("does not create a health label from a legacy trade without an immutable setup plan", () => {
-    const health = buildTradeHealth(undefined, { price: 140, execution: analysis("15m", "bullish"), confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456 });
-    expect(health.state).toBe("DATA UNAVAILABLE");
+    const health = buildTradeHealth(undefined, { price: 140, execution: analysis("15m", "bullish"), confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: null, availability: "UNAVAILABLE" });
+    expect(health.state).toBe("HEALTH UNKNOWN");
   });
 });

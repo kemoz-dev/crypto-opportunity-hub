@@ -5,8 +5,10 @@ import { buildLiveScanner, getScannerLiveOhlcvBundle } from "./marketService";
 
 export type TradeSetupMode = "SCALP" | "SWING";
 export type TradeSetupDirection = "LONG" | "SHORT" | "NO TRADE";
-export type TradeHealthState = "HEALTHY" | "CAUTION" | "THREATENED" | "INVALIDATED" | "DATA UNAVAILABLE";
+export type TradeHealthState = "HEALTHY" | "CAUTION" | "REVERSAL RISK" | "INVALIDATED" | "HEALTH UNKNOWN";
+export type TargetPathHealth = "HEALTHY" | "WEAKENING" | "AT RISK" | "INVALIDATED" | "UNAVAILABLE";
 export type TradeSetupDiagnosticStatus = "PASSED" | "FAILED" | "UNAVAILABLE" | "STALE";
+export type TradeSetupPresentationStatus = "QUALIFIED" | "WATCH" | "NO TRADE";
 
 export type TradeSetupCondition = {
   key: "provider_bundle" | "live_price" | "freshness" | "execution_analysis" | "confirmation_analysis" | "context_analysis" | "opportunity_direction" | "atr" | "entry_zone" | "structural_stop" | "target_structure" | "risk_reward";
@@ -55,6 +57,9 @@ export type TradeSetupPlan = {
   engineVersion: typeof TRADE_SETUP_ENGINE_VERSION;
   mode: TradeSetupMode;
   actionable: boolean;
+  presentationStatus: TradeSetupPresentationStatus;
+  rank: number | null;
+  watch: { missing: string[]; wouldQualifyWhen: string[] } | null;
   availability: "LIVE" | "STALE" | "UNAVAILABLE";
   minimumValidatedTimeframe: string;
   assetId: string;
@@ -113,6 +118,9 @@ function emptyPlan(mode: TradeSetupMode, row: ScannerRow | null, regime: MarketR
     engineVersion: TRADE_SETUP_ENGINE_VERSION,
     mode,
     actionable: false,
+    presentationStatus: "NO TRADE",
+    rank: null,
+    watch: null,
     availability,
     minimumValidatedTimeframe: profile.minimumLabel,
     assetId: row?.asset.id ?? "UNAVAILABLE",
@@ -258,8 +266,24 @@ function buildDiagnostics(plan: TradeSetupPlan, row: ScannerRow, regime: MarketR
   ];
 }
 
+function presentationFor(plan: TradeSetupPlan): Pick<TradeSetupPlan, "presentationStatus" | "watch"> {
+  if (plan.actionable) return { presentationStatus: "QUALIFIED", watch: null };
+  const coreData = plan.diagnostics.filter(condition => ["provider_bundle", "live_price", "freshness", "execution_analysis", "confirmation_analysis", "context_analysis"].includes(condition.key));
+  const hasUnavailableCoreData = coreData.some(condition => condition.status === "UNAVAILABLE" || condition.status === "STALE");
+  const blockingFailures = plan.diagnostics.filter(condition => condition.status === "FAILED");
+  const riskOffRejection = blockingFailures.some(condition => condition.key === "opportunity_direction" && condition.actual === "Market regime is RISK OFF.");
+  const watchable = !riskOffRejection && !hasUnavailableCoreData && blockingFailures.length > 0 && blockingFailures.every(condition => condition.key === "opportunity_direction" || condition.key === "risk_reward");
+  if (!watchable) return { presentationStatus: "NO TRADE", watch: null };
+  const missing = blockingFailures.map(condition => condition.label);
+  const wouldQualifyWhen = blockingFailures.map(condition => condition.key === "opportunity_direction"
+    ? "The existing Opportunity direction is bullish or bearish and market context is not Risk Off."
+    : `The first validated target meets the existing minimum R:R of ${MINIMUM_REWARD_RISK}:1.`);
+  return { presentationStatus: "WATCH", watch: { missing, wouldQualifyWhen } };
+}
+
 function withDiagnostics(plan: TradeSetupPlan, row: ScannerRow, regime: MarketRegime | null, atr: number | null = null, derivation: LevelDerivation | null = null): TradeSetupPlan {
-  return { ...plan, diagnostics: buildDiagnostics(plan, row, regime, atr, derivation) };
+  const diagnosed = { ...plan, diagnostics: buildDiagnostics(plan, row, regime, atr, derivation) };
+  return { ...diagnosed, ...presentationFor(diagnosed) };
 }
 
 export function summarizeDiagnostics(plans: TradeSetupPlan[]): TradeSetupDiagnosticSummary {
@@ -365,6 +389,9 @@ export function buildTradeSetupPlan(mode: TradeSetupMode, row: ScannerRow, regim
     engineVersion: TRADE_SETUP_ENGINE_VERSION,
     mode,
     actionable: true,
+    presentationStatus: "QUALIFIED",
+    rank: null,
+    watch: null,
     availability: "LIVE",
     minimumValidatedTimeframe: profile.minimumLabel,
     assetId: row.asset.id,
@@ -397,8 +424,10 @@ export async function getTradeSetups(mode: TradeSetupMode, configuration: Scorin
   const profile = PROFILES[mode];
   const minimumCandles = Math.max(configuration.indicator.emaSlow + 2, configuration.indicator.macdSlow + configuration.indicator.macdSignal + 2, 60);
   const setups = await Promise.all(scan.rows.map(row => getTradeSetupForRow(mode, row, scan.marketRegime, configuration, minimumCandles, getScannerLiveOhlcvBundle(scan, row.asset.symbol))));
-  const ordered = setups.sort((left, right) => Number(right.actionable) - Number(left.actionable) || (right.tradeSetupQuality ?? -1) - (left.tradeSetupQuality ?? -1) || (right.opportunityScore ?? -1) - (left.opportunityScore ?? -1));
-  return { mode, generatedAt: scan.generatedAt, lowerTimeframeDataReady: LOWER_TIMEFRAME_DATA_READY, minimumValidatedTimeframe: PROFILES[mode].minimumLabel, marketRegime: scan.marketRegime, providerHealth: summarizeProviderHealth(scan), diagnostics: summarizeDiagnostics(ordered), setups: ordered };
+  const ordered = setups.sort((left, right) => Number(right.actionable) - Number(left.actionable) || (right.opportunityScore ?? -1) - (left.opportunityScore ?? -1) || left.symbol.localeCompare(right.symbol));
+  let qualifiedRank = 0;
+  const ranked = ordered.map(plan => plan.presentationStatus === "QUALIFIED" ? { ...plan, rank: ++qualifiedRank } : plan);
+  return { mode, generatedAt: scan.generatedAt, lowerTimeframeDataReady: LOWER_TIMEFRAME_DATA_READY, minimumValidatedTimeframe: PROFILES[mode].minimumLabel, marketRegime: scan.marketRegime, providerHealth: summarizeProviderHealth(scan), diagnostics: summarizeDiagnostics(ranked), setups: ranked };
 }
 
 export async function getTradeSetupForRow(mode: TradeSetupMode, row: ScannerRow, regime: MarketRegime | null, configuration: ScoringConfig, minimumCandles = Math.max(configuration.indicator.emaSlow + 2, configuration.indicator.macdSlow + configuration.indicator.macdSignal + 2, 60), existingBundle: LiveOhlcvBundle | null = null) {
@@ -410,15 +439,34 @@ export async function getTradeSetupForRow(mode: TradeSetupMode, row: ScannerRow,
   return buildTradeSetupPlan(mode, row, regime, execution.candles, execution.provider, execution.retrievedAt, bundle);
 }
 
-export function buildTradeHealth(plan: TradeSetupPlan | null | undefined, current: { price: number | null; execution: TimeframeAnalysis | null; confirmation: TimeframeAnalysis | null; context: TimeframeAnalysis | null; generatedAt: number | null }) {
-  if (!plan || !plan.actionable || current.price === null || !plan.stop || !plan.invalidation) return { state: "DATA UNAVAILABLE" as const, reasons: ["A valid immutable setup plan or current validated price is unavailable."], targetProgress: [], reversalWarning: null };
+export type TradeHealthResult = {
+  state: TradeHealthState;
+  reasons: string[];
+  targetProgress: Array<TradeSetupLevel & { reached: boolean; status: "REACHED" | "PENDING"; progressPercent: number | null; distancePercent: number | null }>;
+  targetPath: { state: TargetPathHealth; explanation: string };
+  reversalWarning: string | null;
+  data: { provider: string | null; generatedAt: number | null; availability: "LIVE" | "STALE" | "UNAVAILABLE" };
+};
+
+export function buildTradeHealth(plan: TradeSetupPlan | null | undefined, current: { price: number | null; execution: TimeframeAnalysis | null; confirmation: TimeframeAnalysis | null; context: TimeframeAnalysis | null; generatedAt: number | null; provider: string | null; availability: "LIVE" | "STALE" | "UNAVAILABLE" }): TradeHealthResult {
+  if (!plan || !plan.actionable || current.price === null || !plan.stop || !plan.invalidation || current.availability !== "LIVE") {
+    const stale = current.availability === "STALE";
+    return {
+      state: "HEALTH UNKNOWN",
+      reasons: [stale ? "Current validated setup data is stale; health is not inferred." : "A valid immutable setup plan, coherent current provider bundle, or current validated price is unavailable."],
+      targetProgress: [],
+      targetPath: { state: "UNAVAILABLE", explanation: stale ? "Target path is unknown because current data is stale." : "Target path is unavailable without coherent current provider data." },
+      reversalWarning: null,
+      data: { provider: current.provider, generatedAt: current.generatedAt, availability: current.availability },
+    };
+  }
   const price = current.price;
   const invalidated = plan.direction === "LONG" ? price <= plan.invalidation.price : price >= plan.invalidation.price;
   const threatened = !matches(plan.direction, current.execution) || !matches(plan.direction, current.confirmation);
   const executionHistogramWeakening = current.execution?.macdHistogram != null && plan.executionState?.macdHistogram != null && Math.abs(current.execution.macdHistogram) < Math.abs(plan.executionState.macdHistogram);
   const executionRsiWeakening = current.execution?.rsi != null && plan.executionState?.rsi != null && (plan.direction === "LONG" ? current.execution.rsi < plan.executionState.rsi - 5 : current.execution.rsi > plan.executionState.rsi + 5);
   const weakening = executionHistogramWeakening || executionRsiWeakening;
-  const state: TradeHealthState = invalidated ? "INVALIDATED" : threatened ? "THREATENED" : weakening ? "CAUTION" : "HEALTHY";
+  const state: TradeHealthState = invalidated ? "INVALIDATED" : threatened ? "REVERSAL RISK" : weakening ? "CAUTION" : "HEALTHY";
   const reasons = [
     invalidated ? `Current price crossed immutable invalidation ${plan.invalidation.price}.` : `Current price remains ${plan.direction === "LONG" ? "above" : "below"} immutable invalidation ${plan.invalidation.price}.`,
     current.execution ? `${plan.timeframes.execution.toUpperCase()} technical state is ${current.execution.bias}.` : "Execution timeframe update is unavailable.",
@@ -428,7 +476,14 @@ export function buildTradeHealth(plan: TradeSetupPlan | null | undefined, curren
     const reached = plan.direction === "LONG" ? price >= target.price : price <= target.price;
     const denominator = target.price - plan.entryZone!.preferred;
     const progress = denominator === 0 ? null : round((price - plan.entryZone!.preferred) / denominator * 100, 1);
-    return { ...target, reached, progressPercent: progress, distancePercent: round((target.price - price) / Math.max(price, Number.EPSILON) * 100, 2) };
+    return { ...target, reached, status: reached ? "REACHED" as const : "PENDING" as const, progressPercent: progress, distancePercent: round(Math.abs(target.price - price) / Math.max(price, Number.EPSILON) * 100, 2) };
   });
-  return { state, reasons, targetProgress, reversalWarning: state === "THREATENED" || state === "INVALIDATED" ? "Potential reversal warning: current validated technical state no longer supports the immutable entry thesis." : null };
+  const targetPath: TradeHealthResult["targetPath"] = state === "INVALIDATED"
+    ? { state: "INVALIDATED", explanation: "The immutable invalidation level was crossed; target path is no longer valid." }
+    : state === "REVERSAL RISK"
+      ? { state: "AT RISK", explanation: "Multiple current technical confirmations no longer support the immutable entry thesis." }
+      : state === "CAUTION"
+        ? { state: "WEAKENING", explanation: "The setup remains valid, but execution-timeframe momentum has weakened from the entry observation." }
+        : { state: "HEALTHY", explanation: "Current validated technical conditions still support the immutable setup thesis." };
+  return { state, reasons, targetProgress, targetPath, reversalWarning: state === "REVERSAL RISK" || state === "INVALIDATED" ? "Potential reversal warning: current validated technical state no longer supports the immutable entry thesis." : null, data: { provider: current.provider, generatedAt: current.generatedAt, availability: current.availability } };
 }
