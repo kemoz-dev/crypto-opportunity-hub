@@ -42,3 +42,9 @@ The PWA remains static-shell cached only. Offline mode remains read-only: creati
 ## Validation Boundary
 
 The phase is validated with deterministic setup, target-path, stale-data, snapshot-immutability, Paper Trading accounting, and filter tests; TypeScript; production build; static secret/cache inspection; and desktop/mobile-class visual checks. A controlled production smoke check is required after publication to report the actual provider/regime/setup state. The smoke check must not open, close, or refresh any simulated position unless an explicit user-authorized test position already exists.
+
+## Published Smoke Check — 2026-08-25
+
+The published Phase 4 contract responded successfully for both Scalping and Swing. The response contained the new presentation status and Watch fields for all twelve supported assets. Binance Futures returned its existing HTTP 451 regional-unavailability condition; the server used one coherent Kraken Spot bundle for eleven assets and retained one ineligible bundle where required 15M volume was unavailable. No mixed-provider series was used.
+
+The observed market regime was **RISK OFF**, so both workspaces correctly returned `0 QUALIFIED`, `0 WATCH`, and `12 NO TRADE`. This was a data-bound result under the existing regime and setup rules, not a score, threshold, or provider-policy change. The public manifest and Service Worker each returned successfully. An unauthenticated `openPaperTrade` request returned `401 UNAUTHORIZED`; no Paper Trade, manual health refresh, scheduled job, alert, or settings mutation was performed during the smoke check.
