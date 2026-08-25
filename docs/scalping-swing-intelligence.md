@@ -107,6 +107,36 @@ After publication propagation on 2026-08-25, the bounded read-only published Swi
 
 All available published Swing bundles in that response retained **Kraken Spot** provenance under the existing controlled Binance HTTP 451 fallback policy. There was no qualified plan, therefore no Paper Trade action was exposed or attempted. A separate unauthenticated, read-only `crypto.paperPortfolio` production request returned **HTTP 401**, preserving the protected account boundary. The published browser shell showed the existing billing/limitation banner and `RECONNECTING` state, so the visual client did not receive a server-validated response during the browser observation; it retained its loading state rather than creating rows. The direct public server query above is the authoritative production verification record.
 
+## Phase 9 — Potential Trade Intelligence and Setup Readiness
+
+Phase 9 upgrades `OPPORTUNITY_DISCOVERY_V2` with a separate deterministic `SETUP_READINESS_V1` interpretation. It does **not** replace Opportunity Score, Regime Score, setup quality, the existing level engine, or any eligibility decision. It receives only the existing validated Swing plan, diagnostics, multi-timeframe analyses, provider bundle metadata, market-regime classification, and retained technical candidate when the unchanged setup engine actually derived one.
+
+| Readiness component | Maximum | Deterministic source and rule |
+|---|---:|---|
+| Timeframe alignment | 35 | `35 × aligned directional Swing timeframes / 3`; no alignment is inferred. |
+| Positive evidence | 20 | 5 points per recorded positive analysis reason, capped at four reasons. |
+| Technical candidate | 20 | 20 for an existing supported entry/target/invalidation candidate; 12 for a partial candidate; 0 otherwise. |
+| Existing first-target R:R | 15 | 15 when the existing first target is at least 1:1; 5 when a derived candidate remains below 1:1; 0 when absent. |
+| Regime compatibility | 10 | 10 for `RISK ON`, 5 for `SELECTIVE`, and 0 for `RISK OFF` or unavailable. |
+
+The readiness score is the displayed component sum, capped at 100. It is deliberately a **ranking and explanation aid only**. Mandatory data/coherence failures override it to `DATA_UNAVAILABLE`; invalid structure overrides it to `INVALID`; and no readiness value can create a trade, bypass a risk-off restriction, override Opportunity Score, or change the minimum 1:1 R:R rule.
+
+| Discovery status | Readiness state | Interpretation and action boundary |
+|---|---|---|
+| `DATA_UNAVAILABLE` | `DATA_UNAVAILABLE` | Required current coherent input failed. Dependent plan values are unavailable. |
+| `NO TRADE` | `INVALID` | Existing direction, stop, or forward-target structure failed. No candidate is recovered by loosening conditions. |
+| `WATCH` | `EARLY` or `WATCH` | Early evidence only. No entry or Paper Trading eligibility. |
+| `POTENTIAL` | `NEAR_READY` | Positive evidence and missing completed-candle confirmations are shown; it remains non-actionable. |
+| `QUALIFIED` | `READY` | Every existing qualification condition passed. Existing server revalidation and explicit Paper Trading confirmation still apply. |
+
+When the existing level engine derives a real candidate before the existing first-target R:R gate passes, Phase 9 may show the same execution-EMA entry zone, structural pivot plus 0.25 ATR invalidation, and one to three existing structure/ATR targets. It labels the information **Conditional technical plan — not a trade instruction**, retains its provider, `1H / 4H / 1D` timeframes, timestamp, freshness, and validation state, and shows target distance and R multiple. It shows no level when that original engine did not derive one and never forces three targets. Current Trade Health remains manual and compares live validated inputs only against an immutable **qualified Paper Trade** snapshot; prospective plans display `WAITING` or `UNAVAILABLE`, not a fabricated health result.
+
+Potential alerts expose only `potentialAlertEligible: false`; no alert, notification, poll, scheduler, automatic Paper Trade, close, reversal, or real-trading behavior was added. The dedicated low-timeframe Scalping layer remains separate: until a complete native provider bundle validates, it stays **NO TRADE — DATA UNAVAILABLE** and is never represented as `15M / 1H / 4H` data.
+
+### Phase 9 Local Evidence Record
+
+On 2026-08-25, a bounded read-only local Swing query returned **12 evaluated assets, 0 Qualified, 11 Potential, 1 Watch, 0 No Trade, and 0 Data Unavailable**. The existing provider was Binance Futures with valid coherent `1H / 4H / 1D` bundles. The current regime was `RISK OFF`, therefore every observation remained restricted and no Paper Trade, alert, setting, schedule, provider-policy change, or data write occurred. For BTC, ETH, SOL, AAVE, and DOT, Phase 9 exposed their exact readiness score, missing completed-candle confirmation, and unavailable conditional-plan fields rather than inventing entries, targets, or invalidations.
+
 ## Provenance and Current Limitations
 
 Each setup displays provider, retrieval timestamp, timeframe configuration, market context, and current minimum timeframe. The visual verification on 2026-08-25 showed the live Scalping workspace ranking all 12 supported assets but correctly presenting **NO TRADE** for neutral/unsupported directions or unavailable technical levels. No Paper Trade was opened during validation.

@@ -54,6 +54,21 @@ const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min,
 
 export type TradeSetupLevel = { label: "ENTRY LOW" | "ENTRY HIGH" | "PREFERRED ENTRY" | "STOP" | "INVALIDATION" | "TP1" | "TP2" | "TP3"; price: number; reason: string; priority: "PRIMARY" | "SECONDARY" | "EXTENDED" };
 
+/**
+ * Read-only technical evidence retained when the existing setup engine can
+ * derive levels but does not qualify the setup. It never makes a plan
+ * actionable and is not used by Paper Trading or scoring.
+ */
+export type TradeSetupReadinessCandidate = {
+  availability: "SUPPORTED" | "PARTIAL" | "UNAVAILABLE";
+  reason: string;
+  entryZone: TradeSetupPlan["entryZone"];
+  stop: TradeSetupLevel | null;
+  invalidation: TradeSetupLevel | null;
+  targets: TradeSetupLevel[];
+  rewardRisk: number | null;
+};
+
 export type TradeSetupPlan = {
   engineVersion: typeof TRADE_SETUP_ENGINE_VERSION;
   mode: TradeSetupMode;
@@ -84,11 +99,13 @@ export type TradeSetupPlan = {
   regimeClassification: MarketRegime["classification"] | null;
   marketContext: "SUPPORTIVE" | "NEUTRAL" | "HOSTILE" | "UNAVAILABLE";
   tradeSetupQuality: number | null;
+  currentPrice: number | null;
   entryZone: { low: number; high: number; preferred: number; reason: string } | null;
   stop: TradeSetupLevel | null;
   invalidation: TradeSetupLevel | null;
   targets: TradeSetupLevel[];
   rewardRisk: number | null;
+  readinessCandidate: TradeSetupReadinessCandidate | null;
   evidence: string[];
   risks: string[];
   unavailable: string[];
@@ -99,7 +116,7 @@ export type TradeSetupPlan = {
 };
 
 type DerivedLevels = Pick<TradeSetupPlan, "entryZone" | "stop" | "invalidation" | "targets" | "rewardRisk">;
-type LevelDerivation = { state: "VALID" | "NO_PIVOT" | "INVALID_STOP" | "NO_TARGET" | "RR_BELOW_MINIMUM"; levels: DerivedLevels | null; preferred: number | null; pivot: number | null; stopPrice: number | null; firstTarget: number | null; rewardRisk: number | null };
+type LevelDerivation = { state: "VALID" | "NO_PIVOT" | "INVALID_STOP" | "NO_TARGET" | "RR_BELOW_MINIMUM"; levels: DerivedLevels | null; candidate: TradeSetupReadinessCandidate | null; preferred: number | null; pivot: number | null; stopPrice: number | null; firstTarget: number | null; rewardRisk: number | null };
 const MINIMUM_REWARD_RISK = 1;
 
 function dataBundleForPlan(bundle: LiveOhlcvBundle | null): TradeSetupPlan["dataBundle"] {
@@ -138,11 +155,13 @@ function emptyPlan(mode: TradeSetupMode, row: ScannerRow | null, regime: MarketR
     regimeClassification: regime?.classification ?? null,
     marketContext: regime ? (regime.classification === "RISK ON" ? "SUPPORTIVE" : regime.classification === "RISK OFF" ? "HOSTILE" : "NEUTRAL") : "UNAVAILABLE",
     tradeSetupQuality: null,
+    currentPrice: row?.asset.price ?? null,
     entryZone: null,
     stop: null,
     invalidation: null,
     targets: [],
     rewardRisk: null,
+    readinessCandidate: null,
     evidence: [],
     risks: [],
     unavailable: [reason],
@@ -205,24 +224,23 @@ function buildLevels(direction: TradeSetupDirection, candles: Candle[], currentP
   const pivot = lastPivot(candles, direction === "LONG" ? "low" : "high");
   const buffer = atr * 0.25;
   const stopPrice = pivot === null ? null : direction === "LONG" ? pivot - buffer : pivot + buffer;
-  if (pivot === null) return { state: "NO_PIVOT", levels: null, preferred: round(ema20, 8), pivot: null, stopPrice: null, firstTarget: null, rewardRisk: null };
-  if (stopPrice === null || (direction === "LONG" ? stopPrice >= entryLow : stopPrice <= entryHigh)) return { state: "INVALID_STOP", levels: null, preferred: round(ema20, 8), pivot, stopPrice, firstTarget: null, rewardRisk: null };
+  if (pivot === null) return { state: "NO_PIVOT", levels: null, candidate: null, preferred: round(ema20, 8), pivot: null, stopPrice: null, firstTarget: null, rewardRisk: null };
+  if (stopPrice === null || (direction === "LONG" ? stopPrice >= entryLow : stopPrice <= entryHigh)) return { state: "INVALID_STOP", levels: null, candidate: null, preferred: round(ema20, 8), pivot, stopPrice, firstTarget: null, rewardRisk: null };
   const perUnitRisk = Math.abs(preferred - stopPrice);
-  if (!Number.isFinite(perUnitRisk) || perUnitRisk <= 0) return { state: "INVALID_STOP", levels: null, preferred, pivot, stopPrice, firstTarget: null, rewardRisk: null };
+  if (!Number.isFinite(perUnitRisk) || perUnitRisk <= 0) return { state: "INVALID_STOP", levels: null, candidate: null, preferred, pivot, stopPrice, firstTarget: null, rewardRisk: null };
+  const entryZone = { low: round(entryLow, 8), high: round(entryHigh, 8), preferred, reason: "Current price and execution-timeframe EMA20 define the validated timing zone." };
+  const stop = { label: "STOP" as const, price: round(stopPrice, 8), reason: "Recent structural pivot with a 0.25 ATR volatility buffer.", priority: "PRIMARY" as const };
+  const invalidation = { label: "INVALIDATION" as const, price: round(stopPrice, 8), reason: "Crossing this structural level invalidates the recorded setup context.", priority: "PRIMARY" as const };
   const candidates = historicalLevels(candles, direction === "LONG" ? "high" : "low", direction, preferred);
   const extensions = [2, 3, 4].map(multiplier => round(direction === "LONG" ? preferred + atr * multiplier : preferred - atr * multiplier, 8));
   const prices = Array.from(new Set([...candidates, ...extensions])).filter(price => direction === "LONG" ? price > preferred : price < preferred).slice(0, 3);
-  if (!prices.length) return { state: "NO_TARGET", levels: null, preferred, pivot, stopPrice, firstTarget: null, rewardRisk: null };
+  if (!prices.length) return { state: "NO_TARGET", levels: null, candidate: { availability: "PARTIAL", reason: "A validated entry zone and structural invalidation exist, but no forward technical target was derivable.", entryZone, stop, invalidation, targets: [], rewardRisk: null }, preferred, pivot, stopPrice, firstTarget: null, rewardRisk: null };
   const targets = prices.map((price, index) => ({ label: (`TP${index + 1}` as "TP1" | "TP2" | "TP3"), price, reason: candidates.includes(price) ? "Nearest validated swing structure" : "ATR-based volatility extension", priority: index === 0 ? "PRIMARY" as const : index === 1 ? "SECONDARY" as const : "EXTENDED" as const }));
   const rr = Math.abs(targets[0].price - preferred) / perUnitRisk;
-  if (!Number.isFinite(rr) || rr < MINIMUM_REWARD_RISK) return { state: "RR_BELOW_MINIMUM", levels: null, preferred, pivot, stopPrice, firstTarget: targets[0]?.price ?? null, rewardRisk: Number.isFinite(rr) ? round(rr, 2) : null };
-  return { state: "VALID", preferred, pivot, stopPrice, firstTarget: targets[0]?.price ?? null, rewardRisk: round(rr, 2), levels: {
-    entryZone: { low: round(entryLow, 8), high: round(entryHigh, 8), preferred, reason: "Current price and execution-timeframe EMA20 define the validated timing zone." },
-    stop: { label: "STOP" as const, price: round(stopPrice, 8), reason: "Recent structural pivot with a 0.25 ATR volatility buffer.", priority: "PRIMARY" as const },
-    invalidation: { label: "INVALIDATION" as const, price: round(stopPrice, 8), reason: "Crossing this structural level invalidates the recorded setup context.", priority: "PRIMARY" as const },
-    targets,
-    rewardRisk: round(rr, 2),
-  } };
+  const normalizedRewardRisk = Number.isFinite(rr) ? round(rr, 2) : null;
+  const candidate = { availability: normalizedRewardRisk !== null && normalizedRewardRisk >= MINIMUM_REWARD_RISK ? "SUPPORTED" as const : "PARTIAL" as const, reason: normalizedRewardRisk !== null && normalizedRewardRisk >= MINIMUM_REWARD_RISK ? "Validated entry, target path, and structural invalidation are available from existing setup methodology." : "Validated entry, target path, and structural invalidation are available, but the existing first-target minimum R:R is not met.", entryZone, stop, invalidation, targets, rewardRisk: normalizedRewardRisk };
+  if (normalizedRewardRisk === null || normalizedRewardRisk < MINIMUM_REWARD_RISK) return { state: "RR_BELOW_MINIMUM", levels: null, candidate, preferred, pivot, stopPrice, firstTarget: targets[0]?.price ?? null, rewardRisk: normalizedRewardRisk };
+  return { state: "VALID", candidate, preferred, pivot, stopPrice, firstTarget: targets[0]?.price ?? null, rewardRisk: normalizedRewardRisk, levels: { entryZone, stop, invalidation, targets, rewardRisk: normalizedRewardRisk } };
 }
 
 const diagnostic = (key: TradeSetupCondition["key"], label: string, status: TradeSetupDiagnosticStatus, actual: string, required: string, detail: string): TradeSetupCondition => ({ key, label, status, actual, required, detail });
@@ -373,7 +391,7 @@ export function buildTradeSetupPlan(mode: TradeSetupMode, row: ScannerRow, regim
   const atr = calculateAtr(candles);
   if (atr === null || atr <= 0) return withDiagnostics({ ...emptyPlan(mode, row, regime, "ATR is unavailable on the validated execution timeframe, so technical levels cannot be derived.", "UNAVAILABLE", bundle), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime, atr);
   const derivation = buildLevels(direction, candles, row.asset.price, atr);
-  if (!derivation.levels) return withDiagnostics({ ...emptyPlan(mode, row, regime, "A structurally valid stop and at least one positive risk/reward target could not be derived; NO TRADE.", "UNAVAILABLE", bundle), executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime, atr, derivation);
+  if (!derivation.levels) return withDiagnostics({ ...emptyPlan(mode, row, regime, "A structurally valid stop and at least one positive risk/reward target could not be derived; NO TRADE.", "LIVE", bundle), currentPrice: row.asset.price, readinessCandidate: derivation.candidate, executionState: execution, confirmationState: confirmation, contextState: context, dataTimestamp: timestamp, provider }, row, regime, atr, derivation);
   const levels = derivation.levels;
   const setupQuality = quality(direction, execution, confirmation, context, levels.rewardRisk!, regime);
   const evidence = [
@@ -409,7 +427,9 @@ export function buildTradeSetupPlan(mode: TradeSetupMode, row: ScannerRow, regim
     regimeClassification: regime?.classification ?? null,
     marketContext: contextLabel(regime),
     tradeSetupQuality: setupQuality,
+    currentPrice: row.asset.price,
     ...levels,
+    readinessCandidate: derivation.candidate,
     evidence,
     risks,
     unavailable: [],

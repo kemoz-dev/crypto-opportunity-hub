@@ -38,6 +38,8 @@ describe("trade setup intelligence", () => {
     expect(unavailable.actionable).toBe(false);
     expect(unavailable.direction).toBe("NO TRADE");
     expect(unavailable.targets).toEqual([]);
+    expect(unavailable.readinessCandidate).toMatchObject({ availability: "PARTIAL", entryZone: expect.any(Object), invalidation: expect.any(Object), rewardRisk: expect.any(Number) });
+    expect(unavailable.readinessCandidate?.rewardRisk).toBeLessThan(1);
     expect(unavailable.diagnostics.find(condition => condition.key === "structural_stop")?.status).toBe("PASSED");
     expect(unavailable.diagnostics.find(condition => condition.key === "risk_reward")).toMatchObject({ status: "FAILED" });
     expect(unavailable.diagnostics.find(condition => condition.key === "risk_reward")?.required).toContain("1:1");

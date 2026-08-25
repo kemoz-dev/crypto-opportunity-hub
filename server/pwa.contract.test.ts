@@ -77,11 +77,26 @@ describe("Phase 2 secure PWA contract", () => {
     expect(discovery).not.toContain("fetch(");
     expect(discovery).not.toContain("api.bybit.com");
     expect(discovery).toContain("DATA UNAVAILABLE");
-    expect(asset).toContain("Current setup · Swing discovery");
+    expect(asset).toContain("Setup plan · validated Swing evidence");
     expect(asset).toContain("Paper trade qualified Swing");
     expect(paper).toContain("No qualified paper-trade setup selected");
     expect(serverPaper).toContain("assertQualifiedPaperTradeContext(setupMode)");
     expect(mobile).toContain('label: "Discovery"');
+  });
+
+  it("keeps Phase 9 readiness and conditional plans server-derived, non-actionable, and low-timeframe-safe", () => {
+    const discovery = read("client/src/components/crypto/OpportunityDiscoveryWorkspace.tsx");
+    const swing = read("client/src/components/crypto/TradeSetupWorkspace.tsx");
+    const lowTimeframe = read("client/src/components/crypto/LowTimeframeScalpingWorkspace.tsx");
+    expect(discovery).toContain("setupReadiness");
+    expect(discovery).toContain("potentialAlertEligible");
+    expect(discovery).toContain("Conditional technical plan — not a trade instruction");
+    expect(discovery).not.toContain("api.bybit.com");
+    expect(discovery).not.toContain("fetch(");
+    expect(swing).toContain("Conditional technical plan — not eligible for Paper Trading");
+    expect(lowTimeframe).toContain("Scalping Intelligence data is unavailable.");
+    expect(lowTimeframe).toContain("No fallback, fabricated, resampled, stale, or mixed-provider setup is shown.");
+    expect(lowTimeframe).not.toContain("15M / 1H / 4H");
   });
 
   it("does not retain the client-side user mirror after logout and avoids server secret references", () => {
