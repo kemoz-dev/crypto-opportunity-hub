@@ -147,3 +147,8 @@
 - [x] Route existing Manus scheduler, storage, and owner-notification integrations through provider-independent server adapters while retaining current production adapters and scheduled callback protections.
 - [x] Formalize portable server contracts for Paper Trading, Asset Intelligence, and Research Lab without changing their authoritative calculations, records, or business rules.
 - [x] Add focused tests, security checks, documentation, full validation, visual verification, and a reversible published Phase 1 release with no schema migration.
+- [x] Audit the current client shell, mutations, workspaces, charts, and authentication flow for secure PWA and read-only-offline boundaries without changing business logic.
+- [x] Add a versioned manifest, generated icons, Apple/iOS metadata, safe-area styling, conservative static-only service worker, and controlled update registration without caching authenticated API data.
+- [x] Add an explicit offline/read-only presentation state with last-known timestamps and online-only guards for Paper Trading, alerts, settings, and Research Lab mutations.
+- [x] Complete an iPhone/iPad-responsive UX pass for full-screen workspaces, Paper Trading, Asset Intelligence, Research Lab, charts, touch targets, semantics, and accessible status labels.
+- [x] Add PWA/offline/cache/update/security tests and documentation, run full validation and browser/device-class checks, then publish a reversible Phase 2 release without Tauri, a native wrapper, a schema migration, or a new identity provider.

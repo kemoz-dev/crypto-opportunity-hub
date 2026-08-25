@@ -66,6 +66,9 @@ const trpcClient = trpc.createClient({
         return {};
       },
       fetch(input, init) {
+        if (!navigator.onLine && (init?.method ?? "GET").toUpperCase() !== "GET") {
+          return Promise.reject(new Error("Offline read-only mode blocks account and trading changes."));
+        }
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",

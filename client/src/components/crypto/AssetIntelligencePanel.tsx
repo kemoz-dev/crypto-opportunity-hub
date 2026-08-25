@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { usePwaStatus } from "@/pwa/PwaStatus";
 import type { ScannerRow, Timeframe } from "@shared/crypto";
 import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, ChartNoAxesCombined, CircleHelp, Database, FileWarning, Gauge, ShieldAlert, WalletCards } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -17,8 +18,9 @@ const display = (value: number | null | undefined, suffix = "") => value === nul
 const time = (value: number | null | undefined) => value ? new Date(value).toLocaleString() : "UNAVAILABLE";
 
 export function AssetIntelligencePanel({ row, open, onOpenChange, onPaperTrade }: Props) {
+  const { online } = usePwaStatus();
   const [timeframe, setTimeframe] = useState<Timeframe>("4h");
-  const detail = trpc.crypto.assetIntelligence.useQuery({ assetId: row?.asset.id ?? "bitcoin", timeframe }, { enabled: open && Boolean(row), staleTime: 45_000, refetchOnWindowFocus: false });
+  const detail = trpc.crypto.assetIntelligence.useQuery({ assetId: row?.asset.id ?? "bitcoin", timeframe }, { enabled: open && Boolean(row) && online, staleTime: 45_000, refetchOnWindowFocus: false });
   const data = detail.data;
   const score = data?.score ?? row?.score ?? null;
   const headlineState = data?.header.ohlcvState ?? "UNAVAILABLE";
@@ -31,6 +33,6 @@ function MultiTimeframeMatrix({ rows }: { rows: Array<{ timeframe: string; trend
 function SignalChecklist({ rows }: { rows: Array<{ label: string; state: string; detail: string; contribution: number; maximum: number }> }) { return <section className="rounded-xl border border-white/[.07] bg-white/[.02] p-4"><span className="text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-200">Signal checklist</span><div className="mt-3 grid gap-2 md:grid-cols-2">{rows.length ? rows.map(item => <div key={item.label} className="rounded-lg border border-white/[.06] bg-black/10 p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-slate-200">{item.label}</span><span className={item.state === "CONFIRMED" ? "text-emerald-200" : item.state === "NOT CONFIRMED" ? "text-rose-200" : "text-slate-400"}>{item.state}</span></div><p className="mt-1 text-[11px] leading-4 text-slate-500">{item.detail}</p><p className="mt-2 font-mono text-[10px] text-slate-400">{item.contribution}/{item.maximum} existing contribution</p></div>) : <p className="text-xs text-slate-500">UNAVAILABLE — no current technical analysis exists for this timeframe.</p>}</div></section>; }
 function Info({ label, value }: { label: string; value: string }) { return <div className="flex items-start justify-between gap-4 border-b border-white/[.055] pb-2 last:border-0 last:pb-0"><span className="text-slate-500">{label}</span><span className="max-w-[65%] text-right font-mono text-slate-200">{value}</span></div>; }
 function Mini({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-white/[.07] bg-black/10 px-3 py-2"><span className="block text-[9px] font-semibold uppercase tracking-[.13em] text-slate-500">{label}</span><span className="mt-1 block truncate font-mono text-xs text-slate-100">{value}</span></div>; }
-function Tag({ label, tone }: { label: string; tone: "emerald" | "amber" | "rose" | "cyan" }) { const styles = { emerald: "border-emerald-300/20 text-emerald-200", amber: "border-amber-300/20 text-amber-200", rose: "border-rose-300/20 text-rose-200", cyan: "border-cyan-300/20 text-cyan-200" }; return <span className={cn("rounded-full border px-2.5 py-1", styles[tone])}>{label}</span>; }
+function Tag({ label, tone }: { label: string; tone: "emerald" | "amber" | "rose" | "cyan" }) { const { online, lastOnlineAt } = usePwaStatus(); const styles = { emerald: "border-emerald-300/20 text-emerald-200", amber: "border-amber-300/20 text-amber-200", rose: "border-rose-300/20 text-rose-200", cyan: "border-cyan-300/20 text-cyan-200" }; const offlineSuffix = online || !label.startsWith("OHLCV") ? "" : ` · LAST KNOWN DATA ${lastOnlineAt ? new Date(lastOnlineAt).toLocaleString() : "UNAVAILABLE"}`; return <span className={cn("rounded-full border px-2.5 py-1", styles[tone])}>{label}{offlineSuffix}</span>; }
 function MetricBlock({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="rounded-xl border border-white/[.07] bg-white/[.02] p-4"><span className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">{label}</span><strong className="mt-2 block font-mono text-base text-slate-100">{value}</strong><p className="mt-1 text-[11px] text-slate-500">{detail}</p></div>; }
 function Unavailable({ message }: { message: string }) { return <div className="grid min-h-[500px] place-items-center px-6 text-center"><div><CircleHelp className="mx-auto h-6 w-6 text-slate-600" /><p className="mt-3 text-sm font-medium text-slate-300">Asset Intelligence unavailable</p><p className="mx-auto mt-2 max-w-md text-xs leading-5 text-slate-500">{message}</p></div></div>; }

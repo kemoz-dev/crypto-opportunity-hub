@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Crypto Opportunity Hub",
+  "short_name": "Crypto Hub",
+  "description": "Explainable crypto market research with server-authoritative analysis and simulated paper trading.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#060a12",
+  "theme_color": "#08101d",
+  "icons": [
+    {
+      "src": "/manus-storage/crypto-hub-pwa-icon_bc898f39.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
