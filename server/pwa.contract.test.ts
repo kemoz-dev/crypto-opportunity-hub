@@ -66,6 +66,24 @@ describe("Phase 2 secure PWA contract", () => {
     expect(lowTimeframe).not.toContain("fetch(");
   });
 
+  it("keeps Phase 8 discovery server-derived, mobile-accessible, and qualified-only for Paper Trading", () => {
+    const discovery = read("client/src/components/crypto/OpportunityDiscoveryWorkspace.tsx");
+    const asset = read("client/src/components/crypto/AssetIntelligencePanel.tsx");
+    const paper = read("client/src/components/crypto/PaperTradingWorkspace.tsx");
+    const mobile = read("client/src/pwa/PwaMobileNavigation.tsx");
+    const serverPaper = read("server/crypto/paperTrading.ts");
+    expect(discovery).toContain("trpc.crypto.tradeSetups.useQuery({ mode: \"SWING\" }");
+    expect(discovery).toContain("enabled: online");
+    expect(discovery).not.toContain("fetch(");
+    expect(discovery).not.toContain("api.bybit.com");
+    expect(discovery).toContain("DATA UNAVAILABLE");
+    expect(asset).toContain("Current setup · Swing discovery");
+    expect(asset).toContain("Paper trade qualified Swing");
+    expect(paper).toContain("No qualified paper-trade setup selected");
+    expect(serverPaper).toContain("assertQualifiedPaperTradeContext(setupMode)");
+    expect(mobile).toContain('label: "Discovery"');
+  });
+
   it("does not retain the client-side user mirror after logout and avoids server secret references", () => {
     const auth = read("client/src/_core/hooks/useAuth.ts");
     const pwaSources = [

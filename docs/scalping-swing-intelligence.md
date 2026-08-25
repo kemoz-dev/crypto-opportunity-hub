@@ -79,6 +79,28 @@ The Phase 7 production check was read-only and used the already published Bybit-
 
 > **Phase 7 decision:** No provider is qualified for production 1M/3M/5M Scalping use. The stop condition is met: **PROVIDER BLOCKED — HTTP 403** for the only previously documented production data path, while alternative candidates lack a confirmed compliant-use basis. The existing UI remains truthful: no entry, stop, target, R:R, or health recommendation appears without a valid complete bundle. The existing Paper Trading confirmation remains protected and can only consume a qualified plan; no Paper Trade was created. PWA caching remains static-shell-only and does not cache provider/API responses.
 
+## Phase 8 — Opportunity Discovery and Setup Maturity
+
+Phase 8 adds `OPPORTUNITY_DISCOVERY_V1`, a separate server-authoritative **interpretation** of the existing Swing `1H / 4H / 1D` setup response. It does not calculate a score, indicator, provider response, candle, entry rule, target, stop, probability, or Paper Trading economic term. It consumes only already validated scanner/setup diagnostics, technical states, provenance, the existing market regime, and existing Opportunity Score for within-state ordering.
+
+| Discovery state | Meaning | Entry and Paper Trading treatment |
+|---|---|---|
+| `QUALIFIED` | Every existing validated setup condition, level, target, and unchanged minimum R:R test passed. | Existing plan levels may be displayed; manual Paper Trading is available only after the server revalidates the matching setup/direction. |
+| `POTENTIAL` | Valid technical evidence is developing, but a listed existing condition remains unmet, including a constrained R:R or a `RISK OFF` market restriction. | No entry is displayed as an instruction. The interface shows only conditional, completed-candle upgrade requirements. |
+| `WATCH` | Early or incomplete validated technical evidence exists without a completed directional thesis. | No entry, level, target, or Paper Trading action is available. |
+| `NO TRADE` | Valid data was present but a structural stop/target or directional thesis failed the existing method. | No plan is constructed or recovered by changing thresholds. |
+| `DATA UNAVAILABLE` | Required bundle, freshness, price, analysis, or provider coherence failed. | No technical evaluation or opportunity claim is inferred from the missing/stale/incoherent input. |
+
+`EARLY`, `DEVELOPING`, `QUALIFIED`, `INVALIDATED`, and `UNAVAILABLE` are maturity labels, not forecasts or numerical scores. Under **RISK OFF**, technically interesting `POTENTIAL` and `WATCH` observations remain visible but explicitly `RESTRICTED`; they cannot be qualified or initiate Paper Trading. Potential and Watch cards show deterministic **What would change?** conditions. They do not show a forced entry zone, target, stop, or trade probability.
+
+The Paper Trading server now requires an explicit `SCALP`, `SWING`, or `LOW_TIMEFRAME_SCALPING` qualified setup context before it opens a simulated position. The original server-side revalidation, matching-side check, ownership enforcement, 4H-ATR/2R accounting, immutable snapshot, manual close, Trade Health, and real-trading prohibition remain unchanged. Generic dashboard and Asset Intelligence entry surfaces now direct the user to a current Qualified setup instead of presenting a generic simulated-entry form.
+
+The Opportunity Discovery workspace is available as a desktop navigation destination, dashboard card, and secondary mobile PWA destination. It makes no browser-side provider call and has no cache write path. Asset Intelligence adds a **Current Setup · Swing discovery** section with the same state, maturity, exact reason, provenance-linked conditions, and qualified-only Paper Trading action. The existing score, technical matrix, chart, risk/context, and source-evidence panels remain read-only and separate.
+
+### Local Evidence Record
+
+On 2026-08-25, a bounded read-only local `crypto.tradeSetups({ mode: "SWING" })` query returned a valid current `RISK OFF` regime and 12 complete Swing discovery interpretations. The response contained **0 QUALIFIED**, **11 POTENTIAL**, **1 WATCH**, **0 NO TRADE**, and **0 DATA UNAVAILABLE**. All 12 were marked `RESTRICTED` by the current RISK OFF regime; no Paper Trade, alert, schedule, setting, data write, provider-policy change, or real-trading action occurred. The observed providers remained the existing core Binance Futures and controlled Kraken Spot fallback paths; Phase 8 did not alter their resolver policy.
+
 ## Provenance and Current Limitations
 
 Each setup displays provider, retrieval timestamp, timeframe configuration, market context, and current minimum timeframe. The visual verification on 2026-08-25 showed the live Scalping workspace ranking all 12 supported assets but correctly presenting **NO TRADE** for neutral/unsupported directions or unavailable technical levels. No Paper Trade was opened during validation.

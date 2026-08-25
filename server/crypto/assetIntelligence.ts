@@ -1,8 +1,10 @@
 import type { DataStatus, ScannerResponse, ScannerRow, ScoringConfig, Timeframe } from "../../shared/crypto";
 import { DEFAULT_SCORING_CONFIG, SUPPORTED_TIMEFRAMES } from "../../shared/crypto";
-import { buildLiveScanner } from "./marketService";
+import { buildLiveScanner, getScannerLiveOhlcvBundle } from "./marketService";
 import { fetchValidatedLiveOhlcv } from "./providers";
 import { buildTechnicalChartSeries } from "./technical";
+import { getTradeSetupForRow } from "./tradeSetup";
+import { buildOpportunityDiscoveryItem } from "./opportunityDiscovery";
 
 export type PresentationState = "CURRENT" | "DELAYED" | "STALE" | "UNAVAILABLE";
 
@@ -97,6 +99,9 @@ export async function getAssetIntelligence(assetId: string, timeframe: Timeframe
   const row = scan.rows.find(candidate => candidate.asset.id === assetId);
   if (!row) throw new Error("Tracked asset was not found in the current scanner universe.");
   const minimumCandles = Math.max(config.indicator.emaSlow + 2, config.indicator.macdSlow + config.indicator.macdSignal + 2, 60);
-  const chart = await fetchValidatedLiveOhlcv(row.asset.symbol, timeframe, minimumCandles);
-  return buildExplainabilityPresentation(scan, row, timeframe, chart, config);
+  const [chart, swingPlan] = await Promise.all([
+    fetchValidatedLiveOhlcv(row.asset.symbol, timeframe, minimumCandles),
+    getTradeSetupForRow("SWING", row, scan.marketRegime, config, minimumCandles, getScannerLiveOhlcvBundle(scan, row.asset.symbol)),
+  ]);
+  return { ...buildExplainabilityPresentation(scan, row, timeframe, chart, config), currentSetup: buildOpportunityDiscoveryItem(swingPlan) };
 }

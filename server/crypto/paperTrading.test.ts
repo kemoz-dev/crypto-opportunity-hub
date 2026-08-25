@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildPaperPortfolioPresentation, buildPaperTradeSnapshot, calculatePaperEntryTerms, cloneImmutableEntrySnapshot } from "./paperTrading";
+import { assertQualifiedPaperTradeContext, buildPaperPortfolioPresentation, buildPaperTradeSnapshot, calculatePaperEntryTerms, cloneImmutableEntrySnapshot } from "./paperTrading";
 import { DEFAULT_SCORING_CONFIG, type MarketRegime, type ScannerRow } from "../../shared/crypto";
 import type { TradeSetupPlan } from "./tradeSetup";
 import type { LowTimeframeScalpingPlan } from "./lowTimeframeScalping";
 
 describe("paper trading integrity", () => {
+  it("requires an explicit qualified setup context before a simulated position can be opened", () => {
+    expect(() => assertQualifiedPaperTradeContext()).toThrow("current qualified setup context");
+    expect(assertQualifiedPaperTradeContext("SWING")).toBe("SWING");
+    expect(assertQualifiedPaperTradeContext("SCALP")).toBe("SCALP");
+  });
+
   it("derives symmetric 2R long and short terms from a recorded entry and ATR", () => {
     const long = calculatePaperEntryTerms(100, 2, "long", 100_000, 1);
     const short = calculatePaperEntryTerms(100, 2, "short", 100_000, 1);

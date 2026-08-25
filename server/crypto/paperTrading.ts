@@ -8,6 +8,11 @@ import { buildLowTimeframeTradeHealth, getLowTimeframeScalpingIntelligence, type
 
 export type PaperTradeSetupMode = TradeSetupMode | "LOW_TIMEFRAME_SCALPING";
 
+export function assertQualifiedPaperTradeContext(setupMode?: PaperTradeSetupMode) {
+  if (!setupMode) throw new Error("A current qualified setup context is required before opening a simulated position.");
+  return setupMode;
+}
+
 export type PaperTradeSnapshot = {
   scannerGeneratedAt: number;
   asset: { id: string; symbol: string; name: string; sector: string; price: number };
@@ -147,6 +152,7 @@ export async function openLivePaperTrade(userId: number, assetId: string, side: 
   const scan = await buildLiveScanner(false, configuration);
   const row = scan.rows.find(candidate => candidate.asset.id === assetId);
   if (!row?.score || row.asset.price === null) throw new Error("A current live score and price are required before opening a paper trade.");
+  assertQualifiedPaperTradeContext(setupMode);
   const portfolio = await getOrCreatePortfolio(userId, configuration.paperCapital);
   const atrPercent = row.score.technicalByTimeframe.find(item => item.timeframe === "4h")?.atrPercent ?? row.score.technicalByTimeframe.at(0)?.atrPercent ?? null;
   if (atrPercent === null) throw new Error("ATR is unavailable, so a risk-normalized stop cannot be calculated.");
