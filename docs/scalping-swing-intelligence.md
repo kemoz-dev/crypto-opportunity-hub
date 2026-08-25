@@ -56,6 +56,29 @@ The published `crypto.lowTimeframeScalping` route propagated after the Phase 6 c
 
 > **Production stop decision:** No current trustworthy low-timeframe provider bundle exists in the published runtime. The production layer must remain at **NO TRADE — DATA UNAVAILABLE**. No Binance/Kraken fallback, resampling, cache substitution, cross-provider combination, stale-data reuse, Paper Trade, scheduled task, alert, setting, or real-trading action was attempted. The implementation is retained because it fails closed with explicit provenance and diagnostics; enabling live Phase 6 plans requires future production-approved Bybit reachability or a newly authorized equivalent single-provider validation process.
 
+## Phase 7 — Provider Qualification and Production Reachability
+
+Phase 7 re-audited the Phase 6 boundary and investigated independently documented candidates. A candidate was not treated as qualified merely because it exposes labels for 1M, 3M, and 5M bars. Qualification requires technically valid native intervals, current complete volume-bearing candles, known symbol mapping, production reachability, one-provider coherence, and terms/jurisdiction suitability for the intended server-side use.
+
+| Provider | Native intervals in official documentation | Public market-data posture | Terms/operational qualification | Phase 7 decision |
+|---|---|---|---|---|
+| Bybit Spot | 1M, 3M, 5M | Existing Phase 6 public Kline path | Current published runtime returns HTTP 403 for every required request. | `UNAVAILABLE` — no bypass, retry policy change, or fallback. |
+| OKX | 1M, 3M, 5M | Official agreement says public Market Data can be accessed without a key. | Agreement also conditions API Services on verified-account/jurisdiction eligibility and limits the license to internal use unless separately authorized. This has not been established for Crypto Hub. | `REJECTED` — terms/access suitability unresolved; no production integration or probe. |
+| KuCoin Spot | 1min, 3min, 5min | Official Klines endpoint is public, IP-counted, and documents OHLCV plus turnover. | Terms describe Platform services for registered users and list jurisdiction restrictions. A compliant account/jurisdiction/usage basis has not been established. | `REJECTED` — terms/access suitability unresolved; no production integration or probe. |
+| Bitget Spot | 1m, 3m, 5m | Official public Candle endpoint documents OHLCV/turnover and 20 requests/sec/IP. | API terms prohibit availability/performance monitoring and repackaging/reselling API-related data, so Phase 7’s published qualification/presentation use cannot be cleared from the terms alone. | `REJECTED` — do not probe or integrate without written authorization. |
+
+The Phase 7 production check was read-only and used the already published Bybit-only Scalping query for the required five assets. It produced HTTP 200 from Crypto Hub and 25 recorded upstream Bybit HTTP 403 errors (each required native data request failed), yielding five missing bundles and five **NO TRADE — DATA UNAVAILABLE** results. No candle, volume, freshness, or OHLC interpretation was performed from the failed responses.
+
+| Asset | 1M | 3M | 5M | Volume | Fresh | Coherent | Result |
+|---|---|---|---|---|---|---|---|
+| BTC | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | Unavailable | Not evaluable | No | **NO TRADE — DATA UNAVAILABLE** |
+| ETH | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | Unavailable | Not evaluable | No | **NO TRADE — DATA UNAVAILABLE** |
+| SOL | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | Unavailable | Not evaluable | No | **NO TRADE — DATA UNAVAILABLE** |
+| AAVE | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | Unavailable | Not evaluable | No | **NO TRADE — DATA UNAVAILABLE** |
+| DOT | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | `UNAVAILABLE — HTTP 403` | Unavailable | Not evaluable | No | **NO TRADE — DATA UNAVAILABLE** |
+
+> **Phase 7 decision:** No provider is qualified for production 1M/3M/5M Scalping use. The stop condition is met: **PROVIDER BLOCKED — HTTP 403** for the only previously documented production data path, while alternative candidates lack a confirmed compliant-use basis. The existing UI remains truthful: no entry, stop, target, R:R, or health recommendation appears without a valid complete bundle. The existing Paper Trading confirmation remains protected and can only consume a qualified plan; no Paper Trade was created. PWA caching remains static-shell-only and does not cache provider/API responses.
+
 ## Provenance and Current Limitations
 
 Each setup displays provider, retrieval timestamp, timeframe configuration, market context, and current minimum timeframe. The visual verification on 2026-08-25 showed the live Scalping workspace ranking all 12 supported assets but correctly presenting **NO TRADE** for neutral/unsupported directions or unavailable technical levels. No Paper Trade was opened during validation.
@@ -83,3 +106,19 @@ Tauri remains **BLOCKED — AUTH HANDOFF DESIGN REQUIRED**. Phase 6 does not beg
 [3] [Bybit V5 API Rate Limit Rules](https://bybit-exchange.github.io/docs/v5/rate-limit)
 
 [4] [Bybit Terms of Service](https://www.bybit.com/en/help-center/article/Terms-of-Service)
+
+[5] [OKX API Guide — Market Candlesticks](https://www.okx.com/docs-v5/en/#rest-api-market-data-get-candlesticks)
+
+[6] [OKX API Agreement](https://www.okx.com/help/okx-api-agreement)
+
+[7] [KuCoin API — Get Klines](https://www.kucoin.com/docs-new/rest/spot-trading/market-data/get-klines)
+
+[8] [KuCoin API — Rate Limits](https://www.kucoin.com/docs-new/rate-limit)
+
+[9] [KuCoin Terms of Use](https://www.kucoin.com/legal/terms-of-use)
+
+[10] [Bitget API — Get Kline/Candlestick](https://www.bitget.com/api-doc/uta/public/Get-Candle-Data)
+
+[11] [Bitget API Key Terms of Use](https://www.bitget.com/support/articles/12560603797947)
+
+[12] [Bitget Terms of Use](https://www.bitget.com/support/articles/360014944032-terms-of-use)

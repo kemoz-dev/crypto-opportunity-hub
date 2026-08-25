@@ -54,6 +54,31 @@ describe("Bybit Spot low-timeframe provider contract", () => {
     expect(bundle.timeframes.find(item => item.timeframe === affected)).toMatchObject({ eligibleForScalping: false, errorClass: expectedError });
   });
 
+  it.each([
+    [401, "PROVIDER_REQUEST_FAILED"],
+    [403, "PROVIDER_REQUEST_FAILED"],
+    [429, "PROVIDER_RATE_LIMITED"],
+    [451, "PROVIDER_REQUEST_FAILED"],
+    [500, "PROVIDER_REQUEST_FAILED"],
+  ])("fails closed for upstream HTTP %s without a partial analysis", async (status, errorClass) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("provider failure", { status })));
+    const bundle = await fetchValidatedLowTimeframeBundle("BTC", 202);
+    expect(bundle).toMatchObject({ state: "MISSING", eligibleForScalping: false, coherent: false, seriesByTimeframe: {} });
+    expect(bundle.timeframes).toHaveLength(3);
+    expect(bundle.timeframes.every(item => item.state === "MISSING" && item.errorClass === errorClass && item.message?.includes(`HTTP ${status}`))).toBe(true);
+  });
+
+  it.each([
+    ["empty body", async () => new Response("", { status: 200 })],
+    ["malformed JSON", async () => new Response("{not-json", { status: 200 })],
+    ["timeout-like abort", async () => { throw new Error("request abort"); }],
+  ])("fails closed for %s", async (_label, responseFactory) => {
+    vi.stubGlobal("fetch", vi.fn(responseFactory));
+    const bundle = await fetchValidatedLowTimeframeBundle("BTC", 202);
+    expect(bundle).toMatchObject({ state: "MISSING", eligibleForScalping: false, coherent: false, seriesByTimeframe: {} });
+    expect(bundle.timeframes.every(item => item.eligibleForScalping === false && item.state === "MISSING")).toBe(true);
+  });
+
   it("rejects stale, duplicate/gapped, malformed, and future candle data before it can form a setup", () => {
     const now = Date.now();
     const interval = 60_000;
