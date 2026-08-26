@@ -17,6 +17,7 @@ import { getProviderMonitorSummary, listProviderMonitorHistory } from "../crypto
 import { getAssetIntelligence } from "../crypto/assetIntelligence";
 import { getTradeSetups } from "../crypto/tradeSetup";
 import { getLowTimeframeScalpingIntelligence } from "../crypto/lowTimeframeScalping";
+import { archiveSetupMonitor, createSetupMonitor, getSetupMonitorDetail, listActiveSetupMonitors, listSetupMonitorHistory, refreshSetupMonitor } from "../crypto/setupMonitor";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
 import { DEFAULT_SCORING_CONFIG } from "../../shared/crypto";
@@ -44,6 +45,12 @@ export const cryptoRouter = router({
   }),
   tradeSetups: publicProcedure.input(z.object({ mode: z.enum(["SCALP", "SWING"]) })).query(async ({ ctx, input }) => getTradeSetups(input.mode, ctx.user ? await getUserScoringConfig(ctx.user.id) : DEFAULT_SCORING_CONFIG)),
   lowTimeframeScalping: publicProcedure.input(z.object({ assetIds: z.array(z.string().min(1).max(96)).max(12).optional() }).optional()).query(async ({ ctx, input }) => getLowTimeframeScalpingIntelligence(ctx.user ? await getUserScoringConfig(ctx.user.id) : DEFAULT_SCORING_CONFIG, input?.assetIds)),
+  setupMonitorActive: protectedProcedure.query(({ ctx }) => listActiveSetupMonitors(ctx.user.id)),
+  setupMonitorHistory: protectedProcedure.query(({ ctx }) => listSetupMonitorHistory(ctx.user.id)),
+  setupMonitorDetail: protectedProcedure.input(z.object({ instanceId: z.number().int().positive() })).query(({ ctx, input }) => getSetupMonitorDetail(ctx.user.id, input.instanceId)),
+  createSetupMonitor: protectedProcedure.input(z.object({ assetId: z.string().min(1).max(96), mode: z.enum(["SCALP", "SWING"]) })).mutation(async ({ ctx, input }) => createSetupMonitor(ctx.user.id, input.assetId, input.mode, await getUserScoringConfig(ctx.user.id))),
+  refreshSetupMonitor: protectedProcedure.input(z.object({ instanceId: z.number().int().positive() })).mutation(async ({ ctx, input }) => refreshSetupMonitor(ctx.user.id, input.instanceId, await getUserScoringConfig(ctx.user.id))),
+  archiveSetupMonitor: protectedProcedure.input(z.object({ instanceId: z.number().int().positive() })).mutation(({ ctx, input }) => archiveSetupMonitor(ctx.user.id, input.instanceId)),
   assetIntelligence: publicProcedure.input(z.object({ assetId: z.string().min(1), timeframe: z.enum(["15m", "1h", "4h", "1d"]).default("4h") })).query(async ({ ctx, input }) => getAssetIntelligence(input.assetId, input.timeframe, ctx.user ? await getUserScoringConfig(ctx.user.id) : undefined)),
   providerMonitorSummary: publicProcedure.query(() => getProviderMonitorSummary()),
   providerMonitorHistory: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional()).query(({ input }) => listProviderMonitorHistory(input?.limit ?? 20)),

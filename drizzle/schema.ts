@@ -212,6 +212,55 @@ export const paperTradeMonitoringEvents = mysqlTable("paperTradeMonitoringEvents
   index("paper_trade_monitoring_trade_time_idx").on(table.tradeId, table.createdAt),
 ]);
 
+export const setupMonitorInstances = mysqlTable("setupMonitorInstances", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  setupType: varchar("setupType", { length: 32 }).notNull(),
+  timeframe: varchar("timeframe", { length: 12 }).notNull(),
+  immutableCreationSnapshot: json("immutableCreationSnapshot").notNull(),
+  originalStatus: varchar("originalStatus", { length: 32 }).notNull(),
+  originalReadinessSnapshot: json("originalReadinessSnapshot"),
+  originalOpportunitySnapshot: json("originalOpportunitySnapshot"),
+  originalTechnicalEvidence: json("originalTechnicalEvidence"),
+  originalEntryZone: json("originalEntryZone"),
+  originalStopLoss: double("originalStopLoss"),
+  originalTargets: json("originalTargets"),
+  originalInvalidationCondition: json("originalInvalidationCondition"),
+  originalProviderProvenance: json("originalProviderProvenance"),
+  currentStatus: varchar("currentStatus", { length: 32 }).notNull(),
+  currentReadinessSnapshot: json("currentReadinessSnapshot"),
+  currentPrice: double("currentPrice"),
+  currentTechnicalState: json("currentTechnicalState"),
+  currentProviderProvenance: json("currentProviderProvenance"),
+  currentStateReason: text("currentStateReason"),
+  lastValidatedAt: timestamp("lastValidatedAt"),
+  terminalAt: timestamp("terminalAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("setup_monitor_user_status_idx").on(table.userId, table.currentStatus),
+  index("setup_monitor_user_updated_idx").on(table.userId, table.updatedAt),
+  index("setup_monitor_asset_time_idx").on(table.assetId, table.createdAt),
+]);
+
+export const setupMonitorEvents = mysqlTable("setupMonitorEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  instanceId: int("instanceId").notNull().references(() => setupMonitorInstances.id, { onDelete: "cascade" }),
+  eventKey: varchar("eventKey", { length: 160 }).notNull(),
+  eventType: varchar("eventType", { length: 40 }).notNull(),
+  reason: text("reason").notNull(),
+  relevantPrice: double("relevantPrice"),
+  relevantTimeframe: varchar("relevantTimeframe", { length: 12 }),
+  provider: varchar("provider", { length: 96 }),
+  provenance: json("provenance"),
+  freshness: varchar("freshness", { length: 32 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("setup_monitor_event_instance_key_unique").on(table.instanceId, table.eventKey),
+  index("setup_monitor_event_instance_time_idx").on(table.instanceId, table.createdAt),
+]);
+
 export const backtestRuns = mysqlTable("backtestRuns", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),

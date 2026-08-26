@@ -99,6 +99,24 @@ describe("Phase 2 secure PWA contract", () => {
     expect(lowTimeframe).not.toContain("15M / 1H / 4H");
   });
 
+  it("keeps Phase 10B Setup Monitor authenticated, server-derived, and offline-safe", () => {
+    const monitor = read("client/src/components/crypto/SetupMonitorWorkspace.tsx");
+    const navigation = read("client/src/pwa/PwaMobileNavigation.tsx");
+    const home = read("client/src/pages/Home.tsx");
+    const service = read("server/crypto/setupMonitor.ts");
+    expect(monitor).toContain("trpc.crypto.setupMonitorActive.useQuery");
+    expect(monitor).toContain("enabled: online");
+    expect(monitor).toContain("disabled={!online");
+    expect(monitor).toContain("Monitoring refresh, archive, and event writes are disabled offline");
+    expect(monitor).not.toContain("api.bybit.com");
+    expect(monitor).not.toContain("fetch(\"https://api");
+    expect(navigation).toContain('label: "Setup Monitor"');
+    expect(home).toContain('workspace=setup-monitor');
+    expect(service).toContain("eq(setupMonitorInstances.userId, userId)");
+    expect(service).toContain('event.key');
+    expect(service).toContain('currentStatus === "ARCHIVED"');
+  });
+
   it("does not retain the client-side user mirror after logout and avoids server secret references", () => {
     const auth = read("client/src/_core/hooks/useAuth.ts");
     const pwaSources = [

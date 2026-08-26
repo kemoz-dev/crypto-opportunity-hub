@@ -194,3 +194,45 @@ Tauri remains **BLOCKED — AUTH HANDOFF DESIGN REQUIRED**. Phase 6 does not beg
 [11] [Bitget API Key Terms of Use](https://www.bitget.com/support/articles/12560603797947)
 
 [12] [Bitget Terms of Use](https://www.bitget.com/support/articles/360014944032-terms-of-use)
+
+
+## Phase 10B — Authorized Persistence and Setup Monitor
+
+Phase 10B adds an authenticated, owner-scoped **Setup Monitor** for the existing Opportunity Discovery `POTENTIAL`, `QUALIFIED`, and `WATCH` observations. It is a persistence and re-evaluation layer only. It does not alter Opportunity Score, Regime Score, setup thresholds, provider policy, indicator formulas, alerts, scheduled ingestion, Research Lab, Paper Trading economics, or the real-trading prohibition.
+
+| Boundary | Phase 10B behavior |
+|---|---|
+| Authorization | Every Setup Monitor procedure is protected by authenticated tRPC access and filters by the authenticated owner/user identifier. Unauthenticated requests are rejected by the existing auth middleware. |
+| Save eligibility | Only existing `POTENTIAL`, `QUALIFIED`, or `WATCH` discovery results can be saved. `NO TRADE`, `DATA UNAVAILABLE`, and unsupported setup contexts are rejected. |
+| Original snapshot | The save operation stores the original discovery/readiness evidence as an immutable JSON snapshot, including setup identity, scores, regime, technical evidence, provenance, timestamps, and conditional-plan fields. It is never overwritten by refresh. |
+| Current state | Refresh performs a new server-side evaluation through the authoritative Phase 9 engine and writes only the current state, current evidence, validation timestamp, and current snapshot. The original snapshot remains unchanged. |
+| Monitoring scope | Re-evaluation is read-only evidence collection. It does not create alerts, execute Paper Trading, close or mutate trades, or perform any real-trading action. |
+| PWA/offline | The workspace is readable only from server-derived query data. Save, refresh, and archive mutations are disabled while offline; the service worker remains static-shell-only and does not cache API/provider responses. |
+
+### Additive persistence model
+
+The `setupMonitorInstances` table stores one user-owned monitoring instance per saved setup identity. It contains the immutable original status/snapshot, the current status/snapshot, setup type, symbol, timeframe, direction, original/current Opportunity and Regime evidence, lifecycle timestamps, and archive state. The `setupMonitorEvents` table stores deduplicated lifecycle history linked to the instance. Both tables are additive and preserve all existing records and schemas.
+
+The event uniqueness boundary is `(instanceId, eventKey)`. A repeated refresh that produces the same material event key does not create a second row. Event keys cover state changes, target progress, health changes, invalidation, data unavailability, and archive transitions. The service records event evidence and reason text without treating an event as an instruction or an action.
+
+### Lifecycle state machine
+
+| Transition | Meaning |
+|---|---|
+| `POTENTIAL → POTENTIAL` | Evidence remains conditional; no duplicate unchanged event is emitted. |
+| `POTENTIAL → QUALIFIED` | The current server-authoritative re-evaluation satisfies the existing qualification contract; a state-change event is recorded once. |
+| `POTENTIAL → WATCH` | Current evidence falls back to an early/incomplete watch state; the original snapshot remains Potential. |
+| `QUALIFIED → QUALIFIED` | Qualified evidence remains valid; target/health events are emitted only when their deduplicated key changes. |
+| `QUALIFIED → WATCH/POTENTIAL/NO_TRADE/DATA_UNAVAILABLE` | Current qualification is lost or unavailable; the current state changes and the reason is persisted, without rewriting original evidence. |
+| Any active state → `ARCHIVED` | The owner explicitly archives monitoring. Archived instances are excluded from active results and cannot be refreshed. |
+| `ARCHIVED` | Terminal for this instance; no automatic resume, alert, or trade mutation exists. |
+
+A refresh never silently promotes a setup from a historical snapshot. It evaluates current server-side evidence, persists current state separately, and exposes the exact reason for a transition or unavailable result. Repeated refreshes are therefore safe and auditable.
+
+### Phase 10B validation record
+
+Focused deterministic validation passed with **61 tests** across Setup Monitor lifecycle tests, PWA contract assertions, and Paper Trading regressions. The complete repository regression suite passed with **242 tests across 43 files**. TypeScript validation passed with `tsc --noEmit`, and the production Vite/esbuild build completed successfully. The production bundle emitted only the existing non-blocking chunk-size advisory.
+
+The PWA contract explicitly confirms that Setup Monitor uses the tRPC server route, enables reads only when online, disables refresh/archive/event writes offline, contains no browser provider endpoint or direct provider fetch, remains reachable from the mobile secondary navigation, and preserves authenticated server ownership filtering. No score, provider, alert, schedule, Paper Trading, Research Lab, or real-trading behavior was modified by Phase 10B.
+
+No Paper Trade, alert, automatic notification, real order, or background monitoring action is created by Setup Monitor. Persistence begins only after an authenticated user explicitly saves an eligible existing discovery setup, and all later refreshes remain manual and read-only.

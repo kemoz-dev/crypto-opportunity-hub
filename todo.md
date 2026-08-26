@@ -215,3 +215,15 @@
 - [x] Enhance Opportunity Discovery, Asset Intelligence, Swing, Scalping, and Paper Trading presentation with filters/sort disclosure, readiness, conditional plans, targets/progress/health, qualified-only Paper Trading controls, unavailable reasons, and responsive offline-safe PWA layout.
 - [x] Add at least twenty meaningful deterministic readiness, status, target/invalidation, R:R, stale/missing/mixed-data, Trade Health, qualified-only Paper Trading, score/provider/alert regression, PWA/cache, authentication, and no-automatic-action tests.
 - [x] Run full validation and controlled local/production API evidence checks for BTC, ETH, SOL, AAVE, and DOT; document exact provider/timeframe/timestamp/status/readiness/plan availability results, publish, and report any hosting or data blockers truthfully.
+
+## Phase 10B — Authorized Persistence continuation
+
+- [x] Add authenticated Setup Monitor workspace navigation to the PWA secondary menu and Home event routing.
+- [x] Add PWA contract assertions for server-derived Setup Monitor reads, online-only mutations, owner filtering, deduplication, and no browser provider calls.
+- [x] Run focused Setup Monitor, PWA, and Paper Trading regression tests.
+- [x] Run the complete Vitest regression suite across the repository.
+- [x] Run TypeScript validation and production build.
+- [x] Document Phase 10B persistence tables, immutable snapshots, lifecycle state machine, event deduplication, authorization boundary, and validation evidence in scalping-swing-intelligence.md.
+- [x] Perform bounded local persistence validation without fabricating or inserting test data: deterministic service tests cover save/refresh/original-current separation/event deduplication, the additive tables are present with zero rows, and the protected route returns HTTP 401 without a session.
+- [ ] Perform read-only production smoke validation after checkpoint propagation.
+- [x] Save and publish the Phase 10B implementation checkpoint after reviewing this checklist; the post-checkpoint smoke completion is tracked separately below.
