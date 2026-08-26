@@ -225,5 +225,5 @@
 - [x] Run TypeScript validation and production build.
 - [x] Document Phase 10B persistence tables, immutable snapshots, lifecycle state machine, event deduplication, authorization boundary, and validation evidence in scalping-swing-intelligence.md.
 - [x] Perform bounded local persistence validation without fabricating or inserting test data: deterministic service tests cover save/refresh/original-current separation/event deduplication, the additive tables are present with zero rows, and the protected route returns HTTP 401 without a session.
-- [ ] Perform read-only production smoke validation after checkpoint propagation.
+- [x] Perform read-only production smoke validation after checkpoint propagation attempt: published shell returned HTTP 200, while both Setup Monitor procedures returned HTTP 404 NOT_FOUND, so the release is not yet exposed by the published router; no sign-in, mutation, trade, alert, or setting change was attempted.
 - [x] Save and publish the Phase 10B implementation checkpoint after reviewing this checklist; the post-checkpoint smoke completion is tracked separately below.
