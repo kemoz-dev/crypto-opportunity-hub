@@ -591,3 +591,28 @@
 - [x] Add Phase 31 contract tests for live summary counts, data health, no-qualified diagnostics, Potential diagnostics, Scalp/Swing data diagnostics, Risk Off, status states, filters, accessibility, PWA, auth, and no-real-trading boundaries.
 - [x] Run focused/full tests, TypeScript, production build, security/PWA scans, and responsive QA at 375x812, 390x844, 414x896, 1280x800, 1440x900, and 1920x1080 where available.
 - [x] Save and publish the Phase 31 checkpoint only after todo.md is reviewed and all completed items are marked [x].
+
+# Phase 32 — Auto Paper Learning & Strategy Intelligence
+
+- [x] Audit the complete Phase 32 specification against existing Auto Paper trial, event, account, performance, equity-curve, and owner-scope contracts.
+- [x] Preserve the protected core: Opportunity Score, Setup Readiness, qualification, Scalp/15M Fast Scalp/Swing strategies, entry/stop/target calculations, sizing, risk, providers, fallback, validation, freshness, Manual Paper, Auto Paper accounting/lifecycle, Research Lab execution, alerts, schedules, auth, authorization, PWA cache policy, and real-trading prohibition.
+- [x] Preserve no migration, no schema, no new tables/columns, and no new persistence; use existing Auto Paper trial/event/account/performance contracts only.
+- [x] Add Auto Paper Lab PERFORMANCE INTELLIGENCE with server-derived total/completed/win/loss/open/data-unavailable counts and Win Rate, Average R, Total R, Average P&L, Total P&L, Maximum Drawdown, Profit Factor, and Sample Quality.
+- [x] Present conservative sample-quality labels and never imply statistical significance from small samples.
+- [x] Add server-derived STRATEGY PERFORMANCE comparison for SCALP, 15M FAST SCALP, and SWING with quality and data-quality evidence.
+- [x] Add SCALP vs SWING comparison without ranking when sample quality is insufficient.
+- [x] Add TIMEFRAME INTELLIGENCE using only timeframes present in persisted trial evidence; show NO SAMPLE rather than 0% for absent groups.
+- [x] Add DIRECTION INTELLIGENCE for LONG and SHORT using only persisted evidence and honest no-sample states.
+- [x] Add MARKET REGIME INTELLIGENCE for RISK ON, NEUTRAL, and RISK OFF without treating Risk Off as automatic failure.
+- [x] Add QUALIFICATION INTELLIGENCE for QUALIFIED, POTENTIAL, and WATCH only when origin/status evidence exists.
+- [x] Add SETUP QUALITY INTELLIGENCE only when persisted trial evidence contains actual setup-quality values; otherwise show unavailable.
+- [x] Add TARGET LADDER ANALYSIS for TP1/TP2/TP3, STOP LOSS, INVALIDATED, OPEN, and DATA UNAVAILABLE only from server lifecycle evidence.
+- [x] Add HOW TRADES END exit intelligence using only lifecycle categories that actually exist, including manual/other only when present.
+- [x] Add evidence-safe R distribution with INSUFFICIENT SAMPLE when data is inadequate and no fabricated bins.
+- [x] Reuse existing server-derived Equity Curve and drawdown reconstruction without creating snapshots, trials, or lifecycle mutations.
+- [x] Add mobile-first collapsible Auto Paper intelligence sections with 44px+ controls and honest empty/loading/error states.
+- [x] Preserve read-only Auto Paper opening behavior and prevent UI opening from creating trials, accounts, snapshots, trades, or simulation side effects.
+- [x] Preserve lazy loading, code splitting, request discipline, static-shell-only PWA caching, and online-only mutations.
+- [x] Add Phase 32 contract tests for performance metrics, sample labels, strategy/timeframe/direction/regime/qualification/setup-quality comparisons, target/exit states, R distribution, equity reuse, owner scope, auth, accessibility, PWA, and no-trading boundaries.
+- [x] Run focused/full tests, TypeScript, production build, protected-core/security scans, and responsive QA at 375x812, 390x844, 414x896, and desktop widths.
+- [x] Save and publish the Phase 32 checkpoint only after todo.md is reviewed and all completed items are marked [x].
