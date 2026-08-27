@@ -46,3 +46,25 @@ const itemAt = (price: number | null, direction: "LONG" | "SHORT" = "LONG") => m
   it("retains watch when targets are pending", () => expect(reachedStatus(targetProgress(itemAt(100)), "WATCH")).toBe("WATCH"));
   it("has no automatic close lifecycle type", () => expect(["CREATED", "STATE_CHANGED", "TARGET_REACHED", "CAUTION", "REVERSAL_RISK", "INVALIDATED", "DATA_UNAVAILABLE", "ARCHIVED"]).not.toContain("AUTO_CLOSE"));
 });
+
+
+ describe("Phase 11 live target-path evidence", () => {
+  it("calculates long progress from the preferred entry and clamps pending progress", () => {
+    const item = makeItem({ readinessPlan: { currentPrice: 102.5, entryZone: { preferred: 100 }, invalidation: { price: 95 }, targets: [{ label: "TP1", price: 105 }] } });
+    expect(targetProgress(item)[0]).toMatchObject({ progressPercent: 50, distanceFromEntryPercent: 2.5, distanceToInvalidationPercent: 7.32, status: "PENDING" });
+  });
+  it("calculates short progress in the correct direction", () => {
+    const item = makeItem({ direction: "SHORT", readinessPlan: { currentPrice: 97.5, entryZone: { preferred: 100 }, invalidation: { price: 105 }, targets: [{ label: "TP1", price: 95 }] } });
+    expect(targetProgress(item)[0]).toMatchObject({ progressPercent: 50, distanceFromEntryPercent: 2.5, status: "PENDING" });
+  });
+  it("marks a target reached at 100 percent even when price has passed it", () => {
+    const item = makeItem({ readinessPlan: { currentPrice: 112, entryZone: { preferred: 100 }, invalidation: { price: 95 }, targets: [{ label: "TP1", price: 105 }] } });
+    expect(targetProgress(item)[0]).toMatchObject({ reached: true, progressPercent: 100, status: "REACHED" });
+  });
+  it("does not construct live progress without a validated price or entry", () => {
+    const noPrice = makeItem({ readinessPlan: { currentPrice: null, entryZone: { preferred: 100 }, targets: [{ label: "TP1", price: 105 }] } });
+    const noEntry = makeItem({ readinessPlan: { currentPrice: 100, entryZone: null, targets: [{ label: "TP1", price: 105 }] } });
+    expect(targetProgress(noPrice)[0].progressPercent).toBeNull();
+    expect(targetProgress(noEntry)[0].progressPercent).toBeNull();
+  });
+ });

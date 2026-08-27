@@ -236,3 +236,40 @@ Focused deterministic validation passed with **61 tests** across Setup Monitor l
 The PWA contract explicitly confirms that Setup Monitor uses the tRPC server route, enables reads only when online, disables refresh/archive/event writes offline, contains no browser provider endpoint or direct provider fetch, remains reachable from the mobile secondary navigation, and preserves authenticated server ownership filtering. No score, provider, alert, schedule, Paper Trading, Research Lab, or real-trading behavior was modified by Phase 10B.
 
 No Paper Trade, alert, automatic notification, real order, or background monitoring action is created by Setup Monitor. Persistence begins only after an authenticated user explicitly saves an eligible existing discovery setup, and all later refreshes remain manual and read-only.
+
+
+## Phase 11 — Live Setup Monitoring & Trade Health Intelligence
+
+Phase 11 extends the existing Phase 9/10C interpretation and Phase 10B persistence layers without changing the Opportunity Score, Regime Score, scoring weights, indicator formulas, provider policy, alert thresholds, Paper Trading authorization/economics, real-trading prohibition, or scheduler behavior. No new database table or provider was required.
+
+### Conditional plan evidence
+
+Entry zones remain server-derived from the validated execution-timeframe current price and EMA20. Preferred Entry is the EMA20 value only when the existing engine has reached level derivation. Confirmation remains the existing multi-timeframe requirement and is displayed as a condition to wait for; it is not converted into a user-entered order instruction.
+
+Targets remain the existing nearest validated forward swing structure or ATR extensions. The UI shows only targets the engine actually derives; it does not fill T1/T2/T3 or invent levels. Stops and invalidation remain the recent structural pivot with the existing 0.25 ATR buffer, and are shown only when valid relative to the entry zone. R:R remains descriptive and calculated from the actual preferred entry, stop, and each available target; it never changes Opportunity Score, Regime Score, or eligibility thresholds.
+
+### Live health and target path
+
+Setup Monitor re-evaluates the current item server-side on explicit authenticated refresh. Target progress is direction-aware and records `progressPercent`, `distanceFromEntryPercent`, and `distanceToInvalidationPercent` in the current technical snapshot. Progress is bounded to 0–100%; a target passed by the validated current price is `REACHED`, while missing entry or current price yields unavailable progress.
+
+The monitor health state remains evidence-based: `HEALTHY` for supported qualified/target-progress states, `CAUTION` for a Potential setup under observation, `REVERSAL_RISK` when Watch/confirmation deterioration is present, `INVALIDATED` after the existing invalidation gate, and `DATA_UNAVAILABLE` when required validated inputs fail closed. Reversal risk is described as increased risk with reasons; it is never presented as a certainty or a prediction.
+
+### Original versus current state
+
+The existing immutable creation snapshot remains untouched. It preserves the original status, setup readiness, Opportunity context, direction, entry zone, preferred entry, targets, stop/invalidation, provider, timeframe, timestamp, freshness, validation state, and evidence. The current snapshot is stored separately and now includes the complete server-derived current evidence snapshot at creation and refresh, including current price, health, target progress, current explanation, provider provenance, freshness, and validation timestamp.
+
+### Monitoring history and authorization
+
+Meaningful transitions only are written to the existing event history. `CREATED`, state transitions, target reaches, caution, reversal risk, invalidation, unavailable data, and archive remain deduplicated by the existing `(instanceId, eventKey)` uniqueness rule. Refresh does not create trades, alerts, notifications, automatic closes, or reversals. All reads and mutations remain owner-scoped through protected procedures.
+
+### UI surfaces
+
+Setup Monitor now presents immutable Original Plan and server-derived Current Plan sections with direction, entry zone, preferred entry, current price, stop/invalidation, distance to invalidation, target progress bars, R:R, confirmation, provider, timeframe, timestamp, freshness, validation status, health reason, and event provenance. Health, direction, and trade-plan filters are display-only and do not change server calculations.
+
+Discovery adds display-only health, direction, and plan filters. Established Scalping and Swing cards expose the current server-status-derived health label alongside their existing Opportunity, conditional plan, diagnostic, provider, and Paper Trading presentation. Discovery Watch remains a waiting/caution state; active `REVERSAL RISK` is reserved for monitored deterioration.
+
+### PWA and safety boundaries
+
+The Service Worker remains static-shell-only. Protected API responses, Setup Monitor records, authentication tokens, Paper Trading data, and research data are not cached. Offline remains read-only, and Setup Monitor refresh/archive plus Paper Trading mutations remain disabled without an online server connection. No provider credential or endpoint is exposed to the browser.
+
+All values are classified as **SERVER-DERIVED** (levels, health, target progress, state, provenance, timestamps), **DISPLAY-ONLY** (filters, labels, progress bars, formatting), or **USER-INPUT** (none added in Phase 11). When provider data is stale, incoherent, insufficient, or unavailable, live plan and health calculations fail closed and the interface shows `DATA STALE`, `DATA UNAVAILABLE`, or an equivalent unavailable explanation rather than manufacturing a setup.

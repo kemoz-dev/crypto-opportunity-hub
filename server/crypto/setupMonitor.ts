@@ -49,9 +49,27 @@ export function healthFor(item: OpportunityDiscoveryItem, status: SetupMonitorSt
 
 export function targetProgress(item: OpportunityDiscoveryItem) {
   const price = item.readinessPlan.currentPrice;
+  const readinessPlan = item.readinessPlan as OpportunityDiscoveryItem["readinessPlan"] & { entryZone?: OpportunityDiscoveryItem["readinessPlan"]["entryZone"] };
+  const entry = Object.prototype.hasOwnProperty.call(readinessPlan, "entryZone") ? readinessPlan.entryZone?.preferred ?? null : item.readinessPlan.currentPrice;
+  const invalidation = item.readinessPlan.invalidation?.price ?? null;
+  const direction = item.direction === "SHORT" ? -1 : 1;
   return item.readinessPlan.targets.map((target, index) => {
     const reached = price != null && (item.direction === "SHORT" ? price <= target.price : price >= target.price);
-    return { label: target.label, price: target.price, reached, status: reached ? "REACHED" : "PENDING", distancePercent: price != null ? round(Math.abs(target.price - price) / Math.max(price, Number.EPSILON) * 100, 2) : null, ordinal: index + 1 };
+    const targetDistance = entry != null ? Math.abs(target.price - entry) : null;
+    const directionalProgress = price != null && entry != null && targetDistance && targetDistance > 0
+      ? Math.min(100, Math.max(0, ((price - entry) * direction) / targetDistance * 100))
+      : null;
+    return {
+      label: target.label,
+      price: target.price,
+      reached,
+      status: reached ? "REACHED" : "PENDING",
+      distancePercent: price != null ? round(Math.abs(target.price - price) / Math.max(price, Number.EPSILON) * 100, 2) : null,
+      progressPercent: reached ? 100 : directionalProgress == null ? null : round(directionalProgress, 2),
+      distanceFromEntryPercent: price != null && entry != null ? round(Math.abs(price - entry) / Math.max(Math.abs(entry), Number.EPSILON) * 100, 2) : null,
+      distanceToInvalidationPercent: price != null && invalidation != null ? round(Math.abs(price - invalidation) / Math.max(Math.abs(price), Number.EPSILON) * 100, 2) : null,
+      ordinal: index + 1,
+    };
   });
 }
 
@@ -132,7 +150,7 @@ export async function createSetupMonitor(userId: number, assetId: string, mode: 
   if (!["POTENTIAL", "QUALIFIED", "WATCH"].includes(item.status)) throw new Error("Only Potential, Qualified, or Watch setups can be explicitly saved for monitoring.");
   const status = monitorStatus(item);
   const snapshot = evidenceSnapshot(item, status);
-  const inserted = await db.insert(setupMonitorInstances).values({ userId, assetId: item.assetId, setupType: mode, timeframe: JSON.stringify(item.timeframes), immutableCreationSnapshot: snapshot, originalStatus: status, originalReadinessSnapshot: item.setupReadiness, originalOpportunitySnapshot: { opportunityScore: item.opportunityScore, direction: item.direction, regime: item.regime }, originalTechnicalEvidence: { whyInteresting: item.whyInteresting, timeframeAgreement: item.timeframeAgreement, evidence: item.sourcePlan.evidence }, originalEntryZone: item.readinessPlan.entryZone, originalStopLoss: item.sourcePlan.stop?.price ?? null, originalTargets: item.readinessPlan.targets, originalInvalidationCondition: item.readinessPlan.invalidation, originalProviderProvenance: { provider: item.provider, dataTimestamp: item.dataTimestamp, freshness: item.freshness, validationStatus: item.validationStatus }, currentStatus: status, currentReadinessSnapshot: item.setupReadiness, currentPrice: item.readinessPlan.currentPrice, currentTechnicalState: { health: snapshot.health, targetProgress: snapshot.targetProgress, direction: item.direction }, currentProviderProvenance: { provider: item.provider, dataTimestamp: item.dataTimestamp, freshness: item.freshness, validationStatus: item.validationStatus }, currentStateReason: snapshot.currentStateReason, lastValidatedAt: item.dataTimestamp ? new Date(item.dataTimestamp) : null }).$returningId();
+  const inserted = await db.insert(setupMonitorInstances).values({ userId, assetId: item.assetId, setupType: mode, timeframe: JSON.stringify(item.timeframes), immutableCreationSnapshot: snapshot, originalStatus: status, originalReadinessSnapshot: item.setupReadiness, originalOpportunitySnapshot: { opportunityScore: item.opportunityScore, direction: item.direction, regime: item.regime }, originalTechnicalEvidence: { whyInteresting: item.whyInteresting, timeframeAgreement: item.timeframeAgreement, evidence: item.sourcePlan.evidence }, originalEntryZone: item.readinessPlan.entryZone, originalStopLoss: item.sourcePlan.stop?.price ?? null, originalTargets: item.readinessPlan.targets, originalInvalidationCondition: item.readinessPlan.invalidation, originalProviderProvenance: { provider: item.provider, dataTimestamp: item.dataTimestamp, freshness: item.freshness, validationStatus: item.validationStatus }, currentStatus: status, currentReadinessSnapshot: item.setupReadiness, currentPrice: item.readinessPlan.currentPrice, currentTechnicalState: { health: snapshot.health, targetProgress: snapshot.targetProgress, direction: item.direction, currentSnapshot: snapshot }, currentProviderProvenance: { provider: item.provider, dataTimestamp: item.dataTimestamp, freshness: item.freshness, validationStatus: item.validationStatus }, currentStateReason: snapshot.currentStateReason, lastValidatedAt: item.dataTimestamp ? new Date(item.dataTimestamp) : null }).$returningId();
   const instanceId = inserted[0]?.id;
   if (!instanceId) throw new Error("Setup Monitor instance was not created.");
   await insertEvent(db, instanceId, { key: "CREATED", type: "CREATED", reason: `Saved ${status} setup for server-authoritative monitoring.`, price: item.readinessPlan.currentPrice, timeframe: JSON.stringify(item.timeframes), provider: item.provider, provenance: snapshot, freshness: item.freshness });

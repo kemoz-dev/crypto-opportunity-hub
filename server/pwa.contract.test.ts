@@ -91,6 +91,8 @@ describe("Phase 2 secure PWA contract", () => {
     expect(discovery).toContain("setupReadiness");
     expect(discovery).toContain("potentialAlertEligible");
     expect(discovery).toContain("Conditional technical plan — not a trade instruction");
+    expect(discovery).toContain("WAITING CONFIRMATION");
+    expect(discovery).toContain("REVERSAL RISK");
     expect(discovery).not.toContain("api.bybit.com");
     expect(discovery).not.toContain("fetch(");
     expect(swing).toContain("Conditional technical plan — not eligible for Paper Trading");
@@ -115,6 +117,11 @@ describe("Phase 2 secure PWA contract", () => {
     expect(service).toContain("eq(setupMonitorInstances.userId, userId)");
     expect(service).toContain('event.key');
     expect(service).toContain('currentStatus === "ARCHIVED"');
+    expect(service).toContain("progressPercent");
+    expect(service).toContain("currentSnapshot: snapshot");
+    expect(monitor).toContain("Health");
+    expect(monitor).toContain("Trade plan");
+    expect(monitor).toContain("Server-derived evidence");
   });
 
   it("does not retain the client-side user mirror after logout and avoids server secret references", () => {

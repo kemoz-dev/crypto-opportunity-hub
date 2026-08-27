@@ -227,3 +227,31 @@
 - [x] Perform bounded local persistence validation without fabricating or inserting test data: deterministic service tests cover save/refresh/original-current separation/event deduplication, the additive tables are present with zero rows, and the protected route returns HTTP 401 without a session.
 - [x] Perform read-only production smoke validation after checkpoint propagation attempt: published shell returned HTTP 200, while both Setup Monitor procedures returned HTTP 404 NOT_FOUND, so the release is not yet exposed by the published router; no sign-in, mutation, trade, alert, or setting change was attempted.
 - [x] Save and publish the Phase 10B implementation checkpoint after reviewing this checklist; the post-checkpoint smoke completion is tracked separately below.
+
+
+## Phase 10C — Production Deployment & Setup Monitor Verification
+
+- [x] Verify the intended production checkpoint and compare deployed artifact/version with local checkpoint fad748a8: local HEAD is fad748a8; production initially lagged, then exposed the same Setup Monitor router after deployment propagation, with no source change required.
+- [x] Discover actual production tRPC API origins and verify all implemented Setup Monitor procedure paths without inventing names: all six implemented procedures are reachable under both /api/trpc and /api/v1/trpc; unauthenticated calls return 401 rather than 404.
+- [x] Determine the evidence-supported cause of the earlier production 404 response: it was a stale/not-yet-propagated published runtime; after propagation, the same paths returned the expected authentication response.
+- [x] Run safe authenticated read-only Setup Monitor verification: connected production browser rendered the authenticated workspace with empty Active setups and History states; unauthenticated API access returned 401; cross-user isolation remains covered by owner-scoped service logic and deterministic authorization tests, while no second production user was available for a live cross-user probe.
+- [x] NO VALID SETUP AVAILABLE FOR CREATION TEST: the current production evidence was RISK OFF with provider/data-quality blockers and no eligible Potential, Qualified, or Watch setup was available; no fabricated setup was created.
+- [x] Verify persistence contracts without fabrication: additive tables are present, deterministic lifecycle tests cover original/current separation, provenance, timestamps, and event deduplication; no natural state transition occurred during the read-only production window.
+- [x] Verify Paper Trading, PWA/service-worker, multi-device, database, security, and cache boundaries without mutations: production Paper Trading routes return 401 unauthenticated, PWA contract passes, static-shell-only cache rules remain intact, and read-only DB counts show Setup Monitor rows 0 with existing datasets untouched.
+- [x] Run focused/full tests, TypeScript, production build, and existing security/cache checks without changing the baseline: 61 focused tests, 242 tests across 43 files, TypeScript pass, production build pass, client secret/provider scan pass, real-action scan clean, and PWA contract pass.
+- [x] Production deployment propagation completed for the existing Phase 10B checkpoint without source, schema, router, authentication, provider, scoring, Paper Trading, scheduler, alert, or Research Lab changes; production now returns the expected protected API responses.
+- [x] Produce the Phase 10C final report using VERIFIED, NOT VERIFIED, BLOCKED, or NOT APPLICABLE for every requested item; limitations are explicitly labeled rather than inferred.
+
+
+## Phase 11 — Live Setup Monitoring & Trade Health Intelligence
+
+- [x] Audit the Phase 10C repository, checkpoint, Setup Monitor persistence, state machine, provider/data-quality, scoring, PWA, Paper Trading, and protected boundaries.
+- [x] Define additive server-derived contracts for conditional trade plans, target paths, setup health, reversal risk, invalidation, provenance, and freshness.
+- [x] Implement entry-zone, preferred-entry, confirmation, target, stop, R:R, target-progress, and health/reversal presentation layers without changing scores or provider policy.
+- [x] Extend authenticated Setup Monitor refresh/detail presentation and Discovery/Scalping/Swing surfaces without adding automatic actions.
+- [x] Preserve immutable originals, separate current state, event deduplication, owner-only access, and no automatic Paper Trades or alerts.
+- [x] Preserve PWA static-shell-only caching, online-only mutations, offline read-only behavior, and multi-device server authority.
+- [x] Add deterministic tests for valid, insufficient, stale, invalidated, target-reached, reversal-risk, progress, and deduplication paths.
+- [x] Run focused/full tests, TypeScript, production build, security scans, PWA/cache scans, and responsive visual verification.
+- [x] Document Phase 11 exact logic, evidence/provenance rules, limitations, and stop conditions.
+- [x] Save and publish the validated Phase 11 checkpoint only after all completed items are marked [x].
