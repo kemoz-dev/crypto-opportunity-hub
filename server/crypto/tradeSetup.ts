@@ -3,6 +3,7 @@ import { calculateAtr } from "./technical";
 import { fetchValidatedLiveOhlcvBundle, type LiveOhlcvBundle } from "./providers";
 import { buildLiveScanner, getScannerLiveOhlcvBundle } from "./marketService";
 import { buildOpportunityDiscovery } from "./opportunityDiscovery";
+import { qualifyAdaptive } from "./adaptiveQualification";
 
 export type TradeSetupMode = "SCALP" | "SWING";
 export type TradeSetupDirection = "LONG" | "SHORT" | "NO TRADE";
@@ -448,7 +449,8 @@ export async function getTradeSetups(mode: TradeSetupMode, configuration: Scorin
   const ordered = setups.sort((left, right) => Number(right.actionable) - Number(left.actionable) || (right.opportunityScore ?? -1) - (left.opportunityScore ?? -1) || left.symbol.localeCompare(right.symbol));
   let qualifiedRank = 0;
   const ranked = ordered.map(plan => plan.presentationStatus === "QUALIFIED" ? { ...plan, rank: ++qualifiedRank } : plan);
-  return { mode, generatedAt: scan.generatedAt, lowerTimeframeDataReady: LOWER_TIMEFRAME_DATA_READY, minimumValidatedTimeframe: PROFILES[mode].minimumLabel, marketRegime: scan.marketRegime, providerHealth: summarizeProviderHealth(scan), diagnostics: summarizeDiagnostics(ranked), discovery: buildOpportunityDiscovery(mode, ranked), setups: ranked };
+  const adaptiveSetups = ranked.map(plan => ({ ...plan, adaptive: qualifyAdaptive(plan) }));
+  return { mode, generatedAt: scan.generatedAt, lowerTimeframeDataReady: LOWER_TIMEFRAME_DATA_READY, minimumValidatedTimeframe: PROFILES[mode].minimumLabel, marketRegime: scan.marketRegime, providerHealth: summarizeProviderHealth(scan), diagnostics: summarizeDiagnostics(adaptiveSetups), discovery: buildOpportunityDiscovery(mode, adaptiveSetups), setups: adaptiveSetups };
 }
 
 export async function getTradeSetupForRow(mode: TradeSetupMode, row: ScannerRow, regime: MarketRegime | null, configuration: ScoringConfig, minimumCandles = Math.max(configuration.indicator.emaSlow + 2, configuration.indicator.macdSlow + configuration.indicator.macdSignal + 2, 60), existingBundle: LiveOhlcvBundle | null = null) {

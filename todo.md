@@ -303,3 +303,42 @@
 - [x] Run full tests, TypeScript, production build, security/provider/real-action scans, PWA/cache checks, accessibility checks, bundle/performance checks, and desktop/tablet/mobile visual verification.
 - [x] Document Phase 14 implementation, limitations, exact data-ladder behavior, and unchanged protected boundaries.
 - [x] Save and publish the validated Phase 14 checkpoint only after all completed items are marked [x].
+
+
+## Phase 15 — Adaptive Trading Intelligence + Auto Paper Trial
+
+- [ ] Audit checkpoint 5bf35ca4, the full Phase 15 specification, scoring/provider/data-quality rules, Paper Trading, Setup Monitor, alerts, scheduler, PWA, and real-trading boundaries.
+- [ ] Define additive qualification states, trading modes, market-condition labels, setup-quality components, warnings, and server-authoritative evidence contracts without changing canonical scores or thresholds.
+- [ ] Implement adaptive presentation that distinguishes valid weak-market opportunities from invalid/missing/stale/incoherent data and remains fail-closed.
+- [ ] Implement the isolated Scalping ladder and separately labeled 15M FAST SCALP behavior without relabeling 1M/3M/5M data or adding provider mixing/resampling.
+- [ ] Add server-derived entry zones, stops/invalidation, variable target paths, R:R, progress, setup quality, rationale, and warnings only when validated evidence supports them.
+- [ ] Implement AUTO PAPER as simulation-only, explicitly gated, server-authoritative, owner-authenticated, immutable, and never connected to exchange or real-order APIs.
+- [ ] Extend Dashboard, Discovery, Scalping, Swing, Setup Monitor, Paper Trading, and mobile UX with adaptive states, modes, health, progress, and evidence without automatic real actions.
+- [ ] Preserve authentication, ownership, PWA offline read-only behavior, alerts, schedules, Research Lab, historical data, provider provenance, and existing Paper Trading economics.
+- [ ] Add deterministic tests for adaptive states/modes, weak-market warnings, invalid-data fail-closed behavior, 15M fallback, AUTO PAPER safeguards, and no-real-trading boundaries.
+- [ ] Run full tests, TypeScript, production build, security/provider/action scans, PWA/cache checks, performance checks, and desktop/tablet/mobile visual verification.
+- [ ] Document Phase 15 exact logic, simulation limits, data limitations, and unchanged production boundaries.
+- [ ] Save and publish the validated Phase 15 checkpoint only after every completed item is marked [x].
+
+
+## Phase 15A — Adaptive Trading Intelligence + Auto Paper Trials
+
+- [x] Audit the authorized Phase 15A specification and checkpoint 5bf35ca4 architecture, including scoring, providers, data quality, Paper Trading, Setup Monitor, alerts, scheduler, PWA, and real-trading boundaries.
+- [x] Define additive schema, settings, trial, event, performance, ownership, and rollback contracts for simulation-only Auto Paper.
+- [x] Generate and review the additive migration SQL, then apply only the explicitly authorized Phase 15A migration through the managed database migration path.
+- [x] Implement server-derived Adaptive Setup Quality, market-condition labels, flexible modes, warnings, and qualification without changing existing canonical scores or provider policy.
+- [x] Implement the controlled 1M/3M/5M to 5M to 15M FAST SCALP ladder without relabeling data, mixing providers, resampling, or weakening validation.
+- [x] Implement server-derived trade plans with valid entry zones, stops/invalidation, up to three evidence-backed targets, R:R, reasons, warnings, and holding horizon.
+- [x] Implement authenticated owner-scoped Auto Paper settings, default OFF, explicit enable/disable, risk sizing, direction/strategy filters, and position limits.
+- [x] Implement immutable Auto Paper trial snapshots, current-state monitoring, event deduplication, duplicate active-setup prevention, manual/auto separation, and performance aggregation.
+- [x] Ensure Auto Paper can mutate Paper Trading simulation only and has no exchange, broker, real-order, or real-balance path.
+- [x] Extend Dashboard, Discovery, Scalping, Swing, Setup Monitor, Paper Trading, Auto Paper Lab, and PWA/mobile surfaces with truthful adaptive states and controls.
+- [x] Preserve authentication, ownership, offline read-only behavior, PWA cache restrictions, alerts, schedules, Research Lab separation, historical provenance, provider policy, and real-trading prohibition.
+- [x] Add deterministic tests for adaptive qualification/modes, weak/Risk-Off handling, invalid data fail-closed behavior, 15M fallback, Auto Paper auth/ownership, snapshots, events, deduplication, balance isolation, manual/auto separation, and no-real-order boundaries.
+- [x] Run schema verification, focused/full tests, TypeScript, production build, security/provider/action scans, PWA/cache checks, performance checks, and desktop/tablet/mobile visual validation.
+- [x] Document Phase 15A logic, migration, Auto Paper simulation limits, data limitations, and unchanged production boundaries.
+- [x] Review the completed checklist and save/publish the validated Phase 15A checkpoint only after all items are marked [x].
+- [x] Add Auto Paper Lab workspace with explicit OFF default, mode controls, active-trial metrics, and owner-scoped history.
+- [x] Add protected server refresh and event-history procedures for Auto Paper monitoring.
+- [x] Add desktop and mobile navigation access for Auto Paper Lab without changing existing workspace behavior.
+- [x] Fix and validate the PWA mobile navigation module parser/import regression discovered during Phase 15A integration.

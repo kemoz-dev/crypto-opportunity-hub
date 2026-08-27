@@ -1,4 +1,5 @@
 import type { TradeSetupCondition, TradeSetupDirection, TradeSetupMode, TradeSetupPlan, TradeSetupReadinessCandidate } from "./tradeSetup";
+import { qualifyAdaptive } from "./adaptiveQualification";
 
 /**
  * Phase 8 is an interpretation layer. It intentionally contains no indicator,
@@ -54,6 +55,7 @@ export type OpportunityDiscoveryItem = {
   exactReason: string;
   dataReason: string | null;
   sourcePresentationStatus: TradeSetupPlan["presentationStatus"];
+  adaptive: ReturnType<typeof qualifyAdaptive>;
   sourcePlan: Pick<TradeSetupPlan, "actionable" | "currentPrice" | "entryZone" | "stop" | "invalidation" | "targets" | "rewardRisk" | "readinessCandidate" | "evidence" | "risks" | "diagnostics">;
 };
 
@@ -183,6 +185,7 @@ function item(plan: TradeSetupPlan): OpportunityDiscoveryItem {
     timeframeAgreement: agreement,
     whyInteresting,
     sourcePresentationStatus: plan.presentationStatus,
+    adaptive: qualifyAdaptive(plan),
     sourcePlan: sourcePlan(plan),
     potentialAlertEligible: false as const,
   } as const;

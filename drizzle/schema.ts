@@ -261,6 +261,73 @@ export const setupMonitorEvents = mysqlTable("setupMonitorEvents", {
   index("setup_monitor_event_instance_time_idx").on(table.instanceId, table.createdAt),
 ]);
 
+export const autoPaperSettings = mysqlTable("autoPaperSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  mode: mysqlEnum("mode", ["CONSERVATIVE", "BALANCED", "OPPORTUNITY", "CUSTOM"]).notNull().default("BALANCED"),
+  maxPositions: int("maxPositions").notNull().default(1),
+  minSetupQuality: double("minSetupQuality").notNull().default(70),
+  minRewardRisk: double("minRewardRisk").notNull().default(1.5),
+  strategies: json("strategies").notNull(),
+  directions: json("directions").notNull(),
+  allowPotential: boolean("allowPotential").notNull().default(false),
+  riskPercent: double("riskPercent").notNull().default(1),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [uniqueIndex("auto_paper_settings_user_unique").on(table.userId)]);
+
+export const autoPaperTrials = mysqlTable("autoPaperTrials", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  paperTradeId: int("paperTradeId").notNull().references(() => paperTrades.id, { onDelete: "cascade" }),
+  setupIdentity: varchar("setupIdentity", { length: 192 }).notNull(),
+  assetId: varchar("assetId", { length: 96 }).notNull().references(() => assets.id),
+  direction: mysqlEnum("direction", ["long", "short"]).notNull(),
+  strategy: varchar("strategy", { length: 64 }).notNull(),
+  timeframe: varchar("timeframe", { length: 12 }).notNull(),
+  source: varchar("source", { length: 32 }).notNull().default("AUTO_PAPER"),
+  status: mysqlEnum("status", ["OPEN", "HEALTHY", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED", "WARNING", "REVERSAL_RISK", "INVALIDATED", "CLOSED", "DATA_UNAVAILABLE"]).notNull().default("OPEN"),
+  immutablePlanSnapshot: json("immutablePlanSnapshot").notNull(),
+  immutableEntrySnapshot: json("immutableEntrySnapshot").notNull(),
+  currentSnapshot: json("currentSnapshot"),
+  entryPrice: double("entryPrice").notNull(),
+  stopPrice: double("stopPrice").notNull(),
+  target1: double("target1"),
+  target2: double("target2"),
+  target3: double("target3"),
+  setupQuality: double("setupQuality").notNull(),
+  rewardRisk: double("rewardRisk").notNull(),
+  provider: varchar("provider", { length: 96 }).notNull(),
+  provenance: json("provenance").notNull(),
+  freshness: varchar("freshness", { length: 32 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  startedAt: timestamp("startedAt").notNull(),
+  completedAt: timestamp("completedAt"),
+}, table => [
+  uniqueIndex("auto_paper_trial_identity_unique").on(table.userId, table.setupIdentity),
+  index("auto_paper_trial_user_status_idx").on(table.userId, table.status),
+  index("auto_paper_trial_asset_time_idx").on(table.assetId, table.createdAt),
+]);
+
+export const autoPaperEvents = mysqlTable("autoPaperEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  trialId: int("trialId").notNull().references(() => autoPaperTrials.id, { onDelete: "cascade" }),
+  eventKey: varchar("eventKey", { length: 160 }).notNull(),
+  eventType: varchar("eventType", { length: 48 }).notNull(),
+  reason: text("reason").notNull(),
+  price: double("price"),
+  timeframe: varchar("timeframe", { length: 12 }),
+  provider: varchar("provider", { length: 96 }),
+  freshness: varchar("freshness", { length: 32 }),
+  provenance: json("provenance"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("auto_paper_event_trial_key_unique").on(table.trialId, table.eventKey),
+  index("auto_paper_event_trial_time_idx").on(table.trialId, table.createdAt),
+]);
+
 export const backtestRuns = mysqlTable("backtestRuns", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),

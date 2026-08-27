@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { scheduledAlertHandler } from "../crypto/alertHandler";
 import { scheduledHistoricalIngestionHandler } from "../crypto/historicalScheduleHandler";
 import { scheduledProviderMonitorHandler } from "../crypto/providerMonitorHandler";
+import { scheduledAutoPaperHandler } from "../crypto/autoPaperHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -42,6 +43,7 @@ async function startServer() {
   app.post("/api/scheduled/evaluate-alert", scheduledAlertHandler);
   app.post("/api/scheduled/ingest-historical-data", scheduledHistoricalIngestionHandler);
   app.post("/api/scheduled/provider-health-monitor", scheduledProviderMonitorHandler);
+  app.post("/api/scheduled/auto-paper-refresh", scheduledAutoPaperHandler);
   // `/api/trpc` remains the compatibility endpoint. `/api/v1/trpc` is an
   // alias of the same typed contract for future clients; it does not fork any
   // business procedure or scoring implementation.

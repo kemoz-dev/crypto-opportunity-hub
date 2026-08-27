@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Activity, BellRing, BookOpen, FlaskConical, Gauge, Menu, Moon, ScanSearch, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "alerts" | "research";
+type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research";
 
 function navigate(target: PwaNavTarget) {
   window.dispatchEvent(new CustomEvent<PwaNavTarget>("crypto-hub:navigate", { detail: target }));
@@ -24,6 +24,7 @@ export function PwaMobileNavigation() {
     { label: "Watchlist", target: "watchlist" as const, icon: BookOpen },
     { label: "Alerts", target: "alerts" as const, icon: BellRing },
     { label: "Research", target: "research" as const, icon: FlaskConical },
+    { label: "Auto Paper Lab", target: "auto-paper" as const, icon: FlaskConical },
   ];
 
   useEffect(() => {
