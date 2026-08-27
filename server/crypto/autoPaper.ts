@@ -194,10 +194,11 @@ export async function refreshAutoPaperTrial(userId: number, trialId: number, con
     return { trial: { ...trial, currentSnapshot, status: "DATA_UNAVAILABLE" as const }, refreshed: true as const, recordedEvents: recorded ? ["DATA_UNAVAILABLE"] : [] };
   }
   const observation = currentTrialStatus(trial, row.asset.price);
-  const status = observation.status === "INVALIDATED" ? "STOPPED" as const : observation.status;
+  const status = observation.status === "INVALIDATED" ? "STOPPED" as const : observation.status === "TARGET_3_REACHED" ? "COMPLETED" as const : observation.status;
   const currentPnl = Number(((row.asset.price - trial.entryPrice) * trial.positionSize * (trial.direction === "long" ? 1 : -1)).toFixed(8));
+  const terminal = status === "STOPPED" || status === "COMPLETED";
   const currentSnapshot = { observedAt: scan.generatedAt, status, price: row.asset.price, provider: bundle.provider, dataQuality: bundle.state, reason: observation.reason, reachedTargets: observation.reached, currentPnl };
-  await db.update(autoPaperTrials).set({ currentSnapshot, currentPnl: status === "STOPPED" ? 0 : currentPnl, realizedPnl: status === "STOPPED" ? currentPnl : trial.realizedPnl, status, completedAt: status === "STOPPED" ? new Date(scan.generatedAt) : undefined }).where(and(eq(autoPaperTrials.id, trial.id), eq(autoPaperTrials.userId, userId)));
+  await db.update(autoPaperTrials).set({ currentSnapshot, currentPnl: terminal ? 0 : currentPnl, realizedPnl: terminal ? currentPnl : trial.realizedPnl, status, completedAt: terminal ? new Date(scan.generatedAt) : undefined }).where(and(eq(autoPaperTrials.id, trial.id), eq(autoPaperTrials.userId, userId)));
   const eventKey = observation.eventType === "HEALTH_CHANGED" ? `HEALTH_CHANGED:${observation.status}` : observation.eventType;
   const recorded = await recordEventIfAbsent(db, trial, { eventKey, eventType: observation.eventType, reason: observation.reason, price: row.asset.price, provider: bundle.provider, freshness: bundle.state, provenance: bundle });
   return { trial: { ...trial, currentSnapshot, currentPnl, status }, refreshed: true as const, recordedEvents: recorded ? [eventKey] : [] };
@@ -272,22 +273,66 @@ export async function getAutoPaperEvents(userId: number, trialId: number) {
   return db.select().from(autoPaperEvents).where(eq(autoPaperEvents.trialId, trialId)).orderBy(asc(autoPaperEvents.createdAt));
 }
 
-export async function getAutoPaperPerformance(userId: number, filters?: { strategy?: string; timeframe?: string; direction?: "long" | "short"; mode?: string; assetId?: string; from?: number; to?: number }) {
+type AutoPaperPerformanceFilters = { strategy?: string; timeframe?: string; direction?: "long" | "short"; mode?: string; assetId?: string; regime?: string; from?: number; to?: number; status?: string; qualification?: string };
+const AUTO_PAPER_TERMINAL_STATUSES = ["STOPPED", "CLOSED", "COMPLETED", "EXPIRED"] as const;
+const AUTO_PAPER_TARGET_STATUSES = ["TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED"] as const;
+
+function trialRegime(trial: any) { return typeof trial.immutablePlanSnapshot?.regime === "string" ? trial.immutablePlanSnapshot.regime : typeof trial.immutablePlanSnapshot?.marketRegime === "string" ? trial.immutablePlanSnapshot.marketRegime : "UNAVAILABLE"; }
+function trialQualification(trial: any) { return trial.immutablePlanSnapshot?.adaptiveQualification?.status ?? trial.immutablePlanSnapshot?.qualification?.status ?? "UNAVAILABLE"; }
+function isCompletedTrial(trial: any) { return AUTO_PAPER_TERMINAL_STATUSES.includes(trial.status); }
+function isWinningTrial(trial: any) { return isCompletedTrial(trial) && Number(trial.realizedPnl ?? 0) > 0; }
+function isLosingTrial(trial: any) { return isCompletedTrial(trial) && Number(trial.realizedPnl ?? 0) < 0; }
+function reachedTargets(trial: any) { return Number((trial.currentSnapshot as any)?.reachedTargets ?? 0); }
+export function getAutoPaperSampleLabel(completed: number) { return completed >= 500 ? "LARGER SAMPLE" : completed >= 50 ? "EARLY EVIDENCE" : "LIMITED SAMPLE"; }
+export function calculateAutoPaperRMultiple(realizedPnl: number, riskAmount: number) { return realizedPnl / Math.max(1, riskAmount); }
+export function calculateAutoPaperMaximumDrawdown(equity: readonly number[]) { let peak = equity[0] ?? 0; let maximum = 0; for (const value of equity) { peak = Math.max(peak, value); maximum = Math.max(maximum, peak - value); } return maximum; }
+
+export async function getAutoPaperPerformance(userId: number, filters?: AutoPaperPerformanceFilters) {
   const all = await getAutoPaperHistory(userId);
-  const trials = all.filter(trial => (!filters?.strategy || trial.strategy === filters.strategy) && (!filters?.timeframe || trial.timeframe === filters.timeframe) && (!filters?.direction || trial.direction === filters.direction) && (!filters?.mode || trial.mode === filters.mode || (filters.mode === "EXPERIMENTAL" && trial.mode === "CUSTOM")) && (!filters?.assetId || trial.assetId === filters.assetId) && (!filters?.from || trial.createdAt.getTime() >= filters.from) && (!filters?.to || trial.createdAt.getTime() <= filters.to));
-  const targetStatuses = ["TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED"];
-  const terminalStatuses = ["INVALIDATED", "STOPPED", "CLOSED", "COMPLETED", "EXPIRED"];
-  const wins = trials.filter(trial => targetStatuses.includes(trial.status));
-  const losses = trials.filter(trial => ["INVALIDATED", "STOPPED"].includes(trial.status));
-  const completed = trials.filter(trial => terminalStatuses.includes(trial.status) || targetStatuses.includes(trial.status));
+  const trials = all.filter(trial => (!filters?.strategy || trial.strategy === filters.strategy) && (!filters?.timeframe || trial.timeframe === filters.timeframe) && (!filters?.direction || trial.direction === filters.direction) && (!filters?.mode || trial.mode === filters.mode || (filters.mode === "EXPERIMENTAL" && trial.mode === "CUSTOM")) && (!filters?.assetId || trial.assetId === filters.assetId) && (!filters?.regime || trialRegime(trial) === filters.regime) && (!filters?.status || trial.status === filters.status) && (!filters?.qualification || trialQualification(trial) === filters.qualification) && (!filters?.from || trial.createdAt.getTime() >= filters.from) && (!filters?.to || trial.createdAt.getTime() <= filters.to));
+  const completed = trials.filter(isCompletedTrial);
   const active = trials.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number]));
-  const rValues = completed.map(trial => targetStatuses.includes(trial.status) ? trial.rewardRisk : losses.some(loss => loss.id === trial.id) ? -1 : null).filter((value): value is number => value !== null);
-  const averageR = rValues.length ? rValues.reduce((sum, value) => sum + value, 0) / rValues.length : null;
+  const wins = completed.filter(isWinningTrial);
+  const losses = completed.filter(isLosingTrial);
+  const rValues = completed.map(trial => calculateAutoPaperRMultiple(Number(trial.realizedPnl ?? 0), Number(trial.entryPrice * trial.positionSize * trial.riskPercent / 100))).filter(Number.isFinite);
+  const winningPnls = wins.map(trial => Number(trial.realizedPnl ?? 0));
+  const losingPnls = losses.map(trial => Number(trial.realizedPnl ?? 0));
+  const grossProfit = winningPnls.reduce((sum, value) => sum + value, 0);
+  const grossLoss = Math.abs(losingPnls.reduce((sum, value) => sum + value, 0));
+  const realizedPnl = completed.reduce((sum, trial) => sum + Number(trial.realizedPnl ?? 0), 0);
+  const unrealizedPnl = active.reduce((sum, trial) => sum + Number(trial.currentPnl ?? 0), 0);
   const positiveR = rValues.filter(value => value > 0).reduce((sum, value) => sum + value, 0);
   const negativeR = Math.abs(rValues.filter(value => value < 0).reduce((sum, value) => sum + value, 0));
-  const pnl = trials.reduce((sum, trial) => sum + trial.realizedPnl + trial.currentPnl, 0);
-  const by = (key: "strategy" | "mode") => Array.from(new Set(trials.map(trial => trial[key]))).map(value => { const group = trials.filter(trial => trial[key] === value); const groupWins = group.filter(trial => targetStatuses.includes(trial.status)).length; return { [key]: value, trials: group.length, active: group.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number])).length, wins: groupWins, losses: group.filter(trial => ["INVALIDATED", "STOPPED"].includes(trial.status)).length, winRate: group.length ? groupWins / group.length * 100 : null, averageR: group.length ? group.reduce((sum, trial) => sum + (targetStatuses.includes(trial.status) ? trial.rewardRisk : trial.status === "INVALIDATED" || trial.status === "STOPPED" ? -1 : 0), 0) / group.length : null }; });
-  return { totalTrials: trials.length, active: active.length, open: active.length, completed: completed.length, closed: completed.length, wins: wins.length, losses: losses.length, breakeven: completed.filter(trial => trial.realizedPnl === 0 && !targetStatuses.includes(trial.status) && !["INVALIDATED", "STOPPED"].includes(trial.status)).length, t1Hit: trials.filter(trial => targetStatuses.includes(trial.status)).length, t2Hit: trials.filter(trial => ["TARGET_2_REACHED", "TARGET_3_REACHED"].includes(trial.status)).length, t3Hit: trials.filter(trial => trial.status === "TARGET_3_REACHED").length, reversalRate: trials.length ? trials.filter(trial => trial.status === "REVERSAL_RISK").length / trials.length * 100 : null, stopRate: trials.length ? losses.length / trials.length * 100 : null, winRate: completed.length >= 5 ? wins.length / completed.length * 100 : null, lossRate: completed.length >= 5 ? losses.length / completed.length * 100 : null, averageR: completed.length >= 5 ? averageR : null, totalR: completed.length >= 5 ? rValues.reduce((sum, value) => sum + value, 0) : null, simulatedPnl: pnl, profitFactor: completed.length >= 5 && negativeR > 0 ? positiveR / negativeR : null, insufficientSample: completed.length < 5, byStrategy: by("strategy"), byMode: by("mode") };
+  const by = (key: "strategy" | "mode" | "direction" | "timeframe" | "assetId") => Array.from(new Set(trials.map(trial => trial[key]))).map(value => { const group = trials.filter(trial => trial[key] === value); const groupCompleted = group.filter(isCompletedTrial); const groupWins = group.filter(isWinningTrial); const groupLosses = group.filter(isLosingTrial); const groupR = groupCompleted.map(trial => Number(trial.realizedPnl ?? 0) / Math.max(1, Number(trial.entryPrice * trial.positionSize * trial.riskPercent / 100))); const groupProfit = groupWins.reduce((sum, trial) => sum + Number(trial.realizedPnl ?? 0), 0); const groupLoss = Math.abs(groupLosses.reduce((sum, trial) => sum + Number(trial.realizedPnl ?? 0), 0)); return { [key]: value, trials: group.length, active: group.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number])).length, completed: groupCompleted.length, wins: groupWins.length, losses: groupLosses.length, pnl: group.reduce((sum, trial) => sum + Number(trial.realizedPnl ?? 0) + (ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number]) ? Number(trial.currentPnl ?? 0) : 0), 0), winRate: groupCompleted.length >= 5 ? groupWins.length / groupCompleted.length * 100 : null, profitFactor: groupCompleted.length >= 5 && groupLoss > 0 ? groupProfit / groupLoss : null, averageR: groupCompleted.length >= 5 && groupR.length ? groupR.reduce((sum, r) => sum + r, 0) / groupR.length : null }; });
+  const account = await getAutoPaperAccount(userId);
+  const startingCapital = account?.startingCapital ?? 0;
+  return { totalTrials: trials.length, active: active.length, open: active.length, completed: completed.length, closed: completed.length, wins: wins.length, losses: losses.length, breakeven: completed.filter(trial => Number(trial.realizedPnl ?? 0) === 0).length, t1Hit: trials.filter(trial => reachedTargets(trial) >= 1).length, t2Hit: trials.filter(trial => reachedTargets(trial) >= 2).length, t3Hit: trials.filter(trial => reachedTargets(trial) >= 3).length, reversalRate: trials.length ? trials.filter(trial => trial.status === "REVERSAL_RISK").length / trials.length * 100 : null, stopRate: trials.length ? losses.length / trials.length * 100 : null, winRate: completed.length >= 5 ? wins.length / completed.length * 100 : null, lossRate: completed.length >= 5 ? losses.length / completed.length * 100 : null, averageWinningTrade: winningPnls.length ? grossProfit / winningPnls.length : null, averageLosingTrade: losingPnls.length ? -grossLoss / losingPnls.length : null, grossProfit, grossLoss, netPnl: realizedPnl + unrealizedPnl, simulatedPnl: realizedPnl + unrealizedPnl, currentEquity: account?.currentEquity ?? startingCapital, startingCapital, returnPercent: startingCapital ? (Number(account?.currentEquity ?? startingCapital) - startingCapital) / startingCapital * 100 : null, averageR: completed.length >= 5 && rValues.length ? rValues.reduce((sum, value) => sum + value, 0) / rValues.length : null, totalR: completed.length >= 5 ? rValues.reduce((sum, value) => sum + value, 0) : null, profitFactor: completed.length >= 5 && grossLoss > 0 ? grossProfit / grossLoss : null, maximumDrawdown: await getAutoPaperMaximumDrawdown(userId, filters), insufficientSample: completed.length < 5, sampleLabel: getAutoPaperSampleLabel(completed.length), byStrategy: by("strategy"), byMode: by("mode"), byDirection: by("direction"), byTimeframe: by("timeframe"), byAsset: by("assetId") };
+}
+
+export async function getAutoPaperMaximumDrawdown(userId: number, filters?: AutoPaperPerformanceFilters) {
+  const curve = await getAutoPaperEquityCurve(userId, filters);
+  return calculateAutoPaperMaximumDrawdown(curve.map(point => point.equity));
+}
+
+export async function getAutoPaperEquityCurve(userId: number, filters?: AutoPaperPerformanceFilters) {
+  const account = await getAutoPaperAccount(userId);
+  const all = await getAutoPaperHistory(userId);
+  const trials = all.filter(trial => (!filters?.strategy || trial.strategy === filters.strategy) && (!filters?.timeframe || trial.timeframe === filters.timeframe) && (!filters?.direction || trial.direction === filters.direction) && (!filters?.mode || trial.mode === filters.mode || (filters.mode === "EXPERIMENTAL" && trial.mode === "CUSTOM")) && (!filters?.assetId || trial.assetId === filters.assetId) && (!filters?.regime || trialRegime(trial) === filters.regime) && (!filters?.qualification || trialQualification(trial) === filters.qualification) && (!filters?.from || trial.createdAt.getTime() >= filters.from) && (!filters?.to || trial.createdAt.getTime() <= filters.to));
+  const startingCapital = account?.startingCapital ?? 0;
+  let equity = startingCapital;
+  const points: Array<{ timestamp: number; equity: number; drawdown: number; trialId?: number; event?: string }> = [{ timestamp: trials[0]?.createdAt.getTime() ?? Date.now(), equity, drawdown: 0, event: "STARTING_CAPITAL" }];
+  for (const trial of [...trials].filter(isCompletedTrial).sort((a, b) => (a.completedAt?.getTime() ?? a.createdAt.getTime()) - (b.completedAt?.getTime() ?? b.createdAt.getTime()))) { equity += Number(trial.realizedPnl ?? 0); points.push({ timestamp: trial.completedAt?.getTime() ?? trial.createdAt.getTime(), equity, drawdown: 0, trialId: trial.id, event: trial.status }); }
+  equity = Number(account?.currentEquity ?? equity);
+  points.push({ timestamp: Date.now(), equity, drawdown: 0, event: "CURRENT_EQUITY" });
+  let peak = points[0]?.equity ?? 0;
+  return points.map(point => { peak = Math.max(peak, point.equity); return { ...point, drawdown: peak - point.equity }; });
+}
+
+export async function buildAutoPaperReport(userId: number, filters?: AutoPaperPerformanceFilters) {
+  const account = await getAutoPaperAccount(userId);
+  const performance = await getAutoPaperPerformance(userId, filters);
+  const trials = (await getAutoPaperHistory(userId)).filter(trial => (!filters?.strategy || trial.strategy === filters.strategy) && (!filters?.timeframe || trial.timeframe === filters.timeframe) && (!filters?.direction || trial.direction === filters.direction) && (!filters?.mode || trial.mode === filters.mode || (filters.mode === "EXPERIMENTAL" && trial.mode === "CUSTOM")) && (!filters?.assetId || trial.assetId === filters.assetId) && (!filters?.regime || trialRegime(trial) === filters.regime) && (!filters?.qualification || trialQualification(trial) === filters.qualification) && (!filters?.from || trial.createdAt.getTime() >= filters.from) && (!filters?.to || trial.createdAt.getTime() <= filters.to));
+  return { metadata: { report: "AUTO_PAPER_PERFORMANCE_V1", generatedAt: new Date().toISOString(), accountId: account?.id ?? null, filters: filters ?? {}, source: AUTO_PAPER_SOURCE, secretsIncluded: false }, account: account ? { id: account.id, startingCapital: account.startingCapital, currentEquity: account.currentEquity, availableCash: account.availableCash, realizedPnl: account.realizedPnl, unrealizedPnl: account.unrealizedPnl } : null, performance, trades: trials.map(trial => ({ id: trial.id, assetId: trial.assetId, strategy: trial.strategy, timeframe: trial.timeframe, direction: trial.direction, mode: trial.mode, status: trial.status, entry: trial.entryPrice, exit: trial.status === "STOPPED" ? (trial.currentSnapshot as any)?.price ?? null : null, targets: [trial.target1, trial.target2, trial.target3].filter(Boolean), stop: trial.stopPrice, realizedPnl: trial.realizedPnl, currentPnl: trial.currentPnl, rMultiple: Number(trial.realizedPnl ?? 0) / Math.max(1, Number(trial.entryPrice * trial.positionSize * trial.riskPercent / 100)), createdAt: trial.createdAt, completedAt: trial.completedAt, provider: trial.provider, freshness: trial.freshness, provenance: trial.provenance, setupQuality: trial.setupQuality, regime: trialRegime(trial), reason: (trial.currentSnapshot as any)?.reason ?? null })) };
 }
 
 export async function getAutoPaperActive(userId: number) {
