@@ -218,7 +218,7 @@ export default function Home() {
   const { isAuthenticated } = useAuth();
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [activeNav, setActiveNav] = useState("Home");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("assetId") : null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paperOpen, setPaperOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("workspace") === "paper-trading");
   const [paperAsset, setPaperAsset] = useState<ScannerRow | null>(null);
@@ -236,7 +236,7 @@ export default function Home() {
   const [historicalDataOpen, setHistoricalDataOpen] = useState(false);
   const [executionCostLabOpen, setExecutionCostLabOpen] = useState(false);
   const [backupRecoveryOpen, setBackupRecoveryOpen] = useState(false);
-  const [assetIntelligenceOpen, setAssetIntelligenceOpen] = useState(false);
+  const [assetIntelligenceOpen, setAssetIntelligenceOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("workspace") === "asset-intelligence" && Boolean(new URLSearchParams(window.location.search).get("assetId")));
   const [minScore, setMinScore] = useState(0);
   const [sector, setSector] = useState("All sectors");
   const { data: scan, isLoading, isFetching, error } = trpc.crypto.scanner.useQuery({ forceRefresh: refreshNonce > 0 }, { refetchOnWindowFocus: false, staleTime: 45_000, retry: 1 });
@@ -244,7 +244,7 @@ export default function Home() {
   const rows = scan?.rows ?? [];
   const sectors = useMemo(() => ["All sectors", ...Array.from(new Set(rows.map(row => row.asset.sector))).sort()], [rows]);
   const filteredRows = useMemo(() => rows.filter(row => (row.score?.score ?? -1) >= minScore && (sector === "All sectors" || row.asset.sector === sector)), [rows, minScore, sector]);
-  const selected = rows.find(row => row.asset.id === selectedId) ?? filteredRows[0] ?? null;
+  const selected = selectedId ? rows.find(row => row.asset.id === selectedId) ?? null : filteredRows[0] ?? null;
   const topRows = rows.filter(row => row.score).slice(0, 3);
   const sectorRotation = useMemo(() => Object.entries(rows.filter(row => row.score).reduce<Record<string, number[]>>((map, row) => { (map[row.asset.sector] ??= []).push(row.score!.score); return map; }, {})).map(([name, values]) => ({ name, score: values.reduce((sum, value) => sum + value, 0) / values.length })).sort((a, b) => b.score - a.score).slice(0, 4), [rows]);
   useEffect(() => { if (online) markReadSnapshot(scan?.generatedAt, Boolean(scan?.dataStatus.some(status => status.status === "live"))); }, [online, scan?.generatedAt, scan?.dataStatus, markReadSnapshot]);

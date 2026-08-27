@@ -465,3 +465,6 @@
 - [x] Validate owner scoping, protected 401 behavior, Manual Paper isolation, real-order isolation, PWA online-only mutations, lazy loading, accessibility, responsive desktop/iPhone, and Light/Dark/System themes.
 - [x] Add Phase 23 Vitest coverage for eligibility/reasons/data-vs-strategy, lifecycle/events/resume, funnel/performance/equity/journal/exports, authentication/ownership/isolation/PWA/responsive contracts.
 - [x] Run full tests, TypeScript, production build, security/provider/order/PWA scans, production smoke; publish a recoverable Phase 23 checkpoint without creating synthetic data or trials. Validation: 301/301 tests, clean typecheck/build/restart, local protected 401/public 200 checks, and desktop/iPhone previews; no trial or synthetic data created.
+- [x] Fix Phase 24 focused test harness import after the first run reported `describe is not defined`.
+- [x] Fix Phase 24 AssetTopSummary regime type mismatch by using the existing asset-intelligence market context contract.
+- [x] Fix Phase 24 mobile Asset Workspace dialog positioning and viewport scroll height; verified edge-to-edge 390px capture with honest unavailable state.
