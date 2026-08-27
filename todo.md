@@ -539,3 +539,28 @@
 - [x] Add Phase 29 contract tests for URL filters, mobile sheet behavior, sorting, empty/data states, bridges, return context, watchlist-only behavior, accessibility, PWA, and protected-core boundaries.
 - [x] Run focused/full tests, TypeScript, production build, boundary scans, and responsive visual QA at 375px, 390px, 414px, and desktop widths.
 - [x] Save and publish the Phase 29 checkpoint only after todo.md is fully reviewed and all completed items are marked [x].
+
+# Phase 30 — Trading Decision Experience & Opportunity Workspace
+
+- [x] Audit the Phase 30 specification against existing Feed, Decision Center, Asset Workspace, chart, navigation, PWA, and protected contracts.
+- [x] Preserve the protected core: scoring, readiness, qualification, strategies, risk, sizing, entry/stop/target calculations, providers, validation, freshness, Paper, Auto Paper, Research Lab, alerts, schedules, auth, authorization, PWA, and real-trading prohibition.
+- [x] Preserve no migration, no schema, no new tables/columns, and no persistent data-model changes; stop with BLOCKER/WHY/SAFE NON-MIGRATION ALTERNATIVE if required.
+- [x] Establish a clear Opportunity Workspace with Asset, Direction, Status, Strategy, and Timeframe above the fold.
+- [x] Add server-derived decision status presentation for READY, POTENTIAL, WATCH, NO TRADE, and DATA UNAVAILABLE without changing qualification.
+- [x] Add server-derived Decision Summary sections for WHY THIS SETUP, RISK, PLAN, and DATA.
+- [x] Present server-derived WHY evidence with honest NOT AVAILABLE handling and no client-side invention.
+- [x] Present valid server-derived plan fields including Entry, Entry Zone, Stop Loss, TP1/TP2/TP3, R:R, Direction, and Timeframe; otherwise show PLAN UNAVAILABLE with reason.
+- [x] Present Entry Zone only when provided by the server, including low/high and current-price distance; never fabricate a zone.
+- [x] Improve target visualization and chart overlays using existing server-derived Entry/SL/TP values only.
+- [x] Add server-derived Risk section for risk level, invalidation, distance, R:R, warning, and market regime without changing calculations.
+- [x] Keep warnings visible without converting Potential/Watch into Qualified or hiding opportunities.
+- [x] Add status-specific Potential, Qualified, Watch, No Trade, and Data Unavailable experiences with honest copy and safe action boundaries.
+- [x] Present Market Regime as RISK ON, NEUTRAL, or RISK OFF with explanation and higher-caution treatment only.
+- [x] Present available server-derived technical evidence: RSI, MACD, EMA20/50/200, Trend, and Volume.
+- [x] Preserve chart empty, limited, and data-unavailable states without client-derived technical values.
+- [x] Preserve safe actions: VIEW DECISION, VIEW FULL ANALYSIS, ADD TO WATCHLIST, and PAPER TRADE only through existing contracts and boundaries.
+- [x] Add mobile-first decision flow with summary-first layout, collapsible WHY/PLAN/RISK/DATA/TECHNICAL sections, and 44px+ controls.
+- [x] Preserve Feed → Decision → Asset navigation and return context, including filter/query context where applicable.
+- [x] Add Phase 30 contract tests for workspace structure, status-specific rendering, server evidence, plan/risk/data states, chart boundaries, warnings, mobile IA, navigation, PWA, auth, and no-real-trading boundaries.
+- [x] Run focused/full tests, TypeScript, production build, boundary scans, and responsive visual QA at 375px, 390px, 414px, and desktop widths.
+- [x] Save and publish the Phase 30 checkpoint only after todo.md is reviewed and all completed items are marked [x].
