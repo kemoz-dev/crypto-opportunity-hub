@@ -473,7 +473,7 @@
 - [x] Add a compact server-derived chart legend for price, available plan levels, EMA20/50/200, and volume with no fabricated entries.
 - [x] Add mobile-first collapsible evidence sections with Summary/Chart/Trade Plan prioritized and accessible 44px controls.
 - [x] Add a canonical read-only `/asset/{asset}` route while preserving private Auto Paper ownership protection.
-- [ ] Perform read-only authenticated production verification when an owner session exists; otherwise report the exact no-session blocker without bypass.
+- [x] Perform read-only authenticated production verification when an owner session exists; otherwise report the exact no-session blocker without bypass. Result: AUTHENTICATED PRODUCTION VERIFICATION BLOCKED — NO OWNER SESSION; published runtime remains limited/404.
 - [x] Fix canonical asset deep-link empty-row blocker with an identity-only unavailable fallback; preserve null market data and server-authoritative detail queries.
 - [x] Run focused/full tests, TypeScript, production build, security/PWA scans, and responsive verification at 375/390/414px and desktop widths.
 - [x] Fix the Phase 25 Asset Workspace compile regression by importing the existing Button component.
