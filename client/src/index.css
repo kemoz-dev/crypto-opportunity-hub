@@ -3,18 +3,67 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root { --background: oklch(0.075 0.015 250); --foreground: oklch(0.94 0.02 220); --card: oklch(0.1 0.017 250); --card-foreground: oklch(0.94 0.02 220); --popover: oklch(0.11 0.017 250); --popover-foreground: oklch(0.94 0.02 220); --primary: oklch(0.81 0.14 205); --primary-foreground: oklch(0.13 0.025 235); --secondary: oklch(0.15 0.02 250); --secondary-foreground: oklch(0.86 0.02 220); --muted: oklch(0.15 0.018 250); --muted-foreground: oklch(0.62 0.025 235); --accent: oklch(0.17 0.025 245); --accent-foreground: oklch(0.94 0.02 220); --destructive: oklch(0.65 0.2 25); --border: oklch(0.22 0.025 245); --input: oklch(0.19 0.022 245); --ring: oklch(0.78 0.14 205); --radius: 0.68rem; }
+:root {
+  --background: oklch(0.975 0.008 240);
+  --foreground: oklch(0.18 0.025 245);
+  --card: oklch(0.995 0.003 240);
+  --card-foreground: oklch(0.18 0.025 245);
+  --popover: oklch(0.995 0.003 240);
+  --popover-foreground: oklch(0.18 0.025 245);
+  --primary: oklch(0.58 0.15 218);
+  --primary-foreground: oklch(0.99 0.005 235);
+  --secondary: oklch(0.935 0.012 240);
+  --secondary-foreground: oklch(0.25 0.03 245);
+  --muted: oklch(0.94 0.01 240);
+  --muted-foreground: oklch(0.42 0.028 245);
+  --accent: oklch(0.93 0.025 220);
+  --accent-foreground: oklch(0.2 0.03 240);
+  --destructive: oklch(0.58 0.2 25);
+  --border: oklch(0.82 0.016 240);
+  --input: oklch(0.88 0.014 240);
+  --ring: oklch(0.62 0.16 210);
+  --radius: 0.68rem;
+}
+
+.dark {
+  --background: oklch(0.075 0.015 250);
+  --foreground: oklch(0.94 0.02 220);
+  --card: oklch(0.1 0.017 250);
+  --card-foreground: oklch(0.94 0.02 220);
+  --popover: oklch(0.11 0.017 250);
+  --popover-foreground: oklch(0.94 0.02 220);
+  --primary: oklch(0.81 0.14 205);
+  --primary-foreground: oklch(0.13 0.025 235);
+  --secondary: oklch(0.15 0.02 250);
+  --secondary-foreground: oklch(0.86 0.02 220);
+  --muted: oklch(0.15 0.018 250);
+  --muted-foreground: oklch(0.62 0.025 235);
+  --accent: oklch(0.17 0.025 245);
+  --accent-foreground: oklch(0.94 0.02 220);
+  --destructive: oklch(0.65 0.2 25);
+  --border: oklch(0.22 0.025 245);
+  --input: oklch(0.19 0.022 245);
+  --ring: oklch(0.78 0.14 205);
+}
 
 * { border-color: var(--border); }
-html { background: #060a12; min-height: 100%; overflow-x: hidden; }
-body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; background: #060a12; color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+html { background: var(--background); min-height: 100%; overflow-x: hidden; }
+body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 #root { min-height: 100dvh; }
 button, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
-button:focus-visible, input:focus-visible, select:focus-visible, [role="tab"]:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
-.terminal-grid { background-image: linear-gradient(rgba(34,211,238,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,.018) 1px, transparent 1px), radial-gradient(ellipse at 50% -20%, rgba(8,145,178,.12), transparent 48%); background-size: 38px 38px, 38px 38px, auto; mask-image: linear-gradient(to bottom, black, transparent 75%); }
-select option { background: #101827; color: #e2e8f0; }
+button:focus-visible, input:focus-visible, select:focus-visible, [role="tab"]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.terminal-grid { background-image: linear-gradient(color-mix(in oklch, var(--primary) 8%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklch, var(--primary) 8%, transparent) 1px, transparent 1px), radial-gradient(ellipse at 50% -20%, color-mix(in oklch, var(--primary) 20%, transparent), transparent 48%); background-size: 38px 38px, 38px 38px, auto; mask-image: linear-gradient(to bottom, black, transparent 75%); }
+select option { background: var(--popover); color: var(--popover-foreground); }
+
+html[data-theme="light"] [class*="bg-[#"] { background-color: color-mix(in oklch, var(--card) 94%, var(--primary)) !important; }
+html[data-theme="light"] [class*="bg-white/"] { background-color: color-mix(in oklch, var(--foreground) 4%, transparent) !important; }
+html[data-theme="light"] [class*="text-slate-100"], html[data-theme="light"] [class*="text-slate-200"], html[data-theme="light"] [class*="text-slate-300"] { color: var(--foreground) !important; }
+html[data-theme="light"] [class*="text-slate-400"] { color: var(--muted-foreground) !important; }
+html[data-theme="light"] [class*="text-slate-500"], html[data-theme="light"] [class*="text-slate-600"] { color: color-mix(in oklch, var(--muted-foreground) 82%, var(--background)) !important; }
+html[data-theme="light"] [class*="border-white/"] { border-color: color-mix(in oklch, var(--foreground) 14%, transparent) !important; }
+
 @media (max-width: 1080px) { .scanner-head { grid-template-columns: 34px minmax(140px, 1fr) minmax(90px,.7fr) 80px 32px; } .scanner-head > :nth-child(5), .scanner-head > :nth-child(6) { display: none; } .scanner-head + button { grid-template-columns: 34px minmax(140px, 1fr) minmax(90px,.7fr) 80px 32px; } .scanner-head + button > :nth-child(5), .scanner-head + button > :nth-child(6) { display: none; } }
 @media (max-width: 620px) { .scanner-head { display: none !important; } .scanner-head + button { grid-template-columns: minmax(0,1fr) max-content !important; gap: .65rem !important; padding: .85rem .9rem !important; } .scanner-head + button > :nth-child(1), .scanner-head + button > :nth-child(7) { display: none; } .scanner-head + button > :nth-child(2) { grid-column: 1; grid-row: 1; } .scanner-head + button > :nth-child(3) { display: block !important; grid-column: 1; grid-row: 2; } .scanner-head + button > :nth-child(4) { grid-column: 2; grid-row: 1; } .scanner-head + button > :nth-child(5) { display: block !important; grid-column: 1; grid-row: 3; } .scanner-head + button > :nth-child(6) { display: block !important; grid-column: 2; grid-row: 2; } }
 
@@ -34,4 +83,8 @@ select option { background: #101827; color: #e2e8f0; }
   main { padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 3.75rem)); }
   .pwa-mobile-nav { padding-top: .15rem; }
   .pwa-mobile-nav button { min-height: 2.35rem; padding-top: .25rem; padding-bottom: .25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

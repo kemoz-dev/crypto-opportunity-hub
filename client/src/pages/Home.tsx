@@ -24,12 +24,13 @@ import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
 import type { ScannerResponse, ScannerRow } from "@shared/crypto";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/contexts/ThemeContext";
 import { OnlineStatusLabel, usePwaStatus } from "@/pwa/PwaStatus";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Activity, AlertTriangle, ArchiveRestore, ArrowDownRight, ArrowUpRight, BarChart3, BellRing, BookOpen, Calculator, ChevronDown,
-  ChevronRight, Clock3, Database, FlaskConical, Gauge, Layers3, LineChart, Loader2, PanelLeft,
-  RefreshCw, ScanSearch, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Target, TrendingUp,
+  ChevronRight, Clock3, Database, FlaskConical, Gauge, Layers3, LineChart, Loader2, Moon, PanelLeft,
+  RefreshCw, ScanSearch, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Target, TrendingUp,
   WalletCards, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,17 +39,17 @@ type NavItem = { label: string; icon: typeof Gauge; phase: "live" | "planned" };
 type NavGroup = { label: string; items: NavItem[] };
 
 const navigationGroups: NavGroup[] = [
-  { label: "Home", items: [{ label: "Dashboard", icon: Gauge, phase: "live" }] },
-  { label: "Trade", items: [
+  { label: "Main", items: [
+    { label: "Dashboard", icon: Gauge, phase: "live" },
+    { label: "Opportunities", icon: Sparkles, phase: "live" },
+    { label: "Market Scanner", icon: ScanSearch, phase: "live" },
+    { label: "Asset Intelligence", icon: LineChart, phase: "live" },
+  ] },
+  { label: "Trading", items: [
     { label: "Scalping", icon: Target, phase: "live" },
     { label: "Swing", icon: TrendingUp, phase: "live" },
     { label: "Setup Monitor", icon: Activity, phase: "live" },
     { label: "Paper Trading", icon: WalletCards, phase: "live" },
-  ] },
-  { label: "Analysis", items: [
-    { label: "Market Scanner", icon: ScanSearch, phase: "live" },
-    { label: "Opportunity Discovery", icon: Sparkles, phase: "live" },
-    { label: "Asset Intelligence", icon: LineChart, phase: "live" },
   ] },
   { label: "Research", items: [
     { label: "Research Lab", icon: FlaskConical, phase: "live" },
@@ -57,11 +58,9 @@ const navigationGroups: NavGroup[] = [
     { label: "Execution Cost Lab", icon: Calculator, phase: "live" },
     { label: "Backtesting", icon: BarChart3, phase: "live" },
   ] },
-  { label: "Monitor", items: [
+  { label: "System", items: [
     { label: "Watchlist", icon: BookOpen, phase: "live" },
     { label: "Alerts", icon: BellRing, phase: "live" },
-  ] },
-  { label: "System", items: [
     { label: "Data / Provider Health", icon: ShieldCheck, phase: "live" },
     { label: "Backup & Recovery", icon: ArchiveRestore, phase: "live" },
     { label: "Settings", icon: Settings2, phase: "live" },
@@ -200,6 +199,7 @@ function RegimeBanner({ scan }: { scan: ScannerResponse | undefined }) {
 
 export default function Home() {
   const { online, connectionState, liveDataAvailable, updateReady, markReadSnapshot, markLiveDataUnavailable } = usePwaStatus();
+  const { theme, toggleTheme } = useTheme();
   const { isAuthenticated } = useAuth();
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [activeNav, setActiveNav] = useState("Dashboard");
@@ -240,7 +240,7 @@ export default function Home() {
   const openDiscoveryWorkspace = () => { setPaperOpen(false); setSetupMode(null); setSetupMonitorOpen(false); setDiscoveryOpen(true); setActiveNav("Opportunity Discovery"); if (typeof window !== "undefined") window.history.replaceState(null, "", `${window.location.pathname}?workspace=opportunity-discovery`); };
   const openSetupMonitorWorkspace = () => { setPaperOpen(false); setSetupMode(null); setDiscoveryOpen(false); setWatchlistOpen(false); setSetupMonitorOpen(true); setActiveNav("Setup Monitor"); if (typeof window !== "undefined") window.history.replaceState(null, "", `${window.location.pathname}?workspace=setup-monitor`); };
   const openWatchlistWorkspace = () => { setPaperOpen(false); setSetupMode(null); setDiscoveryOpen(false); setSetupMonitorOpen(false); setWatchlistOpen(true); setActiveNav("Watchlist"); if (typeof window !== "undefined") window.history.replaceState(null, "", `${window.location.pathname}?workspace=watchlist`); };
-  const handleNav = (item: NavItem) => { if (item.label === "Settings") { setSettingsOpen(true); return; } if (item.label === "Setup Monitor") { openSetupMonitorWorkspace(); return; } if (item.label === "Watchlist") { openWatchlistWorkspace(); return; } if (item.label === "Paper Trading") { openPaperWorkspace(selected); return; } if (item.label === "Scalping") { openSetupWorkspace("SCALP"); return; } if (item.label === "Swing") { openSetupWorkspace("SWING"); return; } if (item.label === "Opportunity Discovery") { openDiscoveryWorkspace(); return; } if (item.label === "Market Scanner") { setActiveNav(item.label); scrollToScanner(); return; } if (item.label === "Backtesting") { setBacktestingOpen(true); return; } if (item.label === "Alerts") { setAlertsOpen(true); return; } if (item.label === "Research Summary") { setResearchSummaryOpen(true); return; } if (item.label === "Research Lab") { setResearchLabOpen(true); return; } if (item.label === "Historical Data") { setHistoricalDataOpen(true); return; } if (item.label === "Execution Cost Lab") { setExecutionCostLabOpen(true); return; } if (item.label === "Backup & Recovery") { setBackupRecoveryOpen(true); return; } if (item.phase === "planned") { toast.message(`${item.label} is planned after the verified Phase 1 scanner milestone.`, { description: "No placeholder data has been added for this feature." }); return; } setActiveNav(item.label); };
+  const handleNav = (item: NavItem) => { if (item.label === "Settings") { setSettingsOpen(true); return; } if (item.label === "Setup Monitor") { openSetupMonitorWorkspace(); return; } if (item.label === "Watchlist") { openWatchlistWorkspace(); return; } if (item.label === "Paper Trading") { openPaperWorkspace(selected); return; } if (item.label === "Scalping") { openSetupWorkspace("SCALP"); return; } if (item.label === "Swing") { openSetupWorkspace("SWING"); return; } if (item.label === "Opportunity Discovery" || item.label === "Opportunities") { openDiscoveryWorkspace(); return; } if (item.label === "Market Scanner") { setActiveNav(item.label); scrollToScanner(); return; } if (item.label === "Backtesting") { setBacktestingOpen(true); return; } if (item.label === "Alerts") { setAlertsOpen(true); return; } if (item.label === "Research Summary") { setResearchSummaryOpen(true); return; } if (item.label === "Research Lab") { setResearchLabOpen(true); return; } if (item.label === "Historical Data") { setHistoricalDataOpen(true); return; } if (item.label === "Execution Cost Lab") { setExecutionCostLabOpen(true); return; } if (item.label === "Backup & Recovery") { setBackupRecoveryOpen(true); return; } if (item.phase === "planned") { toast.message(`${item.label} is planned after the verified Phase 1 scanner milestone.`, { description: "No placeholder data has been added for this feature." }); return; } setActiveNav(item.label); };
   useEffect(() => {
     const onMobileNavigate = (event: Event) => {
       const target = (event as CustomEvent<"dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "alerts" | "research">).detail;
@@ -267,7 +267,7 @@ export default function Home() {
     </Suspense><div className="terminal-grid fixed inset-0 pointer-events-none opacity-40" />
     <div className="relative mx-auto flex min-h-screen max-w-[1800px]">
       <aside className="hidden w-[234px] shrink-0 border-r border-white/[.07] bg-[#070c16]/80 px-3 py-5 lg:flex lg:flex-col"><div className="flex items-center gap-3 px-2 pb-7"><div className="relative grid h-8 w-8 place-items-center rounded-lg bg-cyan-300 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,.32)]"><TrendingUp className="h-4 w-4 stroke-[2.7]" /><span className={cn("absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#070c16]", connectionState === "ONLINE" ? "bg-emerald-400" : "bg-amber-400")} /></div><div><h1 className="text-sm font-bold tracking-tight">Crypto Opportunity</h1><p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[.21em] text-cyan-300">Research terminal</p></div></div><nav aria-label="Primary workspace navigation" className="space-y-4">{navigationGroups.map(group => <section key={group.label} aria-labelledby={`nav-group-${group.label}`}><p id={`nav-group-${group.label}`} className="mb-1 px-3 text-[9px] font-semibold uppercase tracking-[.18em] text-slate-600">{group.label}</p><div className="space-y-0.5">{group.items.map(item => { const Icon = item.icon; const active = activeNav === item.label; return <button key={item.label} onClick={() => handleNav(item)} className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs transition-colors", active ? "bg-cyan-300/[.08] text-cyan-100 shadow-[inset_2px_0_0_#22d3ee]" : "text-slate-400 hover:bg-white/[.035] hover:text-slate-200")}><Icon className={cn("h-4 w-4", active ? "text-cyan-300" : "text-slate-500")} /><span className="min-w-0 flex-1 truncate">{item.label}</span>{item.phase === "planned" && <span className="text-[8px] uppercase tracking-wide text-slate-600">Soon</span>}</button> })}</div></section>)}</nav><div className="mt-auto rounded-xl border border-white/[.07] bg-white/[.025] p-3"><div className="flex items-center justify-between"><span className="text-[9px] font-semibold uppercase tracking-[.15em] text-slate-500">System status</span><span className={cn("flex items-center gap-1.5 text-[10px]", liveDataAvailable ? "text-emerald-300" : "text-amber-200")}><StatusDot status={liveDataAvailable ? "live" : "stale"} />{connectionState}</span></div><p className="mt-2 text-[11px] leading-4 text-slate-500">Live inputs are timestamped. Scores are explainable research signals, not trade instructions.</p></div></aside>
-      <div className="min-w-0 flex-1"><main className="min-w-0"><header className="flex h-[70px] items-center justify-between border-b border-white/[.07] bg-[#080d17]/65 px-4 backdrop-blur-xl sm:px-6"><div className="flex items-center gap-3"><button className="rounded-md p-2 text-slate-400 hover:bg-white/[.05] lg:hidden"><PanelLeft className="h-4 w-4" /></button><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-slate-500">{activeNav} <span className="text-slate-700">/</span> Live scanner</p><div className="mt-1 flex items-center gap-2"><h2 className="text-base font-semibold tracking-tight text-slate-100">Opportunity intelligence</h2><span className="hidden items-center gap-1 text-[10px] text-slate-500 sm:flex"><Clock3 className="h-3 w-3" />{scan ? `Updated ${timeAgo(scan.generatedAt)}` : "Initializing sources"}</span><OnlineStatusLabel /></div></div></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={refresh} disabled={isFetching || !online} className="h-8 border-white/[.09] bg-white/[.025] px-3 text-xs text-slate-300 hover:bg-white/[.07] hover:text-white"><RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />Refresh</Button><button onClick={() => toast.message("Search will be introduced with the extended scanner universe.")} className="hidden rounded-md border border-white/[.09] bg-white/[.025] p-2 text-slate-400 hover:bg-white/[.07] sm:block"><ScanSearch className="h-3.5 w-3.5" /></button></div></header>
+      <div className="min-w-0 flex-1"><main className="min-w-0"><header className="flex h-[70px] items-center justify-between border-b border-white/[.07] bg-[#080d17]/65 px-4 backdrop-blur-xl sm:px-6"><div className="flex items-center gap-3"><button className="rounded-md p-2 text-slate-400 hover:bg-white/[.05] lg:hidden"><PanelLeft className="h-4 w-4" /></button><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-slate-500">{activeNav} <span className="text-slate-700">/</span> Live scanner</p><div className="mt-1 flex items-center gap-2"><h2 className="text-base font-semibold tracking-tight text-slate-100">Opportunity intelligence</h2><span className="hidden items-center gap-1 text-[10px] text-slate-500 sm:flex"><Clock3 className="h-3 w-3" />{scan ? `Updated ${timeAgo(scan.generatedAt)}` : "Initializing sources"}</span><OnlineStatusLabel /></div></div></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={refresh} disabled={isFetching || !online} className="h-8 border-white/[.09] bg-white/[.025] px-3 text-xs text-slate-300 hover:bg-white/[.07] hover:text-white"><RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />Refresh</Button><button type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} className="rounded-md border border-white/[.09] bg-white/[.025] p-2 text-slate-400 hover:bg-white/[.07] hover:text-slate-100"><Sun className={cn("h-3.5 w-3.5", theme === "light" ? "text-amber-400" : "hidden")} /><Moon className={cn("h-3.5 w-3.5", theme === "dark" ? "text-cyan-200" : "hidden")} /></button><button onClick={() => toast.message("Search will be introduced with the extended scanner universe.")} className="hidden rounded-md border border-white/[.09] bg-white/[.025] p-2 text-slate-400 hover:bg-white/[.07] sm:block"><ScanSearch className="h-3.5 w-3.5" /></button></div></header>
         <div className="p-4 sm:p-6"><div className="mb-5 grid gap-4 xl:grid-cols-[1.45fr_.9fr]"><RegimeBanner scan={scan} /><div className="flex items-center justify-between rounded-xl border border-white/[.07] bg-white/[.025] px-4 py-3"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Data quality</p><p className="mt-1 text-xs text-slate-300">{scan?.dataStatus.filter(status => status.status === "live").length ?? 0} live provider feeds · {scan?.dataStatus.filter(status => status.status !== "live").length ?? 0} unavailable</p></div><ShieldCheck className="h-5 w-5 text-cyan-300" /></div></div>
           {error ? <div className="mb-5 rounded-xl border border-rose-300/20 bg-rose-300/[.05] p-4 text-sm text-rose-100"><div className="flex gap-2"><AlertTriangle className="h-4 w-4 shrink-0" /><div><p className="font-semibold">Live scanner unavailable</p><p className="mt-1 text-xs text-rose-100/70">{error.message}. No market or score values have been generated.</p></div></div></div> : null}
           <ControlCenter scan={scan} monitoredCount={isAuthenticated ? activeMonitors?.length ?? null : null} authenticated={isAuthenticated} onDiscovery={openDiscoveryWorkspace} onScalping={() => openSetupWorkspace("SCALP")} onSwing={() => openSetupWorkspace("SWING")} onMonitor={openSetupMonitorWorkspace} />

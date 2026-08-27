@@ -158,6 +158,33 @@ describe("Phase 2 secure PWA contract", () => {
     }
   });
 
+  it("keeps Phase 14 theme, evidence hierarchy, and Scalping separation presentation-only", () => {
+    const theme = read("client/src/contexts/ThemeContext.tsx");
+    const css = read("client/src/index.css");
+    const home = read("client/src/pages/Home.tsx");
+    const mobile = read("client/src/pwa/PwaMobileNavigation.tsx");
+    const card = read("client/src/components/crypto/OpportunityCard.tsx");
+    const trade = read("client/src/components/crypto/TradeSetupWorkspace.tsx");
+    expect(theme).toContain("prefers-color-scheme");
+    expect(theme).toContain("localStorage");
+    expect(theme).toContain("dataset.theme");
+    expect(css).toContain("prefers-reduced-motion");
+    expect(home).toContain("toggleTheme");
+    expect(home).toContain("Switch to");
+    expect(mobile).toContain("role=\"dialog\"");
+    expect(mobile).toContain("Escape");
+    expect(mobile).toContain("Switch to");
+    expect(card).toContain("Distance to invalidation");
+    expect(card).toContain("dataQuality");
+    expect(card).toContain("confirmationGaps");
+    expect(trade).toContain("15M Fast Scalp");
+    expect(trade).toContain("1M / 3M / 5M is isolated");
+    for (const source of [home, mobile, card, trade]) {
+      expect(source).not.toContain("api.bybit.com");
+      expect(source).not.toContain("fetch(\"https://api");
+    }
+  });
+
   it("does not retain the client-side user mirror after logout and avoids server secret references", () => {
     const auth = read("client/src/_core/hooks/useAuth.ts");
     const pwaSources = [

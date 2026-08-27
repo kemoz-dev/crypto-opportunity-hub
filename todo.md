@@ -286,3 +286,20 @@
 - [x] Run focused/full tests, TypeScript, production build, security/cache scans, bundle/performance checks, and desktop/tablet/mobile visual verification.
 - [x] Document Phase 13 implementation, limitations, Watchlist decision, and unchanged protected boundaries.
 - [x] Save and publish the validated Phase 13 checkpoint only after all completed items are marked [x].
+
+
+## Phase 14 — Complete UI/UX Redesign + Multi-Device Experience + Scalping/Swing Discovery
+- [x] Audit checkpoint 60566ab5, current UI architecture, themes, navigation, PWA, Opportunity Card, Scalping/Swing engines, provider/data-quality boundaries, and the complete Phase 14 specification.
+- [x] Define a premium terminal IA, dark/light theme contract, responsive shell, shared status vocabulary, and server-derived Opportunity Card evidence contract.
+- [x] Simplify desktop and mobile navigation without deleting functionality or weakening authentication/ownership boundaries.
+- [x] Implement first-class persisted dark/light mode with system preference fallback, accessible contrast, semantic status colors, and readable charts/tables/badges.
+- [x] Redesign Dashboard around market regime, top opportunities, Scalping/Swing snapshots, active monitoring, Paper Trading, data quality, and clear empty/error states.
+- [x] Upgrade Opportunity Card to show only server-derived direction, scores, readiness, health, timeframe, data quality, provider, freshness, levels, R:R, progress, invalidation distance, and rationale.
+- [x] Implement the controlled Scalping data ladder without relabeling 15M as 1M/3M/5M and without weakening provider/data validation.
+- [x] Add the separate validated 15M Fast Scalp presentation only where existing 15M evidence is eligible, with explicit fallback labeling and fail-closed unavailable states.
+- [x] Improve Swing discovery with practical filters, setup readiness, health/progress, no-trade explanations, and mobile/desktop responsive flows without changing scoring or status rules.
+- [x] Preserve Paper Trading, Setup Monitor, Alerts, Research Lab, scheduler, historical data, provider provenance, PWA cache/offline, and real-trading prohibitions.
+- [x] Add deterministic tests for themes/navigation, Opportunity Card evidence, data-ladder/fallback semantics, Swing discovery, protected actions, and PWA boundaries.
+- [x] Run full tests, TypeScript, production build, security/provider/real-action scans, PWA/cache checks, accessibility checks, bundle/performance checks, and desktop/tablet/mobile visual verification.
+- [x] Document Phase 14 implementation, limitations, exact data-ladder behavior, and unchanged protected boundaries.
+- [x] Save and publish the validated Phase 14 checkpoint only after all completed items are marked [x].

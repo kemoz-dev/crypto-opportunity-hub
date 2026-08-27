@@ -1,5 +1,6 @@
-import { Activity, BellRing, BookOpen, FlaskConical, Gauge, Menu, ScanSearch, Target, TrendingUp, WalletCards } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Activity, BellRing, BookOpen, FlaskConical, Gauge, Menu, Moon, ScanSearch, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "alerts" | "research";
 
@@ -9,6 +10,7 @@ function navigate(target: PwaNavTarget) {
 
 export function PwaMobileNavigation() {
   const [moreOpen, setMoreOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
   const primaryItems = [
     { label: "Home", target: "dashboard" as const, icon: Gauge },
     { label: "Scanner", target: "scanner" as const, icon: ScanSearch },
@@ -23,6 +25,46 @@ export function PwaMobileNavigation() {
     { label: "Alerts", target: "alerts" as const, icon: BellRing },
     { label: "Research", target: "research" as const, icon: FlaskConical },
   ];
-  const choose = (target: PwaNavTarget) => { setMoreOpen(false); navigate(target); };
-  return <nav aria-label="Mobile workspace navigation" className="pwa-mobile-nav fixed inset-x-0 bottom-0 z-[80] flex border-t border-white/[.08] bg-[#080d17]/95 px-1 pt-1 backdrop-blur-xl lg:hidden">{moreOpen ? <div id="pwa-mobile-more" className="pwa-mobile-more absolute inset-x-2 bottom-full mb-2 rounded-xl border border-white/[.1] bg-[#0b1321]/98 p-2 shadow-2xl"><p className="px-2 py-1 text-[9px] font-semibold uppercase tracking-[.16em] text-slate-500">More workspaces</p>{moreItems.map(item => { const Icon = item.icon; return <button key={item.target} onClick={() => choose(item.target)} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-xs text-slate-200 hover:bg-white/[.06]"><Icon className="h-4 w-4 text-cyan-200" />{item.label}</button>; })}</div> : null}{primaryItems.map(item => { const Icon = item.icon; return <button key={item.target} onClick={() => choose(item.target)} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100"><Icon className="h-4 w-4" /><span className="truncate">{item.label}</span></button>; })}<button aria-expanded={moreOpen} aria-controls="pwa-mobile-more" onClick={() => setMoreOpen(value => !value)} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100"><Menu className="h-4 w-4" /><span className="truncate">More</span></button></nav>;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const choose = (target: PwaNavTarget) => {
+    setMoreOpen(false);
+    navigate(target);
+  };
+
+  return (
+    <nav aria-label="Mobile workspace navigation" className="pwa-mobile-nav fixed inset-x-0 bottom-0 z-[80] flex border-t border-white/[.08] bg-[#080d17]/95 px-1 pt-1 backdrop-blur-xl lg:hidden">
+      {moreOpen ? (
+        <div id="pwa-mobile-more" role="dialog" aria-label="More workspaces" className="pwa-mobile-more absolute inset-x-2 bottom-full mb-2 rounded-xl border border-white/[.1] bg-[#0b1321]/98 p-2 shadow-2xl">
+          <div className="flex items-center justify-between px-2 py-1">
+            <p className="text-[9px] font-semibold uppercase tracking-[.16em] text-slate-500">More workspaces</p>
+            <button type="button" aria-label="Close more workspaces" onClick={() => setMoreOpen(false)} className="rounded p-1 text-slate-400 hover:bg-white/[.06] hover:text-slate-100"><X className="h-3.5 w-3.5" /></button>
+          </div>
+          {moreItems.map(item => {
+            const Icon = item.icon;
+            return <button type="button" key={item.target} onClick={() => choose(item.target)} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-xs text-slate-200 hover:bg-white/[.06]"><Icon className="h-4 w-4 text-cyan-200" />{item.label}</button>;
+          })}
+          <button type="button" onClick={() => { toggleTheme(); setMoreOpen(false); }} className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-lg border-t border-white/[.07] px-3 py-3 text-left text-xs text-slate-200 hover:bg-white/[.06]">
+            {theme === "dark" ? <Sun className="h-4 w-4 text-amber-300" /> : <Moon className="h-4 w-4 text-cyan-200" />}
+            Switch to {theme === "dark" ? "Light" : "Dark"} theme
+          </button>
+        </div>
+      ) : null}
+      {primaryItems.map(item => {
+        const Icon = item.icon;
+        return <button type="button" key={item.target} onClick={() => choose(item.target)} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100"><Icon className="h-4 w-4" /><span className="truncate">{item.label}</span></button>;
+      })}
+      <button type="button" aria-expanded={moreOpen} aria-controls="pwa-mobile-more" onClick={() => setMoreOpen(value => !value)} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100">
+        {moreOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        <span className="truncate">More</span>
+      </button>
+    </nav>
+  );
 }
