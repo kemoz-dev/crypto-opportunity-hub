@@ -81,6 +81,7 @@ html[data-theme="light"] [class*="text-fuchsia-100"], html[data-theme="light"] [
   .pwa-safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
   .pwa-mobile-nav { padding-bottom: max(.35rem, env(safe-area-inset-bottom)); }
   main { padding-bottom: max(5.75rem, calc(env(safe-area-inset-bottom) + 4.5rem)); }
+  html[data-asset-workspace-open="true"] .pwa-mobile-nav { display: none !important; }
   [data-slot="dialog-content"] { inset: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left) !important; transform: none !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain; border-radius: 0 !important; padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important; }
 }
 

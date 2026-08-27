@@ -479,3 +479,11 @@
 - [x] Fix the Phase 25 Asset Workspace compile regression by importing the existing Button component.
 - [x] Fix the Phase 25 missing AutoPaperPerformanceEvidence component before validation.
 - [x] Fix focused contract failures without weakening the implementation: retain legacy evidence wording, explicit TP labels, and narrow the order-boundary assertion.
+- [x] Review the newly attached specification and map its requirements to existing project contracts.
+- [x] Implement the requested compatible changes without weakening authentication, data-quality, PWA, Paper/Auto Paper, Research Lab, scheduler, or real-trading boundaries.
+- [x] Fix Phase 26 compile regression by adding the chart availability contract used by AssetIntelligencePanel.
+- [x] Fix Phase 25/26 focused contract failures without weakening production behavior or safety boundaries.
+- [x] Fix Phase 26 compile regression by adding the routeAssetId/routeAssetKnown props to AssetIntelligencePanel.
+- [x] Run focused/full tests, TypeScript, production build, security scans, and responsive verification for the new specification.
+- [x] Fix iPhone 375 Asset Workspace bottom-nav overlap with mobile safe-area/content padding, then recheck 375/390/414.
+- [x] Raise only the Asset Workspace dialog above the persistent mobile navigation layer, then recheck no overlay at 375/390/414.

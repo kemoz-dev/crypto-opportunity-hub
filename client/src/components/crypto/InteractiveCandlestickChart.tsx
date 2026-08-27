@@ -11,9 +11,18 @@ export type ChartPlanOverlay = {
   targets?: Array<{ label?: string | null; price?: number | null; status?: string | null }>;
 };
 
+export type ChartAvailability = {
+  state?: string | null;
+  provider?: string | null;
+  timeframe?: string | null;
+  lastValidatedAt?: number | null;
+  reason?: string | null;
+};
+
 type Props = {
   points: TechnicalChartPoint[];
   overlay?: ChartPlanOverlay | null;
+  availability?: ChartAvailability;
   symbol?: string | null;
   timeframe?: string | null;
   className?: string;
@@ -38,7 +47,7 @@ export function clampWindow(start: number, end: number, length: number) {
   return [safeStart, safeEnd] as const;
 }
 
-export function InteractiveCandlestickChart({ points, overlay, symbol, timeframe, className }: Props) {
+export function InteractiveCandlestickChart({ points, overlay, availability, symbol, timeframe, className }: Props) {
   const [windowState, setWindowState] = useState(() => ({ start: Math.max(0, points.length - 90), end: points.length }));
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const dragRef = useRef<{ clientX: number; start: number; end: number } | null>(null);
@@ -63,10 +72,11 @@ export function InteractiveCandlestickChart({ points, overlay, symbol, timeframe
 
   if (!points.length) {
     return (
-      <div className={cn("grid min-h-72 place-items-center rounded-xl border border-dashed border-white/[.1] bg-white/[.015] px-5 text-center", className)}>
+      <div className={cn("grid min-h-72 place-items-center rounded-xl border border-dashed border-white/[.1] bg-white/[.015] px-5 text-center", className)} role="status" aria-label="Chart data unavailable">
         <div>
-          <p className="text-sm font-medium text-slate-300">Chart data unavailable</p>
-          <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">No validated current candle window is available for the selected timeframe. No historical data was requested to fill the display.</p>
+          <p className="text-sm font-semibold uppercase tracking-[.14em] text-amber-200">CHART DATA UNAVAILABLE</p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">No validated current candle window is available for the selected timeframe. No historical data was requested to fill the display.</p>
+          <div className="mt-3 space-y-1 text-[10px] uppercase tracking-[.1em] text-slate-500"><p>Provider: {availability?.provider ?? "UNAVAILABLE"}</p><p>Timeframe: {(availability?.timeframe ?? timeframe ?? "UNAVAILABLE").toUpperCase()}</p><p>Last validated: {availability?.lastValidatedAt ? new Date(availability.lastValidatedAt).toLocaleString() : "UNAVAILABLE"}</p><p>Reason: {availability?.reason ?? "UNAVAILABLE"}</p></div>
         </div>
       </div>
     );

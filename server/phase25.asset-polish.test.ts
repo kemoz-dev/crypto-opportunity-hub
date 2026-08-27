@@ -10,7 +10,7 @@ describe("Phase 25 trade investigation polish contracts", () => {
     const home = source("client/src/pages/Home.tsx");
     expect(app).toContain("path=\"/asset/:assetId\"");
     expect(home).toContain("/^\\/asset\\/([^/]+)$/");
-    expect(home).toContain("window.history.replaceState(null, \"\", `/asset/${encodeURIComponent(assetId)}`)");
+    expect(home).toContain("window.history.pushState");
     expect(home).toContain("function initialAssetWorkspaceOpen");
     expect(home).toContain("function identityFallbackRow");
     expect(home).toContain("price: null");

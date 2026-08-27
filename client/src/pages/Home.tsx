@@ -33,11 +33,17 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
-import type { ScannerResponse, ScannerRow } from "@shared/crypto";
+import { DEFAULT_ASSET_UNIVERSE, type ScannerResponse, type ScannerRow } from "@shared/crypto";
+
+function canonicalAssetId(raw: string) {
+  const normalized = decodeURIComponent(raw).trim().toLowerCase();
+  return DEFAULT_ASSET_UNIVERSE.find(asset => asset.id.toLowerCase() === normalized || asset.symbol.toLowerCase() === normalized)?.id ?? normalized;
+}
 
 function identityFallbackRow(assetId: string): ScannerRow {
-  const symbol = assetId.toUpperCase();
-  return { asset: { id: assetId, symbol, name: assetId, binanceSymbol: "", sector: "UNAVAILABLE", price: null, marketCap: null, marketCapRank: null, volume24h: null, change1h: null, change24h: null, change7d: null, lastUpdatedAt: null, provider: "UNAVAILABLE" }, score: null, dataStatus: [], fundingRate: null, openInterest: null };
+  const profile = DEFAULT_ASSET_UNIVERSE.find(asset => asset.id === assetId);
+  const identity = profile ?? { id: assetId, symbol: assetId.toUpperCase(), name: assetId, binanceSymbol: "", sector: "UNAVAILABLE" };
+  return { asset: { ...identity, price: null, marketCap: null, marketCapRank: null, volume24h: null, change1h: null, change24h: null, change7d: null, lastUpdatedAt: null, provider: "UNAVAILABLE" }, score: null, dataStatus: [], fundingRate: null, openInterest: null };
 }
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -217,7 +223,7 @@ function WorkspaceRail({ activeNav, onSelect }: { activeNav: string; onSelect: (
   return <div className="mb-5 hidden overflow-x-auto rounded-xl border border-white/[.07] bg-white/[.02] p-1.5 xl:flex" aria-label="Primary workspaces">{navigationGroups[0].items.map(item => { const Icon = item.icon; const active = activeNav === item.label; return <button key={item.label} type="button" onClick={() => onSelect(item)} className={cn("flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-[11px] font-semibold transition-colors", active ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:bg-white/[.06] hover:text-slate-100")}><Icon className="h-3.5 w-3.5" />{item.label}</button>; })}</div>;
 }
 
-function initialAssetId() { if (typeof window === "undefined") return null; const queryAsset = new URLSearchParams(window.location.search).get("assetId"); if (queryAsset) return queryAsset; const match = window.location.pathname.match(/^\/asset\/([^/]+)$/); return match ? decodeURIComponent(match[1]) : null; }
+function initialAssetId() { if (typeof window === "undefined") return null; const queryAsset = new URLSearchParams(window.location.search).get("assetId"); if (queryAsset) return canonicalAssetId(queryAsset); const match = window.location.pathname.match(/^\/asset\/([^/]+)$/); return match ? canonicalAssetId(match[1]) : null; }
 function initialAssetWorkspaceOpen() { if (typeof window === "undefined") return false; const query = new URLSearchParams(window.location.search); return Boolean(initialAssetId()) && (query.get("workspace") === "asset-intelligence" || window.location.pathname.startsWith("/asset/")); }
 
 export default function Home() {
@@ -252,13 +258,18 @@ export default function Home() {
   const rows = scan?.rows ?? [];
   const sectors = useMemo(() => ["All sectors", ...Array.from(new Set(rows.map(row => row.asset.sector))).sort()], [rows]);
   const filteredRows = useMemo(() => rows.filter(row => (row.score?.score ?? -1) >= minScore && (sector === "All sectors" || row.asset.sector === sector)), [rows, minScore, sector]);
-  const selected = selectedId ? rows.find(row => row.asset.id === selectedId) ?? identityFallbackRow(selectedId) : filteredRows[0] ?? null;
+  const selected = selectedId ? rows.find(row => row.asset.id === selectedId) ?? (DEFAULT_ASSET_UNIVERSE.some(asset => asset.id === selectedId) ? identityFallbackRow(selectedId) : null) : filteredRows[0] ?? null;
   const topRows = rows.filter(row => row.score).slice(0, 3);
   const sectorRotation = useMemo(() => Object.entries(rows.filter(row => row.score).reduce<Record<string, number[]>>((map, row) => { (map[row.asset.sector] ??= []).push(row.score!.score); return map; }, {})).map(([name, values]) => ({ name, score: values.reduce((sum, value) => sum + value, 0) / values.length })).sort((a, b) => b.score - a.score).slice(0, 4), [rows]);
   useEffect(() => { if (online) markReadSnapshot(scan?.generatedAt, Boolean(scan?.dataStatus.some(status => status.status === "live"))); }, [online, scan?.generatedAt, scan?.dataStatus, markReadSnapshot]);
   useEffect(() => { if (online && error) markLiveDataUnavailable(); }, [online, error, markLiveDataUnavailable]);
   useEffect(() => { if (selectedId) setAssetIntelligenceOpen(true); }, [selectedId]);
-  const openAssetWorkspace = (assetId: string) => { setSelectedId(assetId); setAssetIntelligenceOpen(true); if (typeof window !== "undefined") window.history.replaceState(null, "", `/asset/${encodeURIComponent(assetId)}`); };
+  useEffect(() => {
+    const syncAssetRoute = () => { const assetId = initialAssetId(); setSelectedId(assetId); setAssetIntelligenceOpen(initialAssetWorkspaceOpen()); };
+    window.addEventListener("popstate", syncAssetRoute);
+    return () => window.removeEventListener("popstate", syncAssetRoute);
+  }, []);
+  const openAssetWorkspace = (assetId: string) => { const canonicalId = canonicalAssetId(assetId); setSelectedId(canonicalId); setAssetIntelligenceOpen(true); if (typeof window !== "undefined") { const nextPath = `/asset/${encodeURIComponent(canonicalId)}`; if (window.location.pathname !== nextPath) window.history.pushState(null, "", nextPath); } };
   const closeAssetWorkspace = () => { setAssetIntelligenceOpen(false); setSelectedId(null); if (typeof window !== "undefined") window.history.replaceState(null, "", window.location.pathname.startsWith("/asset/") ? "/" : window.location.pathname); };
   const scrollToScanner = () => { requestAnimationFrame(() => document.getElementById("market-scanner")?.scrollIntoView({ behavior: "smooth", block: "start" })); };
   const openPaperWorkspace = (asset: ScannerRow | null, mode?: "SCALP" | "SWING" | "LOW_TIMEFRAME_SCALPING") => { setPaperAsset(asset); setPaperSetupMode(mode); setSetupMode(null); setDiscoveryOpen(false); setActiveNav("Paper"); setPaperOpen(true); if (typeof window !== "undefined") window.history.replaceState(null, "", `${window.location.pathname}?workspace=paper-trading`); };
@@ -296,7 +307,7 @@ export default function Home() {
   const refresh = () => { if (!online) { toast.message("Offline read-only mode", { description: "Live data is unavailable until Crypto Hub reconnects." }); return; } setRefreshNonce(value => value + 1); toast.message("Refreshing public market sources", { description: "The scanner will display unavailable states if a source does not respond." }); };
   const pwaBannerVisible = connectionState !== "ONLINE" || updateReady;
   return <div className={cn("min-h-screen bg-[#060a12] text-slate-100 selection:bg-cyan-300/30", pwaBannerVisible && "pt-16")}>
-    <Suspense fallback={null}><LazyAssetIntelligencePanel row={selected} open={assetIntelligenceOpen} onOpenChange={open => open ? setAssetIntelligenceOpen(true) : closeAssetWorkspace()} onPaperTrade={(row, mode) => { setAssetIntelligenceOpen(false); openPaperWorkspace(row, mode); }} />
+    <Suspense fallback={null}><LazyAssetIntelligencePanel row={selected} routeAssetId={selectedId} routeAssetKnown={!selectedId || Boolean(selected)} open={assetIntelligenceOpen} onOpenChange={open => open ? setAssetIntelligenceOpen(true) : closeAssetWorkspace()} onPaperTrade={(row, mode) => { setAssetIntelligenceOpen(false); openPaperWorkspace(row, mode); }} />
     </Suspense><div className="terminal-grid fixed inset-0 pointer-events-none opacity-40" />
     <div className="relative mx-auto flex min-h-screen max-w-[1800px]">
       <aside className="hidden w-[234px] shrink-0 border-r border-white/[.07] bg-[#070c16]/80 px-3 py-5 lg:flex lg:flex-col"><div className="flex items-center gap-3 px-2 pb-7"><div className="relative grid h-8 w-8 place-items-center rounded-lg bg-cyan-300 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,.32)]"><TrendingUp className="h-4 w-4 stroke-[2.7]" /><span className={cn("absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#070c16]", connectionState === "ONLINE" ? "bg-emerald-400" : "bg-amber-400")} /></div><div><h1 className="text-sm font-bold tracking-tight">Crypto Opportunity</h1><p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[.21em] text-cyan-300">Research terminal</p></div></div><nav aria-label="Primary workspace navigation" className="space-y-4">{navigationGroups.map(group => <section key={group.label} aria-labelledby={`nav-group-${group.label}`}><p id={`nav-group-${group.label}`} className="mb-1 px-3 text-[9px] font-semibold uppercase tracking-[.18em] text-slate-600">{group.label}</p><div className="space-y-0.5">{group.items.map(item => { const Icon = item.icon; const active = activeNav === item.label; return <button key={item.label} onClick={() => handleNav(item)} className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs transition-colors", active ? "bg-cyan-300/[.08] text-cyan-100 shadow-[inset_2px_0_0_#22d3ee]" : "text-slate-400 hover:bg-white/[.035] hover:text-slate-200")}><Icon className={cn("h-4 w-4", active ? "text-cyan-300" : "text-slate-500")} /><span className="min-w-0 flex-1 truncate">{item.label}</span>{item.phase === "planned" && <span className="text-[8px] uppercase tracking-wide text-slate-600">Soon</span>}</button> })}</div></section>)}</nav><div className="mt-auto rounded-xl border border-white/[.07] bg-white/[.025] p-3"><div className="flex items-center justify-between"><span className="text-[9px] font-semibold uppercase tracking-[.15em] text-slate-500">System status</span><span className={cn("flex items-center gap-1.5 text-[10px]", liveDataAvailable ? "text-emerald-300" : "text-amber-200")}><StatusDot status={liveDataAvailable ? "live" : "stale"} />{connectionState}</span></div><p className="mt-2 text-[11px] leading-4 text-slate-500">Live inputs are timestamped. Scores are explainable research signals, not trade instructions.</p></div></aside>

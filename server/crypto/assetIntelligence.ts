@@ -24,6 +24,9 @@ export function buildExplainabilityPresentation(scan: ScannerResponse, row: Scan
   const selectedAnalysis = analysisFor(score, requestedTimeframe);
   const chartStatuses = chart.statuses;
   const sourceTimestamp = chart.series?.retrievedAt ?? row.asset.lastUpdatedAt;
+  const allStatuses = [...scan.dataStatus, ...row.dataStatus, ...chartStatuses];
+  const dataStatus = presentationState(allStatuses, sourceTimestamp);
+  const chartReason = chart.series ? null : chartStatuses.map(status => status.message ?? status.errorClass).filter(Boolean).join(" · ") || "No validated current candle window is available for the selected timeframe.";
   const evidence = score?.reasons ?? [];
   const technicalRows = SUPPORTED_TIMEFRAMES.map(timeframe => {
     const analysis = analysisFor(score, timeframe);
@@ -54,6 +57,8 @@ export function buildExplainabilityPresentation(scan: ScannerResponse, row: Scan
       ohlcvTimestamp: chart.series?.retrievedAt ?? null,
       ohlcvState: presentationState(chartStatuses, sourceTimestamp),
       normalizationVersion: chart.series?.normalizationVersion ?? null,
+      dataStatus,
+      lastValidatedAt: sourceTimestamp,
     },
     explainability: {
       positive: evidence.filter(reason => reason.direction === "positive"),
@@ -67,7 +72,7 @@ export function buildExplainabilityPresentation(scan: ScannerResponse, row: Scan
       selectedAnalysis,
       matrix: technicalRows,
       checklist: selectedAnalysis?.reasons.map(reason => ({ label: reason.label, state: reason.direction === "positive" ? "CONFIRMED" : reason.direction === "negative" ? "NOT CONFIRMED" : "UNAVAILABLE", detail: reason.detail, contribution: reason.score, maximum: reason.maxScore })) ?? [],
-      chart: chart.series ? { provider: chart.series.provider, symbol: chart.series.symbol, timeframe: chart.series.timeframe, retrievedAt: chart.series.retrievedAt, candles: buildTechnicalChartSeries(chart.series.candles, config), status: "CURRENT" as const } : { provider: null, symbol: null, timeframe: requestedTimeframe, retrievedAt: null, candles: [], status: "UNAVAILABLE" as const },
+      chart: chart.series ? { provider: chart.series.provider, symbol: chart.series.symbol, timeframe: chart.series.timeframe, retrievedAt: chart.series.retrievedAt, lastValidatedAt: chart.series.retrievedAt, reason: null, candles: buildTechnicalChartSeries(chart.series.candles, config), status: presentationState(chartStatuses, chart.series.retrievedAt) } : { provider: null, symbol: null, timeframe: requestedTimeframe, retrievedAt: null, lastValidatedAt: null, reason: chartReason, candles: [], status: "UNAVAILABLE" as const },
     },
     risk: {
       atrPercent: selectedAnalysis?.atrPercent ?? null,
@@ -87,7 +92,7 @@ export function buildExplainabilityPresentation(scan: ScannerResponse, row: Scan
     },
     provenance: {
       scannerGeneratedAt: scan.generatedAt,
-      dataStatuses: [...scan.dataStatus, ...row.dataStatus, ...chartStatuses],
+      dataStatuses: allStatuses,
       selectedTimeframe: requestedTimeframe,
       datasetVersion: null,
     },
