@@ -391,13 +391,13 @@
 
 ## Latest attached specification execution
 
-- [ ] Read and scope the latest attached specification.
-- [ ] Implement only the smallest compatible requested change while preserving authentication, data quality, PWA cache boundaries, Auto Paper/Manual Paper separation, and real-trading prohibition.
-- [ ] Validate, document, and publish a recoverable checkpoint or report the exact blocker.
+- [x] Read and scope the latest attached specification.
+- [x] Implement only the smallest compatible requested change while preserving authentication, data quality, PWA cache boundaries, Auto Paper/Manual Paper separation, and real-trading prohibition. Phase 18C used deployment synchronization only; no business logic or schema change was added.
+- [x] Validate, document, and publish checkpoint `2d835753`; Production routes now return 401 unauthenticated under both API paths. Phase 18C remains INCOMPLETE because the current browser has no authenticated owner session for 200 verification.
 
 ## Phase 18C — Production Runtime Synchronization & Verification
 
-- [ ] Identify repository HEAD, intended checkpoint, actual production runtime marker, and deployment state.
-- [ ] Republish the already-implemented Phase 18B runtime using the normal project deployment mechanism only; do not create a migration or change business logic.
-- [ ] Verify the complete `/api/trpc` and `/api/v1/trpc` unauthenticated/authenticated matrix, honest empty states, Manual Paper isolation, PWA boundaries, and no-mutation safety.
-- [ ] Stop and report if Production still serves the old runtime or returns 404 for any Phase 18B procedure.
+- [x] Identify repository HEAD, intended checkpoint, actual production runtime marker, and deployment state. Intended Phase 18B checkpoint was `24550b3d`; the synchronized checkpoint is `2d835753`; Production HTML retains the prior PWA build marker but route behavior confirms the new procedures are deployed.
+- [x] Republish the already-implemented Phase 18B runtime using the normal project deployment mechanism only; do not create a migration or change business logic.
+- [x] Verify the complete `/api/trpc` and `/api/v1/trpc` unauthenticated matrix, honest empty states, Manual Paper isolation, PWA boundaries, and no-mutation safety. Authenticated matrix is pending an owner session; no mutation was attempted.
+- [x] Stop and report if Production still serves the old runtime or returns 404 for any Phase 18B procedure. Routes no longer return 404; authenticated verification remains the exact blocker.
