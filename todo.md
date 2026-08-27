@@ -644,3 +644,21 @@
 
 - [x] Fix Command Center Discovery defensive timeframe rendering so valid server responses cannot crash when `timeframes` is not an array; show an honest unavailable label without fabricating data.
 - [x] Add regression coverage for non-array/missing timeframe presentation and re-run full validation plus responsive QA at 375px, 390px, 414px, and desktop widths.
+
+
+# Phase 34 — Opportunity Quality Engine & Trade Decision Center
+
+- [x] Audit the Phase 34 specification against existing discovery, trade-setup, opportunity-card, feed, decision-center, asset, and server contracts.
+- [x] Preserve the protected core: scoring, providers/fallback, validation/freshness, risk/sizing, Scalp/15M Fast Scalp/Swing, qualification, Manual Paper, Auto Paper, Research Lab, alerts, schedules, authentication/authorization, PWA policy, and no-real-trading boundary.
+- [x] Preserve no schema, migration, table, column, persistence, synthetic-data, fake-market-data, or client-side decision/ranking changes.
+- [x] Reuse or expose only existing server-derived opportunity quality, readiness, diagnostics, plan, risk, data-health, missing-evidence, and simulation evidence.
+- [x] Standardize server-authoritative QUALIFIED, POTENTIAL, WATCH, NO_TRADE, DATA_LIMITED/DATA_UNAVAILABLE, and RISK_OFF_RESTRICTED presentation without lowering thresholds.
+- [x] Present POTENTIAL as review-required with server-derived warning, missing evidence, WHY, RISK, DATA, freshness, and valid plan fields only when available.
+- [x] Present WATCH, NO TRADE, DATA LIMITED, and Risk Off states with explicit server-derived reasons and no implied executability.
+- [x] Add or surface independent server-derived Opportunity Quality labels only where existing evidence supports them; never replace or recalculate primary score.
+- [x] Standardize WHAT/WHY/PLAN/RISK/DATA/EVIDENCE across Feed, Decision Center, and opportunity cards with honest unavailable states.
+- [x] Preserve read-only simulation evidence matching asset, strategy, timeframe, and direction, including no-sample state.
+- [x] Preserve URL filters, return context, Watchlist, Auto Paper read-only evidence, lazy loading, code splitting, accessibility, 44px touch targets, and no horizontal overflow.
+- [x] Add Phase 34 contract and regression tests for quality/state mapping, warnings, missing evidence, plan/data visibility, Risk Off, simulation evidence, navigation, auth, PWA, and no-real-trading boundaries.
+- [x] Run focused/full tests, TypeScript, production build, protected-core/security scans, and responsive QA at mobile and desktop widths.
+- [x] Review todo.md, save the Phase 34 checkpoint, and deliver the published release.

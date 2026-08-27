@@ -11,6 +11,7 @@ export type OpportunityDiscoveryStatus = "QUALIFIED" | "POTENTIAL" | "WATCH" | "
 export type SetupMaturity = "EARLY" | "DEVELOPING" | "CONFIRMING" | "QUALIFIED" | "INVALIDATED" | "UNAVAILABLE";
 export type SetupReadinessState = "READY" | "NEAR_READY" | "EARLY" | "WATCH" | "INVALID" | "DATA_UNAVAILABLE";
 export type DiscoveryTradeReadiness = "READY" | "WAITING" | "RESTRICTED" | "NOT ELIGIBLE" | "UNAVAILABLE";
+export type OpportunityQualityLevel = "STRONG" | "GOOD" | "MIXED" | "WEAK" | "UNAVAILABLE";
 
 type ReadinessPlan = {
   availability: "SUPPORTED" | "PARTIAL" | "UNAVAILABLE";
@@ -56,6 +57,7 @@ export type OpportunityDiscoveryItem = {
   dataReason: string | null;
   sourcePresentationStatus: TradeSetupPlan["presentationStatus"];
   adaptive: ReturnType<typeof qualifyAdaptive>;
+  opportunityQuality: { level: OpportunityQualityLevel; score: number | null; confidence: ReturnType<typeof qualifyAdaptive>["quality"]["confidence"]; explanation: string };
   sourcePlan: Pick<TradeSetupPlan, "actionable" | "currentPrice" | "entryZone" | "stop" | "invalidation" | "targets" | "rewardRisk" | "readinessCandidate" | "evidence" | "risks" | "diagnostics">;
 };
 
@@ -156,6 +158,13 @@ function readiness(status: OpportunityDiscoveryStatus, plan: TradeSetupPlan, mat
   return { version: SETUP_READINESS_VERSION, state, score, components, explanation };
 }
 
+function opportunityQuality(adaptive: ReturnType<typeof qualifyAdaptive>): OpportunityDiscoveryItem["opportunityQuality"] {
+  const score = adaptive.quality.score;
+  if (score == null || adaptive.quality.confidence === "UNAVAILABLE" || adaptive.dataQuality === "UNAVAILABLE") return { level: "UNAVAILABLE", score: null, confidence: adaptive.quality.confidence, explanation: "Opportunity quality is unavailable because validated evidence is incomplete." };
+  const level: OpportunityQualityLevel = score >= 75 ? "STRONG" : score >= 55 ? "GOOD" : score >= 35 ? "MIXED" : "WEAK";
+  return { level, score, confidence: adaptive.quality.confidence, explanation: `Quality is derived from existing validated technical, trend, momentum, plan, regime, and reward/risk evidence; it does not replace the Opportunity Score.` };
+}
+
 function invalidationExplanation(plan: TradeSetupPlan, readinessPlan: ReadinessPlan) {
   if (readinessPlan.invalidation) return `Technical invalidation: ${readinessPlan.invalidation.price}. ${readinessPlan.invalidation.reason}`;
   return diagnostic(plan, "structural_stop")?.detail ?? "Technical invalidation is unavailable because existing validated structure did not support one.";
@@ -168,6 +177,7 @@ function item(plan: TradeSetupPlan): OpportunityDiscoveryItem {
   const matches = alignedTimeframes(plan, direction);
   const whyInteresting = evidenceFor(plan, matches);
   const agreement = { aligned: matches.length, required: 3, direction, label: direction === "NO TRADE" ? "No directional agreement" : `${matches.length}/3 timeframes align ${direction === "LONG" ? "bullishly" : "bearishly"}` };
+  const adaptive = qualifyAdaptive(plan);
   const base = {
     version: OPPORTUNITY_DISCOVERY_VERSION,
     assetId: plan.assetId,
@@ -185,7 +195,8 @@ function item(plan: TradeSetupPlan): OpportunityDiscoveryItem {
     timeframeAgreement: agreement,
     whyInteresting,
     sourcePresentationStatus: plan.presentationStatus,
-    adaptive: qualifyAdaptive(plan),
+    adaptive,
+    opportunityQuality: opportunityQuality(adaptive),
     sourcePlan: sourcePlan(plan),
     potentialAlertEligible: false as const,
   } as const;

@@ -67,7 +67,7 @@ describe("Phase 8 opportunity discovery interpretation", () => {
   });
 
   it("keeps RISK OFF technically interesting items visible as restricted POTENTIAL rather than a qualified trade", () => {
-    const result = buildOpportunityDiscoveryItem(plan({ direction: "NO TRADE", regimeClassification: "RISK OFF", diagnostics: [...coreConditions(), condition("opportunity_direction", "FAILED", "Market regime is RISK OFF."), condition("structural_stop", "UNAVAILABLE"), condition("target_structure", "UNAVAILABLE"), condition("risk_reward", "UNAVAILABLE")] }));
+    const result = buildOpportunityDiscoveryItem(plan({ direction: "NO TRADE", availability: "LIVE", regimeClassification: "RISK OFF", diagnostics: [...coreConditions(), condition("opportunity_direction", "FAILED", "Market regime is RISK OFF."), condition("structural_stop", "UNAVAILABLE"), condition("target_structure", "UNAVAILABLE"), condition("risk_reward", "UNAVAILABLE")] }));
     expect(result).toMatchObject({ status: "POTENTIAL", tradeReadiness: "RESTRICTED", paperTradeEligible: false, regime: { restricted: true } });
     expect(result.exactReason).toContain("RISK OFF");
   });
@@ -189,7 +189,7 @@ describe("Phase 9 setup readiness and conditional-plan contract", () => {
   });
 
   it("preserves RISK OFF as a restricted non-eligible readiness state", () => {
-    const result = buildOpportunityDiscoveryItem(plan({ currentPrice: 100, direction: "NO TRADE", regimeClassification: "RISK OFF", readinessCandidate: readinessCandidate(), diagnostics: [...coreConditions(), condition("opportunity_direction", "FAILED", "Market regime is RISK OFF."), condition("structural_stop", "UNAVAILABLE"), condition("target_structure", "UNAVAILABLE"), condition("risk_reward", "UNAVAILABLE")] }));
+    const result = buildOpportunityDiscoveryItem(plan({ currentPrice: 100, direction: "NO TRADE", availability: "LIVE", regimeClassification: "RISK OFF", readinessCandidate: readinessCandidate(), diagnostics: [...coreConditions(), condition("opportunity_direction", "FAILED", "Market regime is RISK OFF."), condition("structural_stop", "UNAVAILABLE"), condition("target_structure", "UNAVAILABLE"), condition("risk_reward", "UNAVAILABLE")] }));
     expect(result).toMatchObject({ status: "POTENTIAL", tradeReadiness: "RESTRICTED", setupReadiness: { state: "NEAR_READY" }, paperTradeEligible: false });
     expect(result.setupReadiness.components.regime).toBe(0);
   });
@@ -210,5 +210,27 @@ describe("Phase 9 setup readiness and conditional-plan contract", () => {
     const unavailable = plan({ assetId: "aave", symbol: "AAVE", opportunityScore: 99, dataBundle: { provider: null, state: "NO_DATA", coherent: false, eligibleForScoring: false, statusMessage: "No data", timeframes: [] } });
     const potential = plan({ assetId: "eth", symbol: "ETH", opportunityScore: 40, currentPrice: 100, readinessCandidate: readinessCandidate(), diagnostics: potentialDiagnostics() });
     expect(buildOpportunityDiscovery("SWING", [unavailable, potential]).items.map(item => item.status)).toEqual(["POTENTIAL", "DATA UNAVAILABLE"]);
+  });
+});
+
+
+describe("Phase 34 opportunity quality contract", () => {
+  it("exposes independent server-derived quality without replacing the primary opportunity score", () => {
+    const result = buildOpportunityDiscoveryItem(plan({ actionable: true, presentationStatus: "QUALIFIED", opportunityScore: 71, availability: "LIVE", entryZone: { preferred: 100 }, stop: { price: 95 }, targets: [{ label: "TP1", price: 110 }], rewardRisk: 2, currentPrice: 100 }));
+    expect(result.opportunityScore).toBe(71);
+    expect(result.opportunityQuality).toMatchObject({ level: expect.any(String), score: expect.any(Number) });
+    expect(result.opportunityQuality.explanation).toContain("does not replace the Opportunity Score");
+  });
+
+  it("marks quality unavailable when validated evidence is unavailable", () => {
+    const result = buildOpportunityDiscoveryItem(plan({ dataBundle: { provider: null, state: "PROVIDER_UNAVAILABLE", coherent: false, eligibleForScoring: false, statusMessage: "Provider unavailable.", timeframes: [] }, diagnostics: [...coreConditions().map(item => ({ ...item, status: "UNAVAILABLE" as const })), condition("opportunity_direction", "UNAVAILABLE")] }));
+    expect(result.status).toBe("DATA UNAVAILABLE");
+    expect(result.opportunityQuality).toMatchObject({ level: "UNAVAILABLE", score: null });
+  });
+
+  it("keeps Risk Off restricted and non-eligible while exposing quality evidence", () => {
+    const result = buildOpportunityDiscoveryItem(plan({ direction: "NO TRADE", availability: "LIVE", regimeClassification: "RISK OFF", diagnostics: [...coreConditions(), condition("opportunity_direction", "FAILED", "Market regime is RISK OFF."), condition("structural_stop", "UNAVAILABLE"), condition("target_structure", "UNAVAILABLE"), condition("risk_reward", "UNAVAILABLE")] }));
+    expect(result).toMatchObject({ status: "POTENTIAL", tradeReadiness: "RESTRICTED", paperTradeEligible: false, regime: { restricted: true } });
+    expect(result.opportunityQuality.level).not.toBe("UNAVAILABLE");
   });
 });
