@@ -570,3 +570,24 @@
 - [x] Add compact mobile Filter Summary showing active filter count/chips with individual removal and CLEAR ALL, backed only by the existing display-only URL filter state.
 - [x] Add regression coverage for mobile Filter Summary count, chip removal, CLEAR ALL, URL synchronization, touch targets, and protected-core boundaries.
 - [x] Re-run full validation and save the acceptance follow-up checkpoint after todo.md review.
+
+# Phase 31 — Live Opportunity Reliability & Decision Quality
+
+- [x] Audit Phase 31 requirements against current Opportunity Feed, Decision Center, Scalp, Swing, Asset Workspace, and shared server contracts.
+- [x] Preserve the protected core: Opportunity Score, Setup Readiness, adaptive qualification, Scalp/15M Fast Scalp/Swing strategies, risk, sizing, entry/stop/target calculations, providers, fallback, validation, freshness, Paper, Auto Paper, Research Lab, alerts, schedules, auth, authorization, PWA cache policy, and no real trading.
+- [x] Preserve no migration, no schema, no new tables/columns, and no persistent data-model changes; stop with BLOCKER/WHY/SAFE NON-MIGRATION ALTERNATIVE if required.
+- [x] Add a compact server-derived Live Opportunity Summary above the Opportunity Feed with market, total opportunities, Qualified, Potential, Watch, No Trade, and Data Limited counts.
+- [x] Add server-derived Opportunity Data Health with HEALTHY, LIMITED, STALE, or UNAVAILABLE and Last Validated without fabricated timestamps.
+- [x] Add WHY NO QUALIFIED TRADES diagnostic using only existing server reasons and counts where the contract supports them.
+- [x] Add server-derived Potential diagnostic showing what is missing and what would confirm each Potential setup without hiding Potential.
+- [x] Preserve server-authoritative TOP OPPORTUNITIES ordering and explicit Qualified/Potential/Watch/No Trade/Data Unavailable states.
+- [x] Preserve clear Qualified, Potential, Watch, No Trade, and Data Unavailable card evidence, warnings, data quality, freshness, and plan gating.
+- [x] Preserve explicit Market Regime RISK ON, NEUTRAL, and RISK OFF visibility with caution-only treatment and no scoring or filtering mutation.
+- [x] Add Scalp timeframe availability diagnostics for 1M, 3M, 5M, and 15M FAST SCALP using existing server data only; do not mix or fabricate timeframes.
+- [x] Add Swing data diagnostics for status, freshness, coverage, technical evidence, plan availability, and server reason when no setup exists.
+- [x] Preserve existing display-only filters, mobile Filter Summary, Quick View, URL state, Watchlist, and Feed → Decision → Asset return context.
+- [x] Preserve safe actions and Auto Paper read-only evidence without creating trials, accounts, snapshots, trades, or simulation side effects.
+- [x] Preserve lazy loading, code splitting, request discipline, static-shell-only PWA caching, and online-only mutations.
+- [x] Add Phase 31 contract tests for live summary counts, data health, no-qualified diagnostics, Potential diagnostics, Scalp/Swing data diagnostics, Risk Off, status states, filters, accessibility, PWA, auth, and no-real-trading boundaries.
+- [x] Run focused/full tests, TypeScript, production build, security/PWA scans, and responsive QA at 375x812, 390x844, 414x896, 1280x800, 1440x900, and 1920x1080 where available.
+- [x] Save and publish the Phase 31 checkpoint only after todo.md is reviewed and all completed items are marked [x].
