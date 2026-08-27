@@ -124,6 +124,40 @@ describe("Phase 2 secure PWA contract", () => {
     expect(monitor).toContain("Server-derived evidence");
   });
 
+  it("keeps Phase 13 Paper Trading summary read-only, Watchlist owner-scoped, and workspaces lazy-loaded", () => {
+    const summary = read("client/src/components/crypto/PaperTradingSummaryCard.tsx");
+    const watchlist = read("client/src/components/crypto/WatchlistWorkspace.tsx");
+    const settings = read("server/crypto/settings.ts");
+    const paper = read("server/crypto/paperTrading.ts");
+    const router = read("server/routers/crypto.ts");
+    const home = read("client/src/pages/Home.tsx");
+    const mobile = read("client/src/pwa/PwaMobileNavigation.tsx");
+    const vite = read("vite.config.ts");
+    expect(summary).toContain("paperTradingSummary.useQuery");
+    expect(summary).toContain("No trade or portfolio mutation occurs here");
+    expect(summary).toContain("enabled: online && isAuthenticated");
+    expect(watchlist).toContain("trpc.crypto.watchlist.useQuery");
+    expect(watchlist).toContain("trpc.crypto.addWatchlistAsset.useMutation");
+    expect(watchlist).toContain("trpc.crypto.removeWatchlistAsset.useMutation");
+    expect(watchlist).toContain("disabled={!online}");
+    expect(settings).toContain("userSettings.watchlist");
+    expect(settings).toContain("assertCanonicalAsset");
+    expect(paper).toContain("Read-only dashboard summary");
+    expect(paper).toContain("if (!portfolio) return { portfolio: null");
+    expect(router).toContain("paperTradingSummary: protectedProcedure.query");
+    expect(router).toContain("watchlist: protectedProcedure.query");
+    expect(router).toContain("addWatchlistAsset: protectedProcedure");
+    expect(router).toContain("removeWatchlistAsset: protectedProcedure");
+    expect(home).toContain("LazyWatchlistWorkspace");
+    expect(home).toContain("LazyPaperTradingWorkspace");
+    expect(vite).toContain("manualChunks");
+    expect(mobile).toContain('label: "Watchlist"');
+    for (const source of [summary, watchlist, home]) {
+      expect(source).not.toContain("api.bybit.com");
+      expect(source).not.toContain("fetch(\"https://api");
+    }
+  });
+
   it("does not retain the client-side user mirror after logout and avoids server secret references", () => {
     const auth = read("client/src/_core/hooks/useAuth.ts");
     const pwaSources = [

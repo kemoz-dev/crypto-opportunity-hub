@@ -272,3 +272,17 @@
 - [x] Run full tests, TypeScript, production build, security/cache scans, and desktop/tablet/mobile visual verification.
 - [x] Document Phase 12 IA, shared components, responsive decisions, accessibility, limitations, and unchanged business boundaries.
 - [x] Save and publish the validated Phase 12 checkpoint only after all completed items are marked [x].
+
+
+## Phase 13 — Paper Trading Summary, Watchlist, and Performance
+
+- [x] Audit checkpoint 0eef49a5, current Dashboard/auth/Paper Trading contracts, Watchlist-related APIs/settings, PWA boundaries, and the full Phase 13 specification.
+- [x] Decide whether an existing safe server-authoritative Watchlist read/mutation contract exists; the existing nullable userSettings.watchlist field was safe to extend additively, so no migration was required.
+- [x] Add a protected read-only Paper Trading Dashboard summary using authoritative existing API values, with authenticated, empty, failure, and retry states; reads never initialize a portfolio.
+- [x] Add a dedicated Watchlist workspace through the existing userSettings-backed server-authoritative contract, with canonical asset selection, owner scoping, online-only mutations, and no responsibility overlap.
+- [x] Preserve authentication, ownership, offline read-only behavior, Paper Trading rules, alerts, schedules, scoring, providers, Research Lab, Setup Monitor, and real-trading prohibition.
+- [x] Optimize frontend loading/code-splitting without changing runtime business logic or data authority through lazy workspace imports and stable Vite vendor chunks.
+- [x] Add deterministic tests for summary auth/empty/failure states, Watchlist validation/ownership/mutations if supported, and performance/PWA boundaries; focused PWA/Paper Trading/Settings tests passed 25/25.
+- [x] Run focused/full tests, TypeScript, production build, security/cache scans, bundle/performance checks, and desktop/tablet/mobile visual verification.
+- [x] Document Phase 13 implementation, limitations, Watchlist decision, and unchanged protected boundaries.
+- [x] Save and publish the validated Phase 13 checkpoint only after all completed items are marked [x].

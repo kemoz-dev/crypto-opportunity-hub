@@ -238,6 +238,16 @@ export async function getPaperPortfolio(userId: number, configuration: ScoringCo
   return { portfolio, metrics, trades, generatedAt: scan.generatedAt };
 }
 
+/** Read-only dashboard summary. It never initializes a portfolio or writes any record. */
+export async function getPaperTradingSummary(userId: number, configuration: ScoringConfig) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; the paper trading summary cannot be loaded.");
+  const portfolio = (await db.select().from(paperPortfolios).where(eq(paperPortfolios.userId, userId)).orderBy(asc(paperPortfolios.id)).limit(1))[0];
+  if (!portfolio) return { portfolio: null, metrics: null, trades: [], generatedAt: null };
+  const presentation = await getPaperPortfolio(userId, configuration);
+  return { portfolio: presentation.portfolio, metrics: presentation.metrics, trades: presentation.trades, generatedAt: presentation.generatedAt };
+}
+
 export async function recordPaperTradeMonitoring(userId: number, tradeId: number, configuration: ScoringConfig) {
   const presentation = await getPaperPortfolio(userId, configuration);
   const trade = presentation.trades.find(item => item.id === tradeId);

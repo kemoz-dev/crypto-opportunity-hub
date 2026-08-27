@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { adminProcedure, router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { buildLiveScanner } from "../crypto/marketService";
-import { getUserScoringConfig, saveUserScoringConfig, scoringConfigSchema } from "../crypto/settings";
-import { closeLivePaperTrade, getPaperPortfolio, openLivePaperTrade, recordPaperTradeMonitoring, refreshLowTimeframePaperTradeHealth } from "../crypto/paperTrading";
+import { addUserWatchlistAsset, getUserScoringConfig, getUserWatchlist, removeUserWatchlistAsset, saveUserScoringConfig, scoringConfigSchema } from "../crypto/settings";
+import { closeLivePaperTrade, getPaperPortfolio, getPaperTradingSummary, openLivePaperTrade, recordPaperTradeMonitoring, refreshLowTimeframePaperTradeHealth } from "../crypto/paperTrading";
 import { runAndPersistBacktest } from "../crypto/backtesting";
 import { alertInputSchema, createAlert, evaluateAlert, getAlertExecution, listAlertExecutions, listAlerts, setAlertEnabled } from "../crypto/alerts";
 import { getLatestResearchReport } from "../crypto/researchSummary";
@@ -81,6 +81,10 @@ export const cryptoRouter = router({
   settings: protectedProcedure.query(({ ctx }) => getUserScoringConfig(ctx.user.id)),
   saveSettings: protectedProcedure.input(scoringConfigSchema).mutation(({ ctx, input }) => saveUserScoringConfig(ctx.user.id, input)),
   paperPortfolio: protectedProcedure.query(async ({ ctx }) => getPaperPortfolio(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
+  paperTradingSummary: protectedProcedure.query(async ({ ctx }) => getPaperTradingSummary(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
+  watchlist: protectedProcedure.query(({ ctx }) => getUserWatchlist(ctx.user.id)),
+  addWatchlistAsset: protectedProcedure.input(z.object({ assetId: z.string().trim().min(1).max(96) })).mutation(({ ctx, input }) => addUserWatchlistAsset(ctx.user.id, input.assetId)),
+  removeWatchlistAsset: protectedProcedure.input(z.object({ assetId: z.string().trim().min(1).max(96) })).mutation(({ ctx, input }) => removeUserWatchlistAsset(ctx.user.id, input.assetId)),
   openPaperTrade: protectedProcedure.input(z.object({ assetId: z.string().min(1), side: z.enum(["long", "short"]), riskPercent: z.number().min(0.1).max(5), setupMode: z.enum(["SCALP", "SWING", "LOW_TIMEFRAME_SCALPING"]).optional() })).mutation(async ({ ctx, input }) => openLivePaperTrade(ctx.user.id, input.assetId, input.side, input.riskPercent, await getUserScoringConfig(ctx.user.id), input.setupMode)),
   closePaperTrade: protectedProcedure.input(z.object({ tradeId: z.number().int().positive() })).mutation(async ({ ctx, input }) => closeLivePaperTrade(ctx.user.id, input.tradeId, await getUserScoringConfig(ctx.user.id))),
   recordPaperTradeMonitoring: protectedProcedure.input(z.object({ tradeId: z.number().int().positive() })).mutation(async ({ ctx, input }) => recordPaperTradeMonitoring(ctx.user.id, input.tradeId, await getUserScoringConfig(ctx.user.id))),

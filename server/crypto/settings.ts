@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { userSettings } from "../../drizzle/schema";
+import { assets, userSettings } from "../../drizzle/schema";
 import { DEFAULT_SCORING_CONFIG, type ScoringConfig } from "../../shared/crypto";
 import { getDb } from "../db";
 
@@ -59,4 +59,40 @@ export async function saveUserScoringConfig(userId: number, configuration: Scori
   if (!db) throw new Error("Database is unavailable; settings cannot be saved.");
   await db.insert(userSettings).values({ userId, scoringConfiguration: validated }).onDuplicateKeyUpdate({ set: { scoringConfiguration: validated } });
   return validated;
+}
+
+const watchlistSchema = z.array(z.string().trim().min(1).max(96)).max(100);
+
+export async function getUserWatchlist(userId: number): Promise<string[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; the watchlist cannot be loaded.");
+  const row = (await db.select({ watchlist: userSettings.watchlist }).from(userSettings).where(eq(userSettings.userId, userId)).limit(1))[0];
+  const parsed = watchlistSchema.safeParse(Array.isArray(row?.watchlist) ? row.watchlist : []);
+  return parsed.success ? Array.from(new Set(parsed.data)) : [];
+}
+
+async function assertCanonicalAsset(assetId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; the watchlist cannot be changed.");
+  const asset = (await db.select({ id: assets.id }).from(assets).where(eq(assets.id, assetId)).limit(1))[0];
+  if (!asset) throw new Error("Select an asset from the canonical asset list.");
+}
+
+async function persistWatchlist(userId: number, watchlist: string[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; the watchlist cannot be changed.");
+  const validated = watchlistSchema.parse(Array.from(new Set(watchlist)));
+  const existing = (await db.select({ userId: userSettings.userId }).from(userSettings).where(eq(userSettings.userId, userId)).limit(1))[0];
+  if (existing) await db.update(userSettings).set({ watchlist: validated }).where(eq(userSettings.userId, userId));
+  else await db.insert(userSettings).values({ userId, scoringConfiguration: DEFAULT_SCORING_CONFIG, watchlist: validated });
+  return validated;
+}
+
+export async function addUserWatchlistAsset(userId: number, assetId: string) {
+  await assertCanonicalAsset(assetId);
+  return persistWatchlist(userId, [...await getUserWatchlist(userId), assetId]);
+}
+
+export async function removeUserWatchlistAsset(userId: number, assetId: string) {
+  return persistWatchlist(userId, (await getUserWatchlist(userId)).filter(id => id !== assetId));
 }
