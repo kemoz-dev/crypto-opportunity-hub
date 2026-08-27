@@ -76,6 +76,13 @@ describe("Phase 30 trading decision experience contracts", () => {
     expect(asset).toContain("overflow-x-hidden");
   });
 
+  it("exposes compact mobile Filter Summary with removal and clear-all controls", () => {
+    const feed = source("client/src/components/crypto/OpportunityFeedWorkspace.tsx");
+    for (const marker of ["const filterSummary = useMemo", "FILTER{filterSummary.length === 1 ? \"\" : \"S\"}", "aria-label={`Remove filter ${filter.label}`}", "CLEAR ALL", "updateFeedFilters(filter.patch)", "resetFeedFilters"]) expect(feed).toContain(marker);
+    expect(feed).toContain("lg:hidden");
+    expect(feed).toContain("min-h-11");
+  });
+
   it("does not add schema, persistence, provider, scheduler, or real-order behavior", () => {
     const feed = source("client/src/components/crypto/OpportunityFeedWorkspace.tsx");
     const asset = source("client/src/components/crypto/AssetIntelligencePanel.tsx");

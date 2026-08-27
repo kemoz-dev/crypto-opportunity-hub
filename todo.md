@@ -564,3 +564,9 @@
 - [x] Add Phase 30 contract tests for workspace structure, status-specific rendering, server evidence, plan/risk/data states, chart boundaries, warnings, mobile IA, navigation, PWA, auth, and no-real-trading boundaries.
 - [x] Run focused/full tests, TypeScript, production build, boundary scans, and responsive visual QA at 375px, 390px, 414px, and desktop widths.
 - [x] Save and publish the Phase 30 checkpoint only after todo.md is reviewed and all completed items are marked [x].
+
+# Phase 30 Acceptance Follow-up
+
+- [x] Add compact mobile Filter Summary showing active filter count/chips with individual removal and CLEAR ALL, backed only by the existing display-only URL filter state.
+- [x] Add regression coverage for mobile Filter Summary count, chip removal, CLEAR ALL, URL synchronization, touch targets, and protected-core boundaries.
+- [x] Re-run full validation and save the acceptance follow-up checkpoint after todo.md review.
