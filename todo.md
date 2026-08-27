@@ -307,18 +307,18 @@
 
 ## Phase 15 — Adaptive Trading Intelligence + Auto Paper Trial
 
-- [ ] Audit checkpoint 5bf35ca4, the full Phase 15 specification, scoring/provider/data-quality rules, Paper Trading, Setup Monitor, alerts, scheduler, PWA, and real-trading boundaries.
-- [ ] Define additive qualification states, trading modes, market-condition labels, setup-quality components, warnings, and server-authoritative evidence contracts without changing canonical scores or thresholds.
-- [ ] Implement adaptive presentation that distinguishes valid weak-market opportunities from invalid/missing/stale/incoherent data and remains fail-closed.
-- [ ] Implement the isolated Scalping ladder and separately labeled 15M FAST SCALP behavior without relabeling 1M/3M/5M data or adding provider mixing/resampling.
-- [ ] Add server-derived entry zones, stops/invalidation, variable target paths, R:R, progress, setup quality, rationale, and warnings only when validated evidence supports them.
-- [ ] Implement AUTO PAPER as simulation-only, explicitly gated, server-authoritative, owner-authenticated, immutable, and never connected to exchange or real-order APIs.
-- [ ] Extend Dashboard, Discovery, Scalping, Swing, Setup Monitor, Paper Trading, and mobile UX with adaptive states, modes, health, progress, and evidence without automatic real actions.
-- [ ] Preserve authentication, ownership, PWA offline read-only behavior, alerts, schedules, Research Lab, historical data, provider provenance, and existing Paper Trading economics.
-- [ ] Add deterministic tests for adaptive states/modes, weak-market warnings, invalid-data fail-closed behavior, 15M fallback, AUTO PAPER safeguards, and no-real-trading boundaries.
-- [ ] Run full tests, TypeScript, production build, security/provider/action scans, PWA/cache checks, performance checks, and desktop/tablet/mobile visual verification.
-- [ ] Document Phase 15 exact logic, simulation limits, data limitations, and unchanged production boundaries.
-- [ ] Save and publish the validated Phase 15 checkpoint only after every completed item is marked [x].
+- [x] Audit checkpoint 5bf35ca4, the full Phase 15 specification, scoring/provider/data-quality rules, Paper Trading, Setup Monitor, alerts, scheduler, PWA, and real-trading boundaries.
+- [x] Define additive qualification states, trading modes, market-condition labels, setup-quality components, warnings, and server-authoritative evidence contracts without changing canonical scores or thresholds.
+- [x] Implement adaptive presentation that distinguishes valid weak-market opportunities from invalid/missing/stale/incoherent data and remains fail-closed.
+- [x] Implement the isolated Scalping ladder and separately labeled 15M FAST SCALP behavior without relabeling 1M/3M/5M data or adding provider mixing/resampling.
+- [x] Add server-derived entry zones, stops/invalidation, variable target paths, R:R, progress, setup quality, rationale, and warnings only when validated evidence supports them.
+- [x] Implement AUTO PAPER as simulation-only, explicitly gated, server-authoritative, owner-authenticated, immutable, and never connected to exchange or real-order APIs.
+- [x] Extend Dashboard, Discovery, Scalping, Swing, Setup Monitor, Paper Trading, and mobile UX with adaptive states, modes, health, progress, and evidence without automatic real actions.
+- [x] Preserve authentication, ownership, PWA offline read-only behavior, alerts, schedules, Research Lab, historical data, provider provenance, and existing Paper Trading economics.
+- [x] Add deterministic tests for adaptive states/modes, weak-market warnings, invalid-data fail-closed behavior, 15M fallback, AUTO PAPER safeguards, and no-real-trading boundaries.
+- [x] Run full tests, TypeScript, production build, security/provider/action scans, PWA/cache checks, performance checks, and desktop/tablet/mobile visual verification.
+- [x] Document Phase 15 exact logic, simulation limits, data limitations, and unchanged production boundaries.
+- [x] Save and publish the validated Phase 15 checkpoint only after every completed item is marked [x].
 
 
 ## Phase 15A — Adaptive Trading Intelligence + Auto Paper Trials
