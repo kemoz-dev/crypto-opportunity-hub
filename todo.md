@@ -438,3 +438,16 @@
 - [x] Improve Intelligence Workspace hierarchy, responsive behavior, and readability across desktop/iPad/iPhone.
 - [x] Add Phase 21 Vitest coverage for analytics derivation, insufficient-data behavior, export boundaries, isolation, and protected-system safety.
 - [x] Validate no database migration, no protected-area changes, TypeScript, full tests, production build, PWA boundaries, and publish a recoverable Phase 21 checkpoint.
+
+## Phase 22 — Auto Paper Live Simulation Engine
+- [x] Audit the complete Phase 22 requirements against existing Auto Paper settings, eligibility, account, trial, event, refresh, performance, equity, export, and UI contracts.
+- [x] Preserve the protected core: scoring, regime, readiness, qualification, provider/data-quality/freshness rules, Manual Paper, Research Lab, alerts, real trading, PWA, authentication, authorization, and Auto Paper accounting.
+- [x] Keep Auto Paper OFF by default and require explicit authenticated owner confirmation before enabling simulation.
+- [x] Expose a server-derived live Auto Paper eligibility count with ELIGIBLE, NOT_ELIGIBLE, DATA_UNAVAILABLE, REQUIRES_CONFIRMATION, and DUPLICATE semantics without creating trials while OFF.
+- [x] Verify and present server-side eligibility across A/B/C/D modes, including 15M Fast Scalp isolation and Swing 1H/4H/1D boundaries.
+- [x] Ensure automatic eligible setup discovery creates simulation trials only when Auto Paper is explicitly ON, with server-derived entry, stop, targets, R:R, sizing, risk controls, and immutable provenance.
+- [x] Complete idempotent lifecycle monitoring for ACTIVE, HEALTHY, WARNING, REVERSAL_RISK, TARGET_1/2/3_REACHED, INVALIDATED, and COMPLETED states using current server data only.
+- [x] Preserve independent Auto Paper accounting, max positions, available cash, realized/unrealized P/L, equity snapshots, and Manual Paper isolation.
+- [x] Upgrade Auto Paper Lab and Journal with mode, eligibility, lifecycle, target progress, invalidation, data-unavailable, provenance, and no-look-ahead explanations.
+- [x] Add Phase 22 Vitest coverage for activation, eligibility, idempotency, sizing, lifecycle, no-look-ahead, accounting isolation, authentication, and no-real-trading boundaries.
+- [x] Validate no migration, protected-core integrity, TypeScript, full tests (295/295), production build, local 401/public 200 smoke, security scans, responsive UI, and publish a recoverable Phase 22 checkpoint; Auto Paper was not manually enabled and no trial was created for testing.

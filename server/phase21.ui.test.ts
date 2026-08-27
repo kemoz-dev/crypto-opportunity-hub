@@ -7,7 +7,7 @@ const source = (relativePath: string) => readFileSync(resolve(process.cwd(), rel
 describe("Phase 21 trading intelligence analytics contracts", () => {
   it("shows a server-derived top summary and complete funnel stages", () => {
     const workspace = source("client/src/components/crypto/TradingIntelligenceWorkspace.tsx");
-    for (const label of ["Total assets", "Candidates", "Qualified", "Potential", "Watch", "No trade", "Data unavailable", "ALL ASSETS / EVALUATIONS", "CANDIDATES", "AUTO PAPER ELIGIBLE · OBSERVED", "ACTIVE TRIALS", "COMPLETED TRIALS"]) expect(workspace).toContain(label);
+    for (const label of ["Total assets", "Candidates", "Qualified", "Potential", "Watch", "No trade", "Data unavailable", "ALL ASSETS / EVALUATIONS", "CANDIDATES", "AUTO PAPER ELIGIBLE", "ACTIVE TRIALS", "COMPLETED TRIALS"]) expect(workspace).toContain(label);
     for (const label of ["Candidate → Potential", "Potential → Qualified", "Qualified → Auto Paper", "Auto Paper → Completed"]) expect(workspace).toContain(label);
     expect(workspace).toContain("INSUFFICIENT DATA");
   });

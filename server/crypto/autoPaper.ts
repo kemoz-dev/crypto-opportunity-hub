@@ -83,6 +83,33 @@ function validAutoPlan(plan: TradeSetupPlan, settings: AutoPaperSettings) {
   return plan.availability === "LIVE" && plan.dataBundle.coherent && plan.dataBundle.eligibleForScoring && plan.currentPrice !== null && (direction === "LONG" || direction === "SHORT") && plan.entryZone !== null && plan.stop !== null && plan.targets.length > 0 && plan.rewardRisk !== null && plan.rewardRisk >= modeMinimumRewardRisk && quality !== null && quality >= modeMinimumQuality && (settings.strategies.includes(strategy) || (strategy === "SCALP" && settings.strategies.includes("15M FAST SCALP"))) && settings.directions.includes(direction) && (plan.actionable || potentialAllowed);
 }
 
+export const AUTO_PAPER_ELIGIBILITY_STATES = ["ELIGIBLE", "NOT_ELIGIBLE", "DATA_UNAVAILABLE", "REQUIRES_CONFIRMATION", "DUPLICATE"] as const;
+export type AutoPaperEligibilityState = (typeof AUTO_PAPER_ELIGIBILITY_STATES)[number];
+
+export async function getAutoPaperEligibilitySummary(userId: number, configuration: ScoringConfig) {
+  const settings = await getAutoPaperSettings(userId);
+  const history = await getAutoPaperHistory(userId);
+  const active = history.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number]));
+  const activeIdentities = new Set(active.map(trial => trial.setupIdentity));
+  const scan = await buildLiveScanner(false, configuration);
+  const rows: Array<{ assetId: string; symbol: string; strategy: string; timeframe: string; direction: string; state: AutoPaperEligibilityState; reason: string; setupQuality: number | null; rewardRisk: number | null; regime: string | null; provider: string | null; freshness: string | null; setupIdentity: string | null }> = [];
+  const requestedModes = settings.strategies.includes("SWING") ? (["SWING", "SCALP"] as const) : (["SCALP"] as const);
+  for (const candidate of scan.rows) {
+    for (const setupMode of requestedModes) {
+      const bundle = getScannerLiveOhlcvBundle(scan, candidate.asset.symbol);
+      const plan = await getTradeSetupForRow(setupMode, candidate, scan.marketRegime, configuration, undefined, bundle);
+      const adaptive = qualifyAdaptive(plan);
+      const identity = planIdentity(plan);
+      const dataUnavailable = plan.availability !== "LIVE" || !bundle?.coherent || !bundle.eligibleForScoring || plan.currentPrice === null;
+      const state: AutoPaperEligibilityState = dataUnavailable ? "DATA_UNAVAILABLE" : activeIdentities.has(identity) ? "DUPLICATE" : !validAutoPlan(plan, settings) ? "NOT_ELIGIBLE" : active.length >= settings.maxPositions ? "NOT_ELIGIBLE" : !settings.enabled ? "REQUIRES_CONFIRMATION" : "ELIGIBLE";
+      const reason = dataUnavailable ? plan.unavailable?.[0] ?? bundle?.statusMessage ?? "Required live data is unavailable." : state === "DUPLICATE" ? "An active Auto Paper trial already exists for this server setup identity." : state === "NOT_ELIGIBLE" ? (adaptive.reasons?.[0] ?? "The setup does not satisfy the current Auto Paper settings and risk controls.") : state === "REQUIRES_CONFIRMATION" ? "Auto Paper is OFF; explicit owner confirmation is required before simulation." : active.length >= settings.maxPositions ? "The configured maximum active Auto Paper positions has been reached." : "Validated setup satisfies the current server-side Auto Paper requirements.";
+      rows.push({ assetId: plan.assetId, symbol: candidate.asset.symbol, strategy: planStrategy(plan), timeframe: plan.timeframes.execution, direction: plan.direction, state, reason, setupQuality: plan.tradeSetupQuality, rewardRisk: plan.rewardRisk, regime: plan.regimeClassification, provider: plan.provider, freshness: plan.availability, setupIdentity: identity });
+    }
+  }
+  const counts = Object.fromEntries(AUTO_PAPER_ELIGIBILITY_STATES.map(state => [state, rows.filter(row => row.state === state).length])) as Record<AutoPaperEligibilityState, number>;
+  return { generatedAt: scan.generatedAt, enabled: settings.enabled, settings: { mode: settings.mode, maxPositions: settings.maxPositions, strategies: settings.strategies, directions: settings.directions, allowPotential: settings.allowPotential, minSetupQuality: settings.minSetupQuality, minRewardRisk: settings.minRewardRisk, riskPercent: settings.riskPercent }, activeCount: active.length, eligibleCount: counts.ELIGIBLE + counts.REQUIRES_CONFIRMATION, counts, rows, source: AUTO_PAPER_SOURCE };
+}
+
 function positionSize(entryPrice: number, stopPrice: number, equity: number, riskPercent: number) {
   const riskDistance = Math.abs(entryPrice - stopPrice);
   if (!Number.isFinite(riskDistance) || riskDistance <= 0) throw new Error("Auto Paper requires a valid non-zero stop distance.");
@@ -120,7 +147,7 @@ export async function createAutoPaperTrial(userId: number, plan: TradeSetupPlan,
     const trialValues: typeof autoPaperTrials.$inferInsert = { userId, accountId: account.id, paperTradeId: null, setupIdentity: identity, assetId: plan.assetId, direction: tradeDirection, strategy, timeframe: plan.timeframes.execution, source: AUTO_PAPER_SOURCE, mode: settings.mode, status: "ENTERED", immutablePlanSnapshot: cloneImmutableEntrySnapshot(plan), immutableEntrySnapshot: snapshot, currentSnapshot: { observedAt: now, status: "ENTERED", price: entry }, entryPrice: entry, stopPrice: stop, target1: targets[0]?.price, target2: targets[1]?.price, target3: targets[2]?.price, setupQuality: validatedSetupQuality, rewardRisk: validatedRewardRisk, positionSize: size, riskPercent: settings.riskPercent, realizedPnl: 0, currentPnl: 0, provider: plan.provider ?? "UNAVAILABLE", provenance: plan.dataBundle, freshness: plan.availability, startedAt: new Date(now) };
     const insertedTrial = await tx.insert(autoPaperTrials).values(trialValues);
     const trialId = Number(insertedTrial[0].insertId);
-    await tx.insert(autoPaperEvents).values([{ trialId, eventKey: "TRIAL_CREATED", eventType: "SIMULATED_ENTRY", reason: "Validated setup satisfied the enabled Auto Paper requirements; no real order was sent.", price: entry, timeframe: plan.timeframes.execution, provider: plan.provider ?? undefined, freshness: plan.availability, provenance: plan.dataBundle }]);
+    await tx.insert(autoPaperEvents).values([{ trialId, eventKey: "SETUP_DETECTED", eventType: "SETUP_DETECTED", reason: "Server-derived setup passed the enabled Auto Paper eligibility boundary.", price: entry, timeframe: plan.timeframes.execution, provider: plan.provider ?? undefined, freshness: plan.availability, provenance: plan.dataBundle }, { trialId, eventKey: "ENTRY_SIMULATED", eventType: "ENTRY_SIMULATED", reason: "Entry was simulated from the server-derived validated plan; no real order was sent.", price: entry, timeframe: plan.timeframes.execution, provider: plan.provider ?? undefined, freshness: plan.availability, provenance: plan.dataBundle }, { trialId, eventKey: "TRIAL_CREATED", eventType: "SIMULATED_ENTRY", reason: "Validated setup satisfied the enabled Auto Paper requirements; no real order was sent.", price: entry, timeframe: plan.timeframes.execution, provider: plan.provider ?? undefined, freshness: plan.availability, provenance: plan.dataBundle }]);
     return { created: true as const, duplicate: false as const, trialId, paperTradeId: null, identity, source: AUTO_PAPER_SOURCE, snapshot };
   });
 }
@@ -199,9 +226,10 @@ export async function refreshAutoPaperTrial(userId: number, trialId: number, con
   const terminal = status === "STOPPED" || status === "COMPLETED";
   const currentSnapshot = { observedAt: scan.generatedAt, status, price: row.asset.price, provider: bundle.provider, dataQuality: bundle.state, reason: observation.reason, reachedTargets: observation.reached, currentPnl };
   await db.update(autoPaperTrials).set({ currentSnapshot, currentPnl: terminal ? 0 : currentPnl, realizedPnl: terminal ? currentPnl : trial.realizedPnl, status, completedAt: terminal ? new Date(scan.generatedAt) : undefined }).where(and(eq(autoPaperTrials.id, trial.id), eq(autoPaperTrials.userId, userId)));
-  const eventKey = observation.eventType === "HEALTH_CHANGED" ? `HEALTH_CHANGED:${observation.status}` : observation.eventType;
-  const recorded = await recordEventIfAbsent(db, trial, { eventKey, eventType: observation.eventType, reason: observation.reason, price: row.asset.price, provider: bundle.provider, freshness: bundle.state, provenance: bundle });
-  return { trial: { ...trial, currentSnapshot, currentPnl, status }, refreshed: true as const, recordedEvents: recorded ? [eventKey] : [] };
+  const resumed = trial.status === "DATA_UNAVAILABLE" ? await recordEventIfAbsent(db, trial, { eventKey: "RESUMED", eventType: "RESUMED", reason: "Validated live data resumed monitoring without closing or repricing the simulation.", price: row.asset.price, provider: bundle.provider, freshness: bundle.state, provenance: bundle }) : false;
+  const eventKey = observation.eventType === "HEALTH_CHANGED" ? `HEALTH_CHANGED:${observation.status}` : observation.eventType === "STOP_REACHED" ? "STOP_LOSS" : observation.eventType;
+  const recorded = await recordEventIfAbsent(db, trial, { eventKey, eventType: eventKey, reason: observation.reason, price: row.asset.price, provider: bundle.provider, freshness: bundle.state, provenance: bundle });
+  return { trial: { ...trial, currentSnapshot, currentPnl, status }, refreshed: true as const, recordedEvents: [...(resumed ? ["RESUMED"] : []), ...(recorded ? [eventKey] : [])] };
 }
 
 export async function refreshAutoPaperForAllEnabled(getConfiguration: (userId: number) => Promise<ScoringConfig>) {

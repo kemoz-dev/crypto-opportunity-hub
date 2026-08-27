@@ -78,6 +78,7 @@ type CompareRow = { label: string; trials: number; active?: number; completed: n
 type CoverageRow = { assetId: string; registrySector?: string | null; sectorClassificationStatus?: string | null; sectorStatus?: string | null; dataQualityStatus?: string | null; timeframes?: Record<string, { status?: string; expected?: number; observed?: number; missing?: number; coveragePercent?: number; qualityRating?: string }> };
 
 type PerformancePayload = { totalTrials?: number; active?: number; completed?: number; wins?: number; losses?: number; winRate?: number | null; averageR?: number | null; netPnl?: number; currentEquity?: number; maximumDrawdown?: number; sampleLabel?: string; insufficientSample?: boolean; byStrategy?: unknown[]; byTimeframe?: unknown[]; byDirection?: unknown[] };
+type EligibilityPayload = { generatedAt?: number; enabled?: boolean; eligibleCount?: number; activeCount?: number; counts?: { ELIGIBLE?: number; NOT_ELIGIBLE?: number; DATA_UNAVAILABLE?: number; REQUIRES_CONFIRMATION?: number; DUPLICATE?: number }; rows?: Array<{ symbol: string; strategy: string; timeframe: string; direction: string; state: string; reason: string; setupQuality: number | null; rewardRisk: number | null; regime: string | null }> };
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 const date = (value: Date | string | number | null | undefined) => value ? new Date(value).toLocaleString() : "UNAVAILABLE";
@@ -139,6 +140,7 @@ export function TradingIntelligenceWorkspace({ onBack, onOpenAutoPaper, onInspec
   const swingQuery = trpc.crypto.tradeSetups.useQuery({ mode: "SWING" }, { enabled: online, staleTime: 30_000, refetchOnWindowFocus: false });
   const scannerQuery = trpc.crypto.scanner.useQuery(undefined, { enabled: online, staleTime: 45_000, refetchOnWindowFocus: false });
   const performanceQuery = trpc.crypto.autoPaperPerformance.useQuery(undefined, { enabled: privateEnabled, staleTime: 20_000, refetchOnWindowFocus: false });
+  const eligibilityQuery = trpc.crypto.autoPaperEligibilitySummary.useQuery(undefined, { enabled: privateEnabled, staleTime: 30_000, refetchOnWindowFocus: false });
   const historyQuery = trpc.crypto.autoPaperHistory.useQuery(undefined, { enabled: privateEnabled, staleTime: 20_000, refetchOnWindowFocus: false });
   const qualifiedQuery = trpc.crypto.autoPaperPerformance.useQuery({ qualification: "QUALIFIED" }, { enabled: privateEnabled, staleTime: 20_000, refetchOnWindowFocus: false });
   const potentialQuery = trpc.crypto.autoPaperPerformance.useQuery({ qualification: "POTENTIAL" }, { enabled: privateEnabled, staleTime: 20_000, refetchOnWindowFocus: false });
@@ -172,6 +174,7 @@ export function TradingIntelligenceWorkspace({ onBack, onOpenAutoPaper, onInspec
   const activeTrials = trials.filter(trial => !isTerminal(trial));
   const completedTrials = trials.filter(isTerminal);
   const performance = performanceQuery.data as PerformancePayload | undefined;
+  const eligibility = eligibilityQuery.data as EligibilityPayload | undefined;
   const funnel = useMemo(() => {
     const candidateCount = items.filter(item => item.status !== "DATA UNAVAILABLE").length;
     return [
@@ -180,16 +183,16 @@ export function TradingIntelligenceWorkspace({ onBack, onOpenAutoPaper, onInspec
       { label: "WATCH", count: totalEvaluated == null ? null : items.filter(item => item.status === "WATCH").length },
       { label: "POTENTIAL", count: totalEvaluated == null ? null : items.filter(item => item.status === "POTENTIAL").length },
       { label: "QUALIFIED", count: totalEvaluated == null ? null : items.filter(item => item.status === "QUALIFIED").length },
-      { label: "AUTO PAPER ELIGIBLE · OBSERVED", count: privateEnabled && trials.length ? trials.length : privateEnabled && !historyQuery.isLoading ? null : null },
-      { label: "ACTIVE TRIALS", count: privateEnabled && trials.length ? activeTrials.length : privateEnabled && !historyQuery.isLoading ? null : null },
-      { label: "COMPLETED TRIALS", count: privateEnabled && trials.length ? completedTrials.length : privateEnabled && !historyQuery.isLoading ? null : null },
+      { label: "AUTO PAPER ELIGIBLE", count: privateEnabled ? eligibility?.eligibleCount ?? null : null },
+      { label: "ACTIVE TRIALS", count: privateEnabled ? (eligibility ? activeTrials.length : null) : null },
+      { label: "COMPLETED TRIALS", count: privateEnabled ? (eligibility ? completedTrials.length : null) : null },
     ];
-  }, [items, totalEvaluated, privateEnabled, trials.length, activeTrials.length, completedTrials.length, historyQuery.isLoading]);
+  }, [items, totalEvaluated, privateEnabled, eligibility?.eligibleCount, eligibilityQuery.isLoading, activeTrials.length, completedTrials.length]);
   const conversion = useMemo(() => {
     const candidate = funnel[1].count; const watch = funnel[2].count; const potential = funnel[3].count; const qualified = funnel[4].count;
     const rate = (value: number | null, base: number | null) => value == null || base == null || base <= 0 ? "INSUFFICIENT DATA" : `${(value / base * 100).toFixed(1)}%`;
-    return [{ label: "Candidate → Potential", value: rate(potential, candidate) }, { label: "Potential → Qualified", value: rate(qualified, potential) }, { label: "Qualified → Auto Paper", value: privateEnabled && trials.length ? rate(trials.length, qualified) : "INSUFFICIENT DATA" }, { label: "Auto Paper → Completed", value: privateEnabled && trials.length ? rate(completedTrials.length, trials.length) : "INSUFFICIENT DATA" }];
-  }, [funnel, privateEnabled, trials.length, completedTrials.length]);
+    return [{ label: "Candidate → Potential", value: rate(potential, candidate) }, { label: "Potential → Qualified", value: rate(qualified, potential) }, { label: "Qualified → Auto Paper", value: privateEnabled && eligibility?.eligibleCount != null ? rate(eligibility.eligibleCount, qualified) : "INSUFFICIENT DATA" }, { label: "Auto Paper → Completed", value: privateEnabled && eligibility?.eligibleCount != null ? rate(completedTrials.length, eligibility.eligibleCount) : "INSUFFICIENT DATA" }];
+  }, [funnel, privateEnabled, trials.length, completedTrials.length, eligibility?.eligibleCount]);
   const rejectionReasons = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items.filter(candidate => candidate.status === "NO TRADE" || candidate.status === "WATCH")) {

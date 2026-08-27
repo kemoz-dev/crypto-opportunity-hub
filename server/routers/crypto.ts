@@ -17,7 +17,7 @@ import { getProviderMonitorSummary, listProviderMonitorHistory } from "../crypto
 import { getAssetIntelligence } from "../crypto/assetIntelligence";
 import { getTradeSetups } from "../crypto/tradeSetup";
 import { getLowTimeframeScalpingIntelligence } from "../crypto/lowTimeframeScalping";
-import { autoPaperSettingsSchema, evaluateAndCreateAutoPaperTrial, getAutoPaperAccount, getAutoPaperActive, buildAutoPaperReport, getAutoPaperEquityCurve, getAutoPaperEquityHistory, getAutoPaperEquitySnapshots, getAutoPaperEquitySummary, getAutoPaperEventFeed, getAutoPaperEvents, getAutoPaperHistory, getAutoPaperPerformance, getAutoPaperSettings, recordAutoPaperEvent, refreshAutoPaperActive, refreshAutoPaperForAllEnabled, saveAutoPaperSettings } from "../crypto/autoPaper";
+import { autoPaperSettingsSchema, evaluateAndCreateAutoPaperTrial, getAutoPaperAccount, getAutoPaperActive, buildAutoPaperReport, getAutoPaperEligibilitySummary, getAutoPaperEquityCurve, getAutoPaperEquityHistory, getAutoPaperEquitySnapshots, getAutoPaperEquitySummary, getAutoPaperEventFeed, getAutoPaperEvents, getAutoPaperHistory, getAutoPaperPerformance, getAutoPaperSettings, recordAutoPaperEvent, refreshAutoPaperActive, refreshAutoPaperForAllEnabled, saveAutoPaperSettings } from "../crypto/autoPaper";
 import { archiveSetupMonitor, createSetupMonitor, getSetupMonitorDetail, listActiveSetupMonitors, listSetupMonitorHistory, refreshSetupMonitor } from "../crypto/setupMonitor";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
@@ -86,6 +86,7 @@ export const cryptoRouter = router({
   paperPortfolio: protectedProcedure.query(async ({ ctx }) => getPaperPortfolio(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
   paperTradingSummary: protectedProcedure.query(async ({ ctx }) => getPaperTradingSummary(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
   autoPaperSettings: protectedProcedure.query(({ ctx }) => getAutoPaperSettings(ctx.user.id)),
+  autoPaperEligibilitySummary: protectedProcedure.query(async ({ ctx }) => getAutoPaperEligibilitySummary(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
   autoPaperAccount: protectedProcedure.query(({ ctx }) => getAutoPaperAccount(ctx.user.id)),
   saveAutoPaperSettings: protectedProcedure.input(autoPaperSettingsSchema).mutation(async ({ ctx, input }) => saveAutoPaperSettings(ctx.user.id, input, (await getUserScoringConfig(ctx.user.id)).paperCapital)),
   evaluateAutoPaperTrial: protectedProcedure.input(z.object({ assetId: z.string().min(1).max(96), mode: z.enum(["SCALP", "SWING"]) })).mutation(async ({ ctx, input }) => evaluateAndCreateAutoPaperTrial(ctx.user.id, input.assetId, input.mode, await getUserScoringConfig(ctx.user.id))),
