@@ -4,7 +4,9 @@ import type { TechnicalChartPoint } from "../../../../server/crypto/technical";
 import { cn } from "@/lib/utils";
 
 export type ChartPlanOverlay = {
+  direction?: string | null;
   entry?: number | null;
+  entryZone?: { low: number; high: number } | null;
   stop?: number | null;
   targets?: Array<{ label?: string | null; price?: number | null; status?: string | null }>;
 };
@@ -48,7 +50,7 @@ export function InteractiveCandlestickChart({ points, overlay, symbol, timeframe
   const [start, end] = clampWindow(windowState.start, windowState.end, points.length);
   const visible = useMemo(() => points.slice(start, end), [points, start, end]);
   const values = visible.flatMap(point => [point.low, point.high, point.ema20, point.ema50, point.ema200].filter((value): value is number => value != null));
-  const planValues = [overlay?.entry, overlay?.stop, ...(overlay?.targets ?? []).map(target => target.price)].filter((value): value is number => value != null);
+  const planValues = [overlay?.entry, overlay?.entryZone?.low, overlay?.entryZone?.high, overlay?.stop, ...(overlay?.targets ?? []).map(target => target.price)].filter((value): value is number => value != null);
   const min = Math.min(...values, ...planValues);
   const max = Math.max(...values, ...planValues);
   const range = Math.max(max - min, Math.abs(max) * 0.00001, Number.EPSILON);
@@ -121,10 +123,11 @@ export function InteractiveCandlestickChart({ points, overlay, symbol, timeframe
   };
 
   const line = (key: "ema20" | "ema50" | "ema200") => visible.map((point, index) => point[key] == null ? null : `${x(index)},${y(point[key]!)}`).filter(Boolean).join(" ");
+  const targetLabels = ["TP1", "TP2", "TP3"] as const;
   const planLines = [
     { label: "ENTRY", price: overlay?.entry, stroke: "#67e8f9", dash: "5 4" },
     { label: "SL", price: overlay?.stop, stroke: "#fb7185", dash: "5 4" },
-    ...(overlay?.targets ?? []).slice(0, 3).map((target, index) => ({ label: target.label ?? `TP${index + 1}`, price: target.price, stroke: "#34d399", dash: "3 5" })),
+    ...(overlay?.targets ?? []).slice(0, 3).map((target, index) => ({ label: targetLabels[index] ?? `TP${index + 1}`, price: target.price, stroke: "#34d399", dash: "3 5" })),
   ].filter(item => item.price != null) as Array<{ label: string; price: number; stroke: string; dash: string }>;
 
   return (
@@ -138,17 +141,16 @@ export function InteractiveCandlestickChart({ points, overlay, symbol, timeframe
           <p className="mt-1 text-xs text-slate-500">Scroll to zoom · drag to pan · move over candles for completed-bar values.</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[.12em]">
-          <span className="text-cyan-200">EMA20</span><span className="text-amber-200">EMA50</span><span className="text-fuchsia-200">EMA200</span>
-          {planLines.length ? <><span className="ml-1 text-slate-600">|</span><span className="text-cyan-200">PLAN</span></> : null}
-          <button type="button" onClick={() => zoom(0.78)} className="ml-2 rounded border border-white/[.1] px-2 py-1 text-slate-300 hover:bg-white/[.06]" aria-label="Zoom in">+</button>
-          <button type="button" onClick={() => zoom(1.28)} className="rounded border border-white/[.1] px-2 py-1 text-slate-300 hover:bg-white/[.06]" aria-label="Zoom out">−</button>
-          <button type="button" onClick={() => setWindowState({ start: Math.max(0, points.length - 90), end: points.length })} className="rounded border border-white/[.1] px-2 py-1 text-slate-400 hover:bg-white/[.06]">Reset</button>
+          <ChartLegend planLines={planLines} direction={overlay?.direction} hasEntryZone={Boolean(overlay?.entryZone)} />
+          <button type="button" onClick={() => zoom(0.78)} className="ml-1 min-h-11 min-w-11 rounded border border-white/[.1] px-2 py-1 text-slate-300 hover:bg-white/[.06]" aria-label="Zoom in">+</button>
+          <button type="button" onClick={() => zoom(1.28)} className="min-h-11 min-w-11 rounded border border-white/[.1] px-2 py-1 text-slate-300 hover:bg-white/[.06]" aria-label="Zoom out">−</button>
+          <button type="button" onClick={() => setWindowState({ start: Math.max(0, points.length - 90), end: points.length })} className="min-h-11 rounded border border-white/[.1] px-3 py-1 text-slate-400 hover:bg-white/[.06]">Reset</button>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-hidden">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="min-w-[760px] w-full select-none touch-none"
+          className="h-auto w-full select-none touch-none"
           role="img"
           aria-label={`Interactive validated candlestick chart for ${symbol ?? "asset"}`}
           onPointerMove={onPointerMove}
@@ -161,6 +163,7 @@ export function InteractiveCandlestickChart({ points, overlay, symbol, timeframe
           {[0, .25, .5, .75, 1].map(ratio => <g key={ratio}><line x1={chart.left} x2={width - chart.right} y1={chart.top + ratio * chart.height} y2={chart.top + ratio * chart.height} stroke="rgba(148,163,184,.12)" /><text x={8} y={chart.top + ratio * chart.height + 4} fill="#64748b" fontSize="10">{format(max - ratio * range, 5)}</text></g>)}
           <line x1={chart.left} x2={width - chart.right} y1={volume.top - 12} y2={volume.top - 12} stroke="rgba(148,163,184,.15)" />
           <text x={chart.left} y={volume.top + 8} fill="#64748b" fontSize="9">VOLUME</text>
+          {overlay?.entryZone ? <rect x={chart.left} y={Math.min(y(overlay.entryZone.low), y(overlay.entryZone.high))} width={width - chart.left - chart.right} height={Math.abs(y(overlay.entryZone.low) - y(overlay.entryZone.high))} fill="#67e8f9" opacity=".09" stroke="#67e8f9" strokeDasharray="3 5" /> : null}
           {planLines.map(item => <g key={`${item.label}-${item.price}`}><line x1={chart.left} x2={width - chart.right} y1={y(item.price)} y2={y(item.price)} stroke={item.stroke} strokeDasharray={item.dash} strokeWidth="1.3" opacity=".9" /><rect x={width - chart.right - 48} y={y(item.price) - 10} width="46" height="16" rx="3" fill="#0b1423" stroke={item.stroke} strokeOpacity=".35" /><text x={width - chart.right - 25} y={y(item.price) + 2} textAnchor="middle" fill={item.stroke} fontSize="9" fontWeight="600">{item.label}</text></g>)}
           {visible.map((point, index) => { const bullish = point.close >= point.open; const candleX = x(index); const top = y(Math.max(point.open, point.close)); const bottom = y(Math.min(point.open, point.close)); return <g key={point.openTime}><line x1={candleX} x2={candleX} y1={y(point.high)} y2={y(point.low)} stroke={bullish ? "#34d399" : "#fb7185"} strokeWidth="1.15" /><rect x={candleX - candleWidth / 2} y={top} width={candleWidth} height={Math.max(1.5, bottom - top)} fill={bullish ? "#34d399" : "#fb7185"} opacity=".86" rx=".8" /><rect x={candleX - candleWidth / 2} y={volume.top + volume.height - (point.volume / maxVolume) * volume.height} width={candleWidth} height={Math.max(1, (point.volume / maxVolume) * volume.height)} fill={bullish ? "#34d399" : "#fb7185"} opacity=".23" /></g>; })}
           <polyline points={line("ema20")} fill="none" stroke="#67e8f9" strokeWidth="1.6" /><polyline points={line("ema50")} fill="none" stroke="#fbbf24" strokeWidth="1.4" /><polyline points={line("ema200")} fill="none" stroke="#e879f9" strokeWidth="1.35" />
@@ -173,6 +176,12 @@ export function InteractiveCandlestickChart({ points, overlay, symbol, timeframe
     </div>
   );
 }
+
+function ChartLegend({ planLines, direction, hasEntryZone }: { planLines: Array<{ label: string; price: number; stroke: string; dash: string }>; direction?: string | null; hasEntryZone: boolean }) {
+  const [open, setOpen] = useState(false);
+  return <details open={open} onToggle={event => setOpen(event.currentTarget.open)} className="group relative max-w-full"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded border border-white/[.08] px-2.5 py-1 text-slate-300 [&::-webkit-details-marker]:hidden"><span>LEGEND</span><span className="text-slate-600">·</span><span className="text-cyan-200">{direction ?? "PLAN"}</span><span className="text-slate-500">⌄</span></summary><div className="absolute right-0 top-12 z-10 grid min-w-[176px] gap-1 rounded-lg border border-white/[.1] bg-[#0b1423] p-2 shadow-xl sm:right-auto sm:left-0"><LegendItem label="PRICE / CANDLES" color="bg-emerald-300" /><LegendItem label="VOLUME" color="bg-slate-400/50" /><LegendItem label="EMA20" color="bg-cyan-300" />{hasEntryZone ? <LegendItem label="ENTRY ZONE" color="bg-cyan-200/30" /> : null}<LegendItem label="EMA50" color="bg-amber-300" /><LegendItem label="EMA200" color="bg-fuchsia-300" />{planLines.map(line => <LegendItem key={line.label} label={line.label === "SL" ? "STOP LOSS" : line.label} color={line.stroke} />)}</div></details>;
+}
+function LegendItem({ label, color }: { label: string; color: string }) { return <span className="flex items-center gap-2 whitespace-nowrap px-1 py-1 text-[9px] font-semibold uppercase tracking-[.1em] text-slate-300"><span className={cn("h-1.5 w-4 rounded-full", color.startsWith("#") ? "" : color)} style={color.startsWith("#") ? { backgroundColor: color } : undefined} />{label}</span>; }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return <div className="bg-[#070d18] px-3 py-2.5"><span className="block text-[9px] font-semibold uppercase tracking-[.13em] text-slate-500">{label}</span><span className="mt-1 block truncate font-mono text-xs text-slate-200">{value}</span></div>;

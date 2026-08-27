@@ -468,3 +468,14 @@
 - [x] Fix Phase 24 focused test harness import after the first run reported `describe is not defined`.
 - [x] Fix Phase 24 AssetTopSummary regime type mismatch by using the existing asset-intelligence market context contract.
 - [x] Fix Phase 24 mobile Asset Workspace dialog positioning and viewport scroll height; verified edge-to-edge 390px capture with honest unavailable state.
+- [x] Review the newly attached specification and map its requirements to existing project contracts.
+- [x] Implement the compatible attached-specification changes without weakening authentication, data-quality, PWA, Paper/Auto Paper, Research Lab, scheduler, or real-trading boundaries.
+- [x] Add a compact server-derived chart legend for price, available plan levels, EMA20/50/200, and volume with no fabricated entries.
+- [x] Add mobile-first collapsible evidence sections with Summary/Chart/Trade Plan prioritized and accessible 44px controls.
+- [x] Add a canonical read-only `/asset/{asset}` route while preserving private Auto Paper ownership protection.
+- [ ] Perform read-only authenticated production verification when an owner session exists; otherwise report the exact no-session blocker without bypass.
+- [x] Fix canonical asset deep-link empty-row blocker with an identity-only unavailable fallback; preserve null market data and server-authoritative detail queries.
+- [x] Run focused/full tests, TypeScript, production build, security/PWA scans, and responsive verification at 375/390/414px and desktop widths.
+- [x] Fix the Phase 25 Asset Workspace compile regression by importing the existing Button component.
+- [x] Fix the Phase 25 missing AutoPaperPerformanceEvidence component before validation.
+- [x] Fix focused contract failures without weakening the implementation: retain legacy evidence wording, explicit TP labels, and narrow the order-boundary assertion.
