@@ -81,7 +81,7 @@ describe("Phase 2 secure PWA contract", () => {
     expect(asset).toContain("Paper trade qualified Swing");
     expect(paper).toContain("No qualified paper-trade setup selected");
     expect(serverPaper).toContain("assertQualifiedPaperTradeContext(setupMode)");
-    expect(mobile).toContain('label: "Discovery"');
+    expect(mobile).toContain('label: "Opportunities"');
   });
 
   it("keeps Phase 9 readiness and conditional plans server-derived, non-actionable, and low-timeframe-safe", () => {
@@ -112,7 +112,7 @@ describe("Phase 2 secure PWA contract", () => {
     expect(monitor).toContain("Monitoring refresh, archive, and event writes are disabled offline");
     expect(monitor).not.toContain("api.bybit.com");
     expect(monitor).not.toContain("fetch(\"https://api");
-    expect(navigation).toContain('label: "Setup Monitor"');
+    expect(navigation).toContain('label: "Monitor"');
     expect(home).toContain('workspace=setup-monitor');
     expect(service).toContain("eq(setupMonitorInstances.userId, userId)");
     expect(service).toContain('event.key');
@@ -173,7 +173,7 @@ describe("Phase 2 secure PWA contract", () => {
     expect(home).toContain("Switch to");
     expect(mobile).toContain("role=\"dialog\"");
     expect(mobile).toContain("Escape");
-    expect(mobile).toContain("Switch to");
+    expect(mobile).toContain('setTheme("system")');
     expect(card).toContain("Distance to invalidation");
     expect(card).toContain("dataQuality");
     expect(card).toContain("confirmationGaps");

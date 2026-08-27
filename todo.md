@@ -401,3 +401,16 @@
 - [x] Republish the already-implemented Phase 18B runtime using the normal project deployment mechanism only; do not create a migration or change business logic.
 - [x] Verify the complete `/api/trpc` and `/api/v1/trpc` unauthenticated matrix, honest empty states, Manual Paper isolation, PWA boundaries, and no-mutation safety. Authenticated matrix is pending an owner session; no mutation was attempted.
 - [x] Stop and report if Production still serves the old runtime or returns 404 for any Phase 18B procedure. Routes no longer return 404; authenticated verification remains the exact blocker.
+
+## Phase 19 — Professional Trading Terminal
+- [x] Read and scope the latest attached specification.
+- [x] Reduce primary navigation to Home, Markets, Opportunities, Scalp, Swing, Monitor, and Paper across desktop and iPhone.
+- [x] Establish a responsive terminal shell with contextual workspace headers, risk-off warnings, and server-data freshness indicators.
+- [x] Replace the static candle SVG with an interactive server-data candlestick chart supporting zoom, pan, crosshair, volume, EMA overlays, and Entry/SL/TP overlays.
+- [x] Standardize OpportunityCard with status, scores, direction, setup, WHY, RISK, WARNING, DATA, and honest unavailable states across workspaces.
+- [x] Upgrade Asset Intelligence into a comprehensive asset detail workspace with chart, trade plan, technical evidence, and provenance.
+- [x] Present dedicated 15M Fast Scalp and Swing workspaces using existing server-authoritative setup/diagnostic data without changing gates.
+- [x] Improve Markets, Monitor, Paper, Watchlist, and secondary research access around the seven-workspace IA.
+- [x] Verify dark/light/system themes, iPhone/iPad/desktop responsiveness, accessibility, PWA offline read-only boundaries, and Manual/Auto Paper isolation.
+- [x] Add or update Vitest coverage for Phase 19 UI contracts and chart interactions.
+- [x] Validate, document, and publish a recoverable Phase 19 checkpoint or report the exact blocker. Full Vitest 272/272, TypeScript, production build, diff audit, and desktop/iPhone visual checks passed.

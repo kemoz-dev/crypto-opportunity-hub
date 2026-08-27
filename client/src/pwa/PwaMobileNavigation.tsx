@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Activity, BellRing, BookOpen, FlaskConical, Gauge, Menu, Moon, ScanSearch, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
+import { Activity, BellRing, BookOpen, FlaskConical, Gauge, Layers3, Menu, Moon, ScanSearch, Settings2, Sparkles, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research";
+type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research" | "settings";
 
 function navigate(target: PwaNavTarget) {
   window.dispatchEvent(new CustomEvent<PwaNavTarget>("crypto-hub:navigate", { detail: target }));
@@ -10,21 +10,22 @@ function navigate(target: PwaNavTarget) {
 
 export function PwaMobileNavigation() {
   const [moreOpen, setMoreOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themeMode, setTheme } = useTheme();
   const primaryItems = [
     { label: "Home", target: "dashboard" as const, icon: Gauge },
-    { label: "Scanner", target: "scanner" as const, icon: ScanSearch },
+    { label: "Markets", target: "scanner" as const, icon: ScanSearch },
+    { label: "Opportunities", target: "discovery" as const, icon: Sparkles },
     { label: "Scalp", target: "scalping" as const, icon: Target },
     { label: "Swing", target: "swing" as const, icon: TrendingUp },
+    { label: "Monitor", target: "setup-monitor" as const, icon: Activity },
     { label: "Paper", target: "paper" as const, icon: WalletCards },
   ];
   const moreItems = [
-    { label: "Discovery", target: "discovery" as const, icon: ScanSearch },
-    { label: "Setup Monitor", target: "setup-monitor" as const, icon: Activity },
     { label: "Watchlist", target: "watchlist" as const, icon: BookOpen },
-    { label: "Alerts", target: "alerts" as const, icon: BellRing },
-    { label: "Research", target: "research" as const, icon: FlaskConical },
     { label: "Auto Paper Lab", target: "auto-paper" as const, icon: FlaskConical },
+    { label: "Alerts", target: "alerts" as const, icon: BellRing },
+    { label: "Research & History", target: "research" as const, icon: Layers3 },
+    { label: "Settings", target: "settings" as const, icon: Settings2 },
   ];
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export function PwaMobileNavigation() {
   };
 
   return (
-    <nav aria-label="Mobile workspace navigation" className="pwa-mobile-nav fixed inset-x-0 bottom-0 z-[80] flex border-t border-white/[.08] bg-[#080d17]/95 px-1 pt-1 backdrop-blur-xl lg:hidden">
+    <nav aria-label="Mobile workspace navigation" className="pwa-mobile-nav fixed inset-x-0 bottom-0 z-[80] flex overflow-x-auto border-t border-white/[.08] bg-[#080d17]/95 px-1 pt-1 backdrop-blur-xl lg:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {moreOpen ? (
         <div id="pwa-mobile-more" role="dialog" aria-label="More workspaces" className="pwa-mobile-more absolute inset-x-2 bottom-full mb-2 rounded-xl border border-white/[.1] bg-[#0b1321]/98 p-2 shadow-2xl">
           <div className="flex items-center justify-between px-2 py-1">
@@ -52,17 +53,14 @@ export function PwaMobileNavigation() {
             const Icon = item.icon;
             return <button type="button" key={item.target} onClick={() => choose(item.target)} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-xs text-slate-200 hover:bg-white/[.06]"><Icon className="h-4 w-4 text-cyan-200" />{item.label}</button>;
           })}
-          <button type="button" onClick={() => { toggleTheme(); setMoreOpen(false); }} className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-lg border-t border-white/[.07] px-3 py-3 text-left text-xs text-slate-200 hover:bg-white/[.06]">
-            {theme === "dark" ? <Sun className="h-4 w-4 text-amber-300" /> : <Moon className="h-4 w-4 text-cyan-200" />}
-            Switch to {theme === "dark" ? "Light" : "Dark"} theme
-          </button>
+          <div className="mt-1 border-t border-white/[.07] pt-2"><p className="px-3 pb-1 text-[9px] font-semibold uppercase tracking-[.14em] text-slate-500">Theme · {theme.toUpperCase()}</p><div className="grid grid-cols-3 gap-1"><button type="button" onClick={() => { setTheme("light"); setMoreOpen(false); }} className={themeMode === "light" ? "rounded-md bg-cyan-300 px-2 py-2 text-[10px] font-semibold text-slate-950" : "rounded-md px-2 py-2 text-[10px] text-slate-400 hover:bg-white/[.06]"}><Sun className="mx-auto mb-1 h-3.5 w-3.5" />Light</button><button type="button" onClick={() => { setTheme("dark"); setMoreOpen(false); }} className={themeMode === "dark" ? "rounded-md bg-cyan-300 px-2 py-2 text-[10px] font-semibold text-slate-950" : "rounded-md px-2 py-2 text-[10px] text-slate-400 hover:bg-white/[.06]"}><Moon className="mx-auto mb-1 h-3.5 w-3.5" />Dark</button><button type="button" onClick={() => { setTheme("system"); setMoreOpen(false); }} className={themeMode === "system" ? "rounded-md bg-cyan-300 px-2 py-2 text-[10px] font-semibold text-slate-950" : "rounded-md px-2 py-2 text-[10px] text-slate-400 hover:bg-white/[.06]"}>System</button></div></div>
         </div>
       ) : null}
       {primaryItems.map(item => {
         const Icon = item.icon;
-        return <button type="button" key={item.target} onClick={() => choose(item.target)} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100"><Icon className="h-4 w-4" /><span className="truncate">{item.label}</span></button>;
+        return <button type="button" key={item.target} onClick={() => choose(item.target)} className="flex min-h-14 w-[78px] shrink-0 flex-none flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"><Icon className="h-4 w-4" /><span className="min-w-0 max-w-full truncate">{item.label}</span></button>;
       })}
-      <button type="button" aria-expanded={moreOpen} aria-controls="pwa-mobile-more" onClick={() => setMoreOpen(value => !value)} className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100">
+      <button type="button" aria-expanded={moreOpen} aria-controls="pwa-mobile-more" onClick={() => setMoreOpen(value => !value)} className="flex min-h-14 w-[72px] shrink-0 flex-none flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70">
         {moreOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
         <span className="truncate">More</span>
       </button>
