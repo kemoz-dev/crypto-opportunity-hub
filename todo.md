@@ -616,3 +616,31 @@
 - [x] Add Phase 32 contract tests for performance metrics, sample labels, strategy/timeframe/direction/regime/qualification/setup-quality comparisons, target/exit states, R distribution, equity reuse, owner scope, auth, accessibility, PWA, and no-trading boundaries.
 - [x] Run focused/full tests, TypeScript, production build, protected-core/security scans, and responsive QA at 375x812, 390x844, 414x896, and desktop widths.
 - [x] Save and publish the Phase 32 checkpoint only after todo.md is reviewed and all completed items are marked [x].
+
+# Phase 33 — Live Trading Command Center & Opportunity Decision UX
+
+- [x] Audit Phase 33 requirements against current Command Center, Opportunity Feed, Decision Center, Asset Workspace, Paper, Auto Paper, and shared contracts.
+- [x] Preserve the protected core: scoring, readiness, qualification, Scalp/15M Fast Scalp/Swing, entry/SL/TP/R:R, risk, sizing, providers, fallback, validation, freshness, Manual Paper, Auto Paper accounting/lifecycle, Research Lab, alerts, schedules, auth, authorization, PWA cache policy, and real-trading prohibition.
+- [x] Preserve no migration, no schema, no tables/columns, and no new persistence; use existing server contracts only and stop with BLOCKER/WHY/SAFE NON-MIGRATION ALTERNATIVE if required.
+- [x] Make Command Center ordering explicit: Market State, Opportunity Summary, Top Opportunity, Market Warnings, Scalp/Swing, Watchlist, Auto Paper Summary, and Recent Simulation Intelligence.
+- [x] Present Market State hero with server-derived regime, data health, last validated, coverage, warnings, and non-hiding Risk Off treatment.
+- [x] Present a server-derived Opportunity Hero for the top Qualified opportunity, or honest NO QUALIFIED TRADES/TOP POTENTIAL states when appropriate.
+- [x] Preserve server-authoritative ranking and explicit Qualified, Potential, Watch, No Trade, Data Limited, and Unavailable states.
+- [x] Standardize opportunity-card evidence for asset/status/direction/strategy/timeframe, plan, WHY, RISK, DATA, and Auto Paper evidence.
+- [x] Keep valid Entry/SL/TP1/TP2/TP3/R:R visible and show em dash or server-derived plan-unavailable state when invalid; never fabricate.
+- [x] Add server-derived plan-completeness states PLAN READY, PLAN LIMITED, and PLAN UNAVAILABLE where supported.
+- [x] Present per-opportunity data health with provider, timeframe, last validated, and freshness using existing server evidence.
+- [x] Present collapsible WHY THIS OPPORTUNITY and RISK sections using existing server-derived evidence only.
+- [x] Present read-only SIMULATION EVIDENCE for matching Asset/Strategy/Timeframe/Direction samples, or NO MATCHING SIMULATION SAMPLE without changing opportunity decisions.
+- [x] Preserve Decision Center WHAT/WHY/PLAN/RISK/DATA/EVIDENCE in one screen and maintain Feed → Decision → Asset return context.
+- [x] Preserve safe actions VIEW DECISION, VIEW FULL ANALYSIS, ADD TO WATCHLIST, and PAPER TRADE only through existing contracts and simulation boundaries.
+- [x] Preserve mobile-first summary-first layout, collapsible sections, 44px+ controls, loading/error/empty states, and no horizontal overflow.
+- [x] Preserve Quick View, URL filters, Filter Summary, Watchlist, Auto Paper read-only evidence, lazy loading, code splitting, request discipline, and static-shell-only PWA caching.
+- [x] Add Phase 33 contract tests for Command Center order, heroes, status states, plan/data visibility, WHY/RISK/EVIDENCE, Risk Off, navigation, accessibility, PWA, auth, and no-real-trading boundaries.
+- [x] Run focused/full tests, TypeScript, production build, protected-core/security scans, and responsive QA at 375x812, 390x844, 414x896, 1280x800, 1440x900, and 1920x1080 where available.
+- [x] Save and publish the Phase 33 checkpoint only after todo.md is reviewed and all completed items are marked [x].
+
+# Phase 33 QA Follow-up
+
+- [x] Fix Command Center Discovery defensive timeframe rendering so valid server responses cannot crash when `timeframes` is not an array; show an honest unavailable label without fabricating data.
+- [x] Add regression coverage for non-array/missing timeframe presentation and re-run full validation plus responsive QA at 375px, 390px, 414px, and desktop widths.
