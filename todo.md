@@ -358,4 +358,4 @@
 - [x] Expand Auto Paper Lab, Dashboard summary, Discovery, Scalping, Swing, and mobile controls with truthful adaptive evidence.
 - [x] Add deterministic Phase 16 tests for authorization, accounting isolation, modes, automatic entries, lifecycle, performance, and no-real-order boundaries.
 - [x] Run migration verification, full tests, TypeScript, production build, security/provider/action/PWA scans, production smoke checks, and responsive visual validation.
-- [ ] Document Phase 16 limitations and publish a validated checkpoint. Documentation complete; final checkpoint pending.
+- [x] Document Phase 16 limitations and publish a validated checkpoint. Documentation complete and validated checkpoint published.
