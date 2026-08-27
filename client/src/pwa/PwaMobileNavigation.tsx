@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Activity, BarChart3, BellRing, BookOpen, FlaskConical, Gauge, Layers3, Menu, Moon, ScanSearch, Settings2, Sparkles, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research" | "trading-intelligence" | "settings";
+type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "opportunity-feed" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research" | "trading-intelligence" | "settings";
 
 function navigate(target: PwaNavTarget) {
   window.dispatchEvent(new CustomEvent<PwaNavTarget>("crypto-hub:navigate", { detail: target }));
@@ -14,7 +14,7 @@ export function PwaMobileNavigation() {
   const primaryItems = [
     { label: "Home", target: "dashboard" as const, icon: Gauge },
     { label: "Markets", target: "scanner" as const, icon: ScanSearch },
-    { label: "Opportunities", target: "discovery" as const, icon: Sparkles },
+    { label: "Opportunities", target: "opportunity-feed" as const, icon: Sparkles },
     { label: "Scalp", target: "scalping" as const, icon: Target },
     { label: "Swing", target: "swing" as const, icon: TrendingUp },
     { label: "Monitor", target: "setup-monitor" as const, icon: Activity },

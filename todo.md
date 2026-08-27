@@ -487,3 +487,16 @@
 - [x] Run focused/full tests, TypeScript, production build, security scans, and responsive verification for the new specification.
 - [x] Fix iPhone 375 Asset Workspace bottom-nav overlap with mobile safe-area/content padding, then recheck 375/390/414.
 - [x] Raise only the Asset Workspace dialog above the persistent mobile navigation layer, then recheck no overlay at 375/390/414.
+- [x] Review the latest attached specification and map its requirements to existing project contracts.
+- [x] Implement the latest compatible changes without weakening authentication, data-quality, PWA, Paper/Auto Paper, Research Lab, scheduler, or real-trading boundaries.
+- [x] Build a read-only combined Scalp/Swing Opportunity Feed workspace using existing tradeSetups/scanner contracts and lazy loading.
+- [x] Present Market State, Top Opportunities, grouped Scalp/Swing/Watch/Data Limited sections, Risk Off visibility, warnings, freshness, data quality, and honest plan-unavailable states.
+- [x] Add display-only filters for status, strategy, direction, health, data limited, and Risk Off, preserving existing server ranking and deterministic tie-breaks.
+- [x] Reuse OpportunityCard for Entry/SL/TP/R:R, rationale, Auto Paper status/eligibility, and canonical Asset Intelligence deep-links without client-side trial creation.
+- [x] Add a read-only Auto Paper Observation Center with existing private performance/history/event evidence and honest sample-quality labels.
+- [x] Integrate Opportunity Feed into current desktop/mobile IA with back navigation, query-state filter preservation where safe, and no new schema/migration.
+- [x] Add Phase 27 contract tests for feed, ranking, filters, warnings, Risk Off, plan/data states, deep-links, Auto Paper privacy/isolation, and PWA boundaries.
+- [x] Run focused/full tests, TypeScript, production build, security scans, and responsive verification for the latest specification.
+- [x] Fix Phase 27 focused contract failures without weakening feed behavior: use actual Home navigation label and remove client-clock dependence from Auto Paper “today” presentation.
+- [x] Fix Phase 27 ObservationCenter compile regression by parenthesizing mixed nullish and boolean fallbacks.
+- [x] Align Observation Center performance presentation with the existing server contract: t1Hit/t2Hit/t3Hit and maximumDrawdown.
