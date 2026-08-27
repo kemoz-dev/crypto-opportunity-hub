@@ -425,3 +425,16 @@
 - [x] Add a read-only Trading Journal view backed by existing Auto Paper lifecycle, event, accounting, and performance data; do not create trials on page open.
 - [x] Add Phase 20 Vitest coverage for states, RISK OFF visibility, funnel derivation, filters, Auto Paper safety, journal read-only behavior, and no-real-trading boundaries.
 - [x] Validate no migration, protected-system integrity, TypeScript, full tests, production build, responsive UI, PWA boundaries, and publish a recoverable Phase 20 checkpoint.
+
+## Phase 21 — Trading Intelligence Analytics & Experiment Dashboard
+- [x] Audit the Phase 21 analytics requirements against existing discovery, Auto Paper performance, history, coverage, and export contracts.
+- [x] Extend Trading Intelligence with server-derived top summary metrics and a complete ALL ASSETS → CANDIDATES → WATCH → POTENTIAL → QUALIFIED → AUTO PAPER → ACTIVE → COMPLETED funnel.
+- [x] Add truthful funnel conversion rates and server-derived rejection-reason presentation with insufficient-data handling.
+- [x] Add Strategy, Timeframe, Sector, Status, Direction, and Regime comparison panels using existing server-returned or persisted data only.
+- [x] Keep 15M Fast Scalp isolated from Swing 1H/4H/1D buckets and show sector data unavailable/unclassified states honestly.
+- [x] Add historical coverage badges and sample-quality warnings without inventing samples, results, prices, or performance.
+- [x] Add read-only journal export and funnel export using authenticated existing data boundaries; do not create schedules, alerts, trials, or snapshots automatically.
+- [x] Add experiment dashboard and Auto Paper preset comparison without enabling Auto Paper or changing Auto Paper accounting.
+- [x] Improve Intelligence Workspace hierarchy, responsive behavior, and readability across desktop/iPad/iPhone.
+- [x] Add Phase 21 Vitest coverage for analytics derivation, insufficient-data behavior, export boundaries, isolation, and protected-system safety.
+- [x] Validate no database migration, no protected-area changes, TypeScript, full tests, production build, PWA boundaries, and publish a recoverable Phase 21 checkpoint.

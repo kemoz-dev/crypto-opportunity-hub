@@ -12,7 +12,7 @@ describe("Phase 20 trading intelligence contracts", () => {
     expect(discovery).toContain("restrictedByRiskOff");
     expect(discovery).toContain('return finalize("POTENTIAL"');
     expect(workspace).toContain("Opportunity funnel");
-    expect(workspace).toContain("A Potential item is not silently converted to No Trade because of RISK OFF");
+    expect(workspace).toContain("Potential and Watch setups remain visible below with a regime warning");
     expect(workspace).toContain("Setup exists, but market regime is unfavorable");
   });
 
@@ -41,8 +41,8 @@ describe("Phase 20 trading intelligence contracts", () => {
     const autoPaper = source("server/crypto/autoPaper.ts");
     expect(workspace).toContain("trpc.crypto.autoPaperPerformance.useQuery");
     expect(workspace).toContain("trpc.crypto.autoPaperHistory.useQuery");
-    for (const title of ["Scalp vs Swing", "Qualified vs Potential", "Long vs Short", "By Market Regime", "Trading Journal"]) expect(workspace).toContain(title);
-    expect(workspace).toContain("No trial is created when this workspace opens");
+    for (const title of ["Strategy · Scalp vs Swing", "Status · Qualified vs Potential vs Watch", "Direction · Long vs Short", "Regime · Risk On / Neutral / Risk Off", "Trading Journal"]) expect(workspace).toContain(title);
+    expect(workspace).toContain("no screen open creates a trial or snapshot");
     expect(workspace).not.toContain("createAutoPaperTrial");
     expect(autoPaper).toContain("byStrategy");
     expect(autoPaper).toContain("byDirection");
