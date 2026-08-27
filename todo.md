@@ -380,11 +380,11 @@
 - [x] Add snapshot-backed equity history, date ranges, drawdown, comparisons, and export metadata without fabricating points.
 - [x] Add authenticated production-safe validation coverage and verify unauthenticated/cross-owner rejection. Authenticated browser diagnostic was read-only; clean unauthenticated requests returned 401.
 - [x] Run full regression, TypeScript, production build, schema/security/PWA/action scans, restart, and responsive checks.
-- [x] Document Phase 18 and publish a validated checkpoint. Phase 18B documentation is complete; final propagation verification remains tracked below.
-- [x] Complete preview/local Phase 18 validation and document that authenticated production validation is blocked by the missing Production sign-in control. Current Phase 18B source is ready for propagation verification.
+- [x] Document Phase 18 and publish a validated checkpoint. Phase 18B documentation is complete; final propagation verification found the published runtime stale and returning 404.
+- [x] Complete preview/local Phase 18 validation and document that authenticated production validation is blocked by the missing Production sign-in control. Current Phase 18B source was checkpointed, but Production propagation remains blocked by the stale runtime.
 
 ## Latest attached specification execution
 
 - [x] Read and scope the latest attached specification.
 - [x] Implement only compatible requested changes while preserving authentication, data quality, PWA cache boundaries, Auto Paper/Manual Paper separation, and real-trading prohibition.
-- [ ] Validate, document, and publish a recoverable checkpoint if the requested changes are safe and complete. Implementation and validation are complete; checkpoint save is pending.
+- [x] Validate and document the resulting changes; checkpoint `ad8e30d1` was published. Phase 18B remains INCOMPLETE because Production still returns 404 for the newly exposed procedures.
