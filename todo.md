@@ -451,3 +451,17 @@
 - [x] Upgrade Auto Paper Lab and Journal with mode, eligibility, lifecycle, target progress, invalidation, data-unavailable, provenance, and no-look-ahead explanations.
 - [x] Add Phase 22 Vitest coverage for activation, eligibility, idempotency, sizing, lifecycle, no-look-ahead, accounting isolation, authentication, and no-real-trading boundaries.
 - [x] Validate no migration, protected-core integrity, TypeScript, full tests (295/295), production build, local 401/public 200 smoke, security scans, responsive UI, and publish a recoverable Phase 22 checkpoint; Auto Paper was not manually enabled and no trial was created for testing.
+
+## Phase 23 — Auto Paper Control Center & Live Eligibility Intelligence
+- [x] Audit Phase 23 requirements against existing Auto Paper settings, eligibility, account, trials, events, equity, performance, exports, PWA, and authentication contracts.
+- [x] Build a clear Auto Paper Control Center summary for status, simulation-only boundary, equity, cash, active/completed trials, eligible now, and data unavailable.
+- [x] Preserve explicit confirmation for Enable Auto Paper and safe Disable behavior; never enable automatically.
+- [x] Add a live owner-scoped eligibility table/cards with asset, strategy, timeframe, direction, status, quality/readiness, Entry/SL/TPs, R:R, regime, health, provider, and freshness.
+- [x] Present exact server-derived primary and additional reasons, separated into DATA BLOCK and STRATEGY BLOCK, without invented reasons.
+- [x] Ensure Opportunity Card includes Auto Paper status while preserving honest unavailable values and existing Paper/Manual boundaries.
+- [x] Add active simulation detail with original-versus-current plan, lifecycle, health, targets, risk, provenance, freshness, data quality, and full event timeline.
+- [x] Add event filters for all required lifecycle events with duplicate-safe display and DATA_UNAVAILABLE/RESUMED semantics.
+- [x] Present server-derived funnel stages, eligibility summary, Qualified/Potential/Risk Off visibility, Scalp/Swing and Long/Short comparisons, performance, equity, journal, and existing exports.
+- [x] Validate owner scoping, protected 401 behavior, Manual Paper isolation, real-order isolation, PWA online-only mutations, lazy loading, accessibility, responsive desktop/iPhone, and Light/Dark/System themes.
+- [x] Add Phase 23 Vitest coverage for eligibility/reasons/data-vs-strategy, lifecycle/events/resume, funnel/performance/equity/journal/exports, authentication/ownership/isolation/PWA/responsive contracts.
+- [x] Run full tests, TypeScript, production build, security/provider/order/PWA scans, production smoke; publish a recoverable Phase 23 checkpoint without creating synthetic data or trials. Validation: 301/301 tests, clean typecheck/build/restart, local protected 401/public 200 checks, and desktop/iPhone previews; no trial or synthetic data created.
