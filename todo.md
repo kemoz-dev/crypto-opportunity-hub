@@ -388,3 +388,16 @@
 - [x] Read and scope the latest attached specification.
 - [x] Implement only compatible requested changes while preserving authentication, data quality, PWA cache boundaries, Auto Paper/Manual Paper separation, and real-trading prohibition.
 - [x] Validate and document the resulting changes; checkpoint `ad8e30d1` was published. Phase 18B remains INCOMPLETE because Production still returns 404 for the newly exposed procedures.
+
+## Latest attached specification execution
+
+- [ ] Read and scope the latest attached specification.
+- [ ] Implement only the smallest compatible requested change while preserving authentication, data quality, PWA cache boundaries, Auto Paper/Manual Paper separation, and real-trading prohibition.
+- [ ] Validate, document, and publish a recoverable checkpoint or report the exact blocker.
+
+## Phase 18C — Production Runtime Synchronization & Verification
+
+- [ ] Identify repository HEAD, intended checkpoint, actual production runtime marker, and deployment state.
+- [ ] Republish the already-implemented Phase 18B runtime using the normal project deployment mechanism only; do not create a migration or change business logic.
+- [ ] Verify the complete `/api/trpc` and `/api/v1/trpc` unauthenticated/authenticated matrix, honest empty states, Manual Paper isolation, PWA boundaries, and no-mutation safety.
+- [ ] Stop and report if Production still serves the old runtime or returns 404 for any Phase 18B procedure.
