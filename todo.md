@@ -515,3 +515,27 @@
 - [x] Fix Phase 28 TypeScript regression by adding `decision-center` to the Home mobile navigation event union.
 - [x] Fix Phase 28 focused contract assertions to match actual Home/Feed/mobile source markers without weakening behavior.
 - [x] Correct remaining Phase 28 source-boundary assertions to read canonical route markers from App and Home in their actual files.
+
+# Phase 29 — Opportunity Feed 2.0 & Mobile-First Terminal Polish
+
+- [x] Audit the Phase 29 specification against existing Opportunity Feed, Decision Center, Asset Workspace, navigation, and PWA contracts.
+- [x] Keep the protected core unchanged: scoring, readiness, qualification, strategies, risk, sizing, providers, freshness, Paper, Auto Paper accounting, Research Lab, alerts, schedules, auth, authorization, PWA cache policy, and real-trading prohibition.
+- [x] Preserve the no-migration/no-schema/no-new-persistence boundary and stop with BLOCKER/WHY/SAFE PROPOSAL if a requirement needs database changes.
+- [x] Make Opportunity Feed the primary discovery surface with Market State first, Top Opportunities second, and filters third using existing server-derived values.
+- [x] Improve Opportunity Feed market header with regime, data status, and last validated evidence without client fabrication.
+- [x] Improve opportunity-card information hierarchy for asset, direction, status, strategy/timeframe, plan, R:R, why, warning, data, and actions.
+- [x] Preserve visible Potential, Qualified, Watch, No Trade, and Data Unavailable states with honest status-specific treatment.
+- [x] Add Opportunity Feed display-only URL-persisted filters for status, strategy, direction, health, and regime with refresh/back/forward preservation.
+- [x] Add mobile filter-sheet UX with grouped status, strategy, direction, health, and market-regime controls plus Apply, Reset, and Close touch targets of at least 44px.
+- [x] Keep desktop filters clearly visible and ensure mobile filters do not overflow horizontally.
+- [x] Preserve server-authoritative default sorting by Opportunity Score descending without client-side score recalculation.
+- [x] Add honest empty-state handling with clear-filters action, Market State, and Data Status.
+- [x] Hide Entry, SL, TP, and R:R when unavailable unless the server contract marks them valid, and show the reason/data state.
+- [x] Preserve explicit NO TRADE explanations and prevent presentation from implying executability.
+- [x] Add or preserve VIEW DECISION and VIEW FULL ANALYSIS bridges with Feed → Decision → Asset return context retaining filters.
+- [x] Add or preserve authenticated online-only Add to Watchlist / In Watchlist actions using existing contracts, without changing persistence or owner scope.
+- [x] Add a Watchlist Only discovery filter using existing watchlist state without changing server scoring or protected contracts.
+- [x] Improve Feed rendering performance with stable derivations and no unnecessary polling or client fabrication.
+- [x] Add Phase 29 contract tests for URL filters, mobile sheet behavior, sorting, empty/data states, bridges, return context, watchlist-only behavior, accessibility, PWA, and protected-core boundaries.
+- [x] Run focused/full tests, TypeScript, production build, boundary scans, and responsive visual QA at 375px, 390px, 414px, and desktop widths.
+- [x] Save and publish the Phase 29 checkpoint only after todo.md is fully reviewed and all completed items are marked [x].

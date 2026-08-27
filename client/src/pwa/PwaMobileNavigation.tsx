@@ -62,11 +62,11 @@ export function PwaMobileNavigation() {
       ) : null}
       {primaryItems.map(item => {
         const Icon = item.icon;
-        return <button type="button" key={item.target} onClick={() => choose(item.target)} className="flex min-h-14 w-[78px] shrink-0 flex-none flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"><Icon className="h-4 w-4" /><span className="min-w-0 max-w-full truncate">{item.label}</span></button>;
+        return <button type="button" key={item.target} onClick={() => choose(item.target)} className="flex min-h-14 w-[78px] shrink-0 flex-none flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"><Icon className="h-4 w-4" /><span className="whitespace-nowrap text-[9px]">{item.label}</span></button>;
       })}
       <button type="button" aria-expanded={moreOpen} aria-controls="pwa-mobile-more" onClick={() => setMoreOpen(value => !value)} className="flex min-h-14 w-[72px] shrink-0 flex-none flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium text-slate-400 hover:bg-white/[.05] hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70">
         {moreOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        <span className="truncate">More</span>
+        <span className="whitespace-nowrap">More</span>
       </button>
     </nav>
   );

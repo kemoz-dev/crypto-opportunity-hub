@@ -62,8 +62,9 @@ describe("Phase 27 opportunity feed contracts", () => {
       expect(source).toContain(label);
     }
     expect(source).toContain("privateEnabled");
-    expect(source).not.toContain("useMutation");
-    expect(source).not.toContain("mutate(");
+    expect(source).not.toContain("createTrial");
+    expect(source).not.toContain("saveAutoPaperSettings");
+    expect(source).not.toContain("enableAutoPaper");
   });
 
   it("integrates the feed into existing lazy workspace navigation", () => {
