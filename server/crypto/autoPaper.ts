@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { autoPaperAccounts, autoPaperEvents, autoPaperSettings, autoPaperTrials } from "../../drizzle/schema";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { autoPaperAccounts, autoPaperEquitySnapshots, autoPaperEvents, autoPaperSettings, autoPaperTrials } from "../../drizzle/schema";
 import type { ScoringConfig } from "../../shared/crypto";
 import { getDb } from "../db";
 import { cloneImmutableEntrySnapshot } from "./paperTrading";
@@ -244,6 +244,59 @@ export function deriveAutoPaperAccountState(account: Pick<typeof autoPaperAccoun
   return { startingCapital: account.startingCapital, reservedCapital, availableCash, unrealizedPnl, realizedPnl, currentEquity: account.startingCapital + realizedPnl + unrealizedPnl };
 }
 
+const AUTO_PAPER_SNAPSHOT_BUCKET_MS = 5 * 60 * 1000;
+
+export function autoPaperSnapshotDeduplicationKey(accountId: number, capturedAt: number) { return `${accountId}:${Math.floor(capturedAt / AUTO_PAPER_SNAPSHOT_BUCKET_MS)}`; }
+
+export async function persistAutoPaperEquitySnapshot(userId: number, capturedAt = Date.now()) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; Auto Paper snapshot cannot be written.");
+  const account = await getAutoPaperAccount(userId);
+  if (!account) return { created: false as const, reason: "ACCOUNT_NOT_INITIALIZED" as const };
+  const trials = await getAutoPaperHistory(userId);
+  const state = deriveAutoPaperAccountState(account, trials);
+  const deduplicationKey = autoPaperSnapshotDeduplicationKey(account.id, capturedAt);
+  const existing = (await db.select({ id: autoPaperEquitySnapshots.id }).from(autoPaperEquitySnapshots).where(and(eq(autoPaperEquitySnapshots.accountId, account.id), eq(autoPaperEquitySnapshots.userId, userId), eq(autoPaperEquitySnapshots.deduplicationKey, deduplicationKey))).limit(1))[0];
+  if (existing) return { created: false as const, reason: "DUPLICATE_BUCKET" as const, id: existing.id };
+  const active = trials.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number]));
+  const provenance = active[0]?.provenance ?? null;
+  const freshness = active[0]?.freshness ?? "UNAVAILABLE";
+  try {
+    const inserted = await db.insert(autoPaperEquitySnapshots).values({ accountId: account.id, userId, capturedAt: new Date(capturedAt), equity: state.currentEquity, availableCash: state.availableCash, realizedPnl: state.realizedPnl, unrealizedPnl: state.unrealizedPnl, exposure: state.reservedCapital, activeTrialCount: active.length, provenance, freshness, deduplicationKey });
+    return { created: true as const, id: Number(inserted[0]?.insertId ?? 0), capturedAt };
+  } catch (error) {
+    if (error instanceof Error && /duplicate|unique/i.test(error.message)) return { created: false as const, reason: "DUPLICATE_BUCKET" as const };
+    throw error;
+  }
+}
+
+export async function getAutoPaperEquitySnapshots(userId: number, from?: number, to?: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; Auto Paper snapshots cannot be loaded.");
+  const conditions = [eq(autoPaperEquitySnapshots.userId, userId)];
+  if (from != null) conditions.push(gte(autoPaperEquitySnapshots.capturedAt, new Date(from)));
+  if (to != null) conditions.push(lte(autoPaperEquitySnapshots.capturedAt, new Date(to)));
+  return db.select().from(autoPaperEquitySnapshots).where(and(...conditions)).orderBy(asc(autoPaperEquitySnapshots.capturedAt));
+}
+
+export async function getAutoPaperEquityHistory(userId: number, from?: number, to?: number) {
+  const account = await getAutoPaperAccount(userId);
+  if (!account) return { state: "NOT_INITIALIZED" as const, points: [] };
+  const snapshots = await getAutoPaperEquitySnapshots(userId, from, to);
+  if (!snapshots.length) return { state: "NO_SNAPSHOTS" as const, points: [] };
+  return { state: "READY" as const, points: snapshots.map(snapshot => ({ timestamp: snapshot.capturedAt.getTime(), equity: snapshot.equity, availableCash: snapshot.availableCash, realizedPnl: snapshot.realizedPnl, unrealizedPnl: snapshot.unrealizedPnl, exposure: snapshot.exposure, activeTrialCount: snapshot.activeTrialCount, provenance: snapshot.provenance, freshness: snapshot.freshness })) };
+}
+
+export async function getAutoPaperEquitySummary(userId: number, from?: number, to?: number) {
+  const account = await getAutoPaperAccount(userId);
+  if (!account) return { state: "NOT_INITIALIZED" as const, startingCapital: null, currentEquity: null, availableCash: null, realizedPnl: null, unrealizedPnl: null, totalPnl: null, returnPercent: null, peakEquity: null, maximumDrawdown: null, snapshotCount: 0, firstSnapshotAt: null, latestSnapshotAt: null, activeTrialCount: 0 };
+  const snapshots = await getAutoPaperEquitySnapshots(userId, from, to);
+  const equities = snapshots.map(snapshot => snapshot.equity);
+  const latest = snapshots.at(-1);
+  const peakEquity = equities.length ? Math.max(...equities) : account.currentEquity;
+  return { state: snapshots.length ? "READY" as const : "NO_SNAPSHOTS" as const, startingCapital: account.startingCapital, currentEquity: latest?.equity ?? account.currentEquity, availableCash: latest?.availableCash ?? account.availableCash, realizedPnl: latest?.realizedPnl ?? account.realizedPnl, unrealizedPnl: latest?.unrealizedPnl ?? account.unrealizedPnl, totalPnl: account.currentEquity - account.startingCapital, returnPercent: account.startingCapital ? (account.currentEquity - account.startingCapital) / account.startingCapital * 100 : null, peakEquity, maximumDrawdown: calculateAutoPaperMaximumDrawdown(equities), snapshotCount: snapshots.length, firstSnapshotAt: snapshots[0]?.capturedAt ?? null, latestSnapshotAt: latest?.capturedAt ?? null, activeTrialCount: latest?.activeTrialCount ?? 0 };
+}
+
 export async function refreshAutoPaperActive(userId: number, configuration: ScoringConfig) {
   const active = await getAutoPaperActive(userId);
   const refreshed = await Promise.all(active.map(trial => refreshAutoPaperTrial(userId, trial.id, configuration)));
@@ -254,6 +307,7 @@ export async function refreshAutoPaperActive(userId: number, configuration: Scor
       const trials = await getAutoPaperHistory(userId);
       const state = deriveAutoPaperAccountState(account, trials);
       await db.update(autoPaperAccounts).set({ realizedPnl: state.realizedPnl, unrealizedPnl: state.unrealizedPnl, currentEquity: state.currentEquity, availableCash: state.availableCash }).where(and(eq(autoPaperAccounts.id, account.id), eq(autoPaperAccounts.userId, userId)));
+      await persistAutoPaperEquitySnapshot(userId);
     }
   }
   return refreshed;
@@ -316,14 +370,24 @@ export async function getAutoPaperMaximumDrawdown(userId: number, filters?: Auto
 
 export async function getAutoPaperEquityCurve(userId: number, filters?: AutoPaperPerformanceFilters) {
   const account = await getAutoPaperAccount(userId);
+  if (!account) return [];
+
+  const canUseAccountSnapshots = !filters?.strategy && !filters?.timeframe && !filters?.direction && !filters?.mode && !filters?.assetId && !filters?.regime && !filters?.qualification && !filters?.status;
+  const snapshots = canUseAccountSnapshots ? await getAutoPaperEquitySnapshots(userId, filters?.from, filters?.to) : [];
   const all = await getAutoPaperHistory(userId);
   const trials = all.filter(trial => (!filters?.strategy || trial.strategy === filters.strategy) && (!filters?.timeframe || trial.timeframe === filters.timeframe) && (!filters?.direction || trial.direction === filters.direction) && (!filters?.mode || trial.mode === filters.mode || (filters.mode === "EXPERIMENTAL" && trial.mode === "CUSTOM")) && (!filters?.assetId || trial.assetId === filters.assetId) && (!filters?.regime || trialRegime(trial) === filters.regime) && (!filters?.qualification || trialQualification(trial) === filters.qualification) && (!filters?.from || trial.createdAt.getTime() >= filters.from) && (!filters?.to || trial.createdAt.getTime() <= filters.to));
-  const startingCapital = account?.startingCapital ?? 0;
+  const startingCapital = account.startingCapital;
   let equity = startingCapital;
-  const points: Array<{ timestamp: number; equity: number; drawdown: number; trialId?: number; event?: string }> = [{ timestamp: trials[0]?.createdAt.getTime() ?? Date.now(), equity, drawdown: 0, event: "STARTING_CAPITAL" }];
-  for (const trial of [...trials].filter(isCompletedTrial).sort((a, b) => (a.completedAt?.getTime() ?? a.createdAt.getTime()) - (b.completedAt?.getTime() ?? b.createdAt.getTime()))) { equity += Number(trial.realizedPnl ?? 0); points.push({ timestamp: trial.completedAt?.getTime() ?? trial.createdAt.getTime(), equity, drawdown: 0, trialId: trial.id, event: trial.status }); }
-  equity = Number(account?.currentEquity ?? equity);
-  points.push({ timestamp: Date.now(), equity, drawdown: 0, event: "CURRENT_EQUITY" });
+  const completedTrials = [...trials].filter(isCompletedTrial).sort((a, b) => (a.completedAt?.getTime() ?? a.createdAt.getTime()) - (b.completedAt?.getTime() ?? b.createdAt.getTime()));
+  if (!snapshots.length && !completedTrials.length) return [];
+  const points: Array<{ timestamp: number; equity: number; drawdown: number; trialId?: number; event?: string; provenance?: unknown; freshness?: string | null }> = [];
+  if (snapshots.length) {
+    for (const snapshot of snapshots) points.push({ timestamp: snapshot.capturedAt.getTime(), equity: snapshot.equity, drawdown: 0, event: "EQUITY_SNAPSHOT", provenance: snapshot.provenance, freshness: snapshot.freshness });
+  } else {
+    points.push({ timestamp: completedTrials[0]?.createdAt.getTime() ?? Date.now(), equity, drawdown: 0, event: "STARTING_CAPITAL", provenance: "AUTO_PAPER_TRIAL_HISTORY", freshness: "HISTORICAL" });
+    for (const trial of completedTrials) { equity += Number(trial.realizedPnl ?? 0); points.push({ timestamp: trial.completedAt?.getTime() ?? trial.createdAt.getTime(), equity, drawdown: 0, trialId: trial.id, event: trial.status, provenance: trial.provenance, freshness: trial.freshness }); }
+    points.push({ timestamp: Date.now(), equity: Number(account.currentEquity), drawdown: 0, event: "CURRENT_EQUITY", provenance: "AUTO_PAPER_ACCOUNT", freshness: "CURRENT" });
+  }
   let peak = points[0]?.equity ?? 0;
   return points.map(point => { peak = Math.max(peak, point.equity); return { ...point, drawdown: peak - point.equity }; });
 }

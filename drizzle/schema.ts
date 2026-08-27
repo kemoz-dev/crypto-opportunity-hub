@@ -330,6 +330,27 @@ export const autoPaperTrials = mysqlTable("autoPaperTrials", {
   index("auto_paper_trial_asset_time_idx").on(table.assetId, table.createdAt),
 ]);
 
+export const autoPaperEquitySnapshots = mysqlTable("autoPaperEquitySnapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  accountId: int("accountId").notNull().references(() => autoPaperAccounts.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  capturedAt: timestamp("capturedAt").notNull(),
+  equity: double("equity").notNull(),
+  availableCash: double("availableCash").notNull(),
+  realizedPnl: double("realizedPnl").notNull(),
+  unrealizedPnl: double("unrealizedPnl").notNull(),
+  exposure: double("exposure").notNull(),
+  activeTrialCount: int("activeTrialCount").notNull(),
+  provenance: json("provenance"),
+  freshness: varchar("freshness", { length: 32 }),
+  deduplicationKey: varchar("deduplicationKey", { length: 160 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("auto_paper_equity_snapshot_dedup_unique").on(table.accountId, table.deduplicationKey),
+  index("auto_paper_equity_snapshot_user_time_idx").on(table.userId, table.capturedAt),
+  index("auto_paper_equity_snapshot_account_time_idx").on(table.accountId, table.capturedAt),
+]);
+
 export const autoPaperEvents = mysqlTable("autoPaperEvents", {
   id: int("id").autoincrement().primaryKey(),
   trialId: int("trialId").notNull().references(() => autoPaperTrials.id, { onDelete: "cascade" }),

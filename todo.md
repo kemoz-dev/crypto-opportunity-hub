@@ -365,3 +365,26 @@
 - [x] Read and scope the newly attached specification.
 - [x] Implement only compatible requested changes while preserving Auto Paper/Manual Paper isolation, data-quality gates, authentication, PWA boundaries, and real-trading prohibition.
 - [x] Validate and document the resulting changes; publish the resulting changes after the final checklist review.
+
+## Newly attached specification execution
+
+- [x] Read and scope the newly attached specification.
+- [x] Implement only compatible requested changes while preserving Auto Paper/Manual Paper isolation, data-quality gates, authentication, PWA boundaries, and real-trading prohibition. Explicit migration authorization was subsequently provided and the additive snapshot layer was completed.
+- [x] Validate and document the resulting changes; publication is recorded under the Phase 18B checkpoint workflow.
+
+## Phase 18 — Authenticated Production Validation & Equity History
+
+- [x] Audit current Phase 17 Auto Paper account, performance, Lab, export, and lifecycle contracts against Phase 18.
+- [x] Add the authorized owner-scoped immutable Equity Snapshot table and migration without changing Manual Paper records.
+- [x] Persist deduplicated server-generated equity snapshots through the existing refresh/cron authority only.
+- [x] Add snapshot-backed equity history, date ranges, drawdown, comparisons, and export metadata without fabricating points.
+- [x] Add authenticated production-safe validation coverage and verify unauthenticated/cross-owner rejection. Authenticated browser diagnostic was read-only; clean unauthenticated requests returned 401.
+- [x] Run full regression, TypeScript, production build, schema/security/PWA/action scans, restart, and responsive checks.
+- [x] Document Phase 18 and publish a validated checkpoint. Phase 18B documentation is complete; final propagation verification remains tracked below.
+- [x] Complete preview/local Phase 18 validation and document that authenticated production validation is blocked by the missing Production sign-in control. Current Phase 18B source is ready for propagation verification.
+
+## Latest attached specification execution
+
+- [x] Read and scope the latest attached specification.
+- [x] Implement only compatible requested changes while preserving authentication, data quality, PWA cache boundaries, Auto Paper/Manual Paper separation, and real-trading prohibition.
+- [ ] Validate, document, and publish a recoverable checkpoint if the requested changes are safe and complete. Implementation and validation are complete; checkpoint save is pending.
