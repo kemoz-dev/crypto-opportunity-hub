@@ -500,3 +500,18 @@
 - [x] Fix Phase 27 focused contract failures without weakening feed behavior: use actual Home navigation label and remove client-clock dependence from Auto Paper “today” presentation.
 - [x] Fix Phase 27 ObservationCenter compile regression by parenthesizing mixed nullish and boolean fallbacks.
 - [x] Align Observation Center performance presentation with the existing server contract: t1Hit/t2Hit/t3Hit and maximumDrawdown.
+- [x] Review the latest attached specification and map its requirements to existing project contracts.
+- [x] Implement the latest compatible changes without weakening authentication, data-quality, PWA, Paper/Auto Paper, Research Lab, scheduler, or real-trading boundaries.
+- [x] Build a read-only Decision Center as the post-Feed decision surface using existing server-derived Scalp/Swing opportunity contracts.
+- [x] Present market state, top opportunity, Decision Summary, WHY/RISK/WARNINGS, status-specific Potential/Qualified/Watch/No Trade states, plan/health/freshness/provenance, and chart evidence without synthetic values.
+- [x] Add display-only Decision Center filters with URL state preservation across refresh/back/forward and canonical Asset deep-links that return to the same filter context.
+- [x] Add existing-contract Watchlist add/remove actions with authenticated online-only mutation semantics and inline feedback; do not add schema or persistence.
+- [x] Add read-only Auto Paper status/eligibility evidence and a VIEW AUTO PAPER navigation action without creating trials or changing lifecycle/accounting.
+- [x] Simplify desktop/mobile IA around Command Center, Feed, Decision Center, Watchlist, Scalp/Swing, Auto Paper, Intelligence, Research, and Settings while preserving existing routes.
+- [x] Add Phase 28 contract tests for Decision Center, ranking, filters, URL/back/forward/refresh, deep-links, warning priority, plan states, Watchlist, Auto Paper privacy, accessibility, PWA, and no-real-trading boundaries.
+- [x] Run focused/full tests, TypeScript, production build, security scans, and responsive verification for the latest specification.
+- [x] Resolve full-regression contract failures by preserving legacy PWA/navigation labels and other existing public UI markers while keeping Phase 28 IA additions.
+- [x] Fix Phase 28 focused test boundary assertion to allow existing Watchlist mutations while still forbidding trial/order mutations.
+- [x] Fix Phase 28 TypeScript regression by adding `decision-center` to the Home mobile navigation event union.
+- [x] Fix Phase 28 focused contract assertions to match actual Home/Feed/mobile source markers without weakening behavior.
+- [x] Correct remaining Phase 28 source-boundary assertions to read canonical route markers from App and Home in their actual files.

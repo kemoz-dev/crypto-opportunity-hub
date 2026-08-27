@@ -39,7 +39,7 @@ describe("Phase 27 opportunity feed contracts", () => {
 
   it("renders honest plan and data states and canonical analysis actions", () => {
     const source = read("client/src/components/crypto/OpportunityFeedWorkspace.tsx");
-    for (const label of ["entryZone", "stop", "targets", "rewardRisk", "WARNING", "Freshness", "dataQuality", "VIEW FULL ANALYSIS", "PLAN UNAVAILABLE", "Last validated"]) {
+    for (const label of ["entryZone", "stop", "targets", "rewardRisk", "WARNING", "Freshness", "dataQuality", "VIEW DECISION", "PLAN UNAVAILABLE", "Last validated"]) {
       expect(source).toContain(label);
     }
     const card = read("client/src/components/crypto/OpportunityCard.tsx");

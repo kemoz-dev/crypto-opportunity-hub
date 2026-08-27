@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Activity, BarChart3, BellRing, BookOpen, FlaskConical, Gauge, Layers3, Menu, Moon, ScanSearch, Settings2, Sparkles, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "opportunity-feed" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research" | "trading-intelligence" | "settings";
+type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "opportunity-feed" | "decision-center" | "asset-intelligence" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research" | "trading-intelligence" | "settings";
 
 function navigate(target: PwaNavTarget) {
   window.dispatchEvent(new CustomEvent<PwaNavTarget>("crypto-hub:navigate", { detail: target }));
@@ -13,19 +13,22 @@ export function PwaMobileNavigation() {
   const { theme, themeMode, setTheme } = useTheme();
   const primaryItems = [
     { label: "Home", target: "dashboard" as const, icon: Gauge },
-    { label: "Markets", target: "scanner" as const, icon: ScanSearch },
     { label: "Opportunities", target: "opportunity-feed" as const, icon: Sparkles },
-    { label: "Scalp", target: "scalping" as const, icon: Target },
-    { label: "Swing", target: "swing" as const, icon: TrendingUp },
-    { label: "Monitor", target: "setup-monitor" as const, icon: Activity },
-    { label: "Paper", target: "paper" as const, icon: WalletCards },
+    { label: "Watchlist", target: "watchlist" as const, icon: BookOpen },
+    { label: "Auto Paper", target: "auto-paper" as const, icon: FlaskConical },
   ];
   const moreItems = [
-    { label: "Watchlist", target: "watchlist" as const, icon: BookOpen },
+    { label: "Decision Center", target: "decision-center" as const, icon: Sparkles },
+    { label: "Asset Intelligence", target: "asset-intelligence" as const, icon: Activity },
+    { label: "Markets", target: "scanner" as const, icon: ScanSearch },
+    { label: "Monitor", target: "setup-monitor" as const, icon: Activity },
+    { label: "Paper", target: "paper" as const, icon: WalletCards },
+    { label: "Scalp", target: "scalping" as const, icon: Target },
+    { label: "Swing", target: "swing" as const, icon: TrendingUp },
     { label: "Auto Paper Lab", target: "auto-paper" as const, icon: FlaskConical },
-    { label: "Alerts", target: "alerts" as const, icon: BellRing },
-    { label: "Research & History", target: "research" as const, icon: Layers3 },
     { label: "Trading Intelligence", target: "trading-intelligence" as const, icon: BarChart3 },
+    { label: "Intelligence", target: "trading-intelligence" as const, icon: BarChart3 },
+    { label: "Research", target: "research" as const, icon: Layers3 },
     { label: "Settings", target: "settings" as const, icon: Settings2 },
   ];
 
