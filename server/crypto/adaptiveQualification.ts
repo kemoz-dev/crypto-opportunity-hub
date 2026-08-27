@@ -1,7 +1,7 @@
 import type { TradeSetupPlan } from "./tradeSetup";
 
 export type AdaptiveStatus = "STRONG SETUP" | "QUALIFIED" | "POTENTIAL" | "WATCH" | "CAUTION" | "LOW CONFIDENCE" | "NO TRADE" | "DATA UNAVAILABLE";
-export type AdaptiveTradingMode = "CONSERVATIVE" | "BALANCED" | "OPPORTUNITY" | "CUSTOM";
+export type AdaptiveTradingMode = "CONSERVATIVE" | "BALANCED" | "OPPORTUNITY" | "EXPERIMENTAL" | "CUSTOM";
 
 export type AdaptiveSetupQuality = {
   score: number | null;

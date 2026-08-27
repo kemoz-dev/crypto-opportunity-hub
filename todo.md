@@ -342,3 +342,20 @@
 - [x] Add protected server refresh and event-history procedures for Auto Paper monitoring.
 - [x] Add desktop and mobile navigation access for Auto Paper Lab without changing existing workspace behavior.
 - [x] Fix and validate the PWA mobile navigation module parser/import regression discovered during Phase 15A integration.
+
+## Attached instruction execution
+
+- [x] Review the attached Phase 15A instruction file and identify explicit implementation requirements.
+- [x] Apply only the requested changes that are compatible with existing safety, authentication, data-quality, PWA, and real-trading boundaries. Authorized and completed with an additive independent Auto Paper account model; current Manual Paper portfolio remains untouched.
+- [x] Validate and document the applied changes before publishing a new checkpoint.
+
+## Phase 16 — Auto Paper Trading Lab & Adaptive Trade Lifecycle
+
+- [x] Re-audit Phase 15A contracts against the authorized Phase 16 specification.
+- [x] Add the authorized independent Auto Paper account model and migrate trials away from the shared Manual Paper portfolio without altering Manual Paper records.
+- [x] Extend server settings, mode capture, automatic discovery, simulation entry, lifecycle, target milestones, health, and resumable data-unavailable behavior.
+- [x] Add richer persisted-trial performance metrics, filters, Scalp-versus-Swing comparison, and chronological event feed APIs.
+- [x] Expand Auto Paper Lab, Dashboard summary, Discovery, Scalping, Swing, and mobile controls with truthful adaptive evidence.
+- [x] Add deterministic Phase 16 tests for authorization, accounting isolation, modes, automatic entries, lifecycle, performance, and no-real-order boundaries.
+- [x] Run migration verification, full tests, TypeScript, production build, security/provider/action/PWA scans, production smoke checks, and responsive visual validation.
+- [ ] Document Phase 16 limitations and publish a validated checkpoint. Documentation complete; final checkpoint pending.

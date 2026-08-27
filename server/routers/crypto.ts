@@ -17,7 +17,7 @@ import { getProviderMonitorSummary, listProviderMonitorHistory } from "../crypto
 import { getAssetIntelligence } from "../crypto/assetIntelligence";
 import { getTradeSetups } from "../crypto/tradeSetup";
 import { getLowTimeframeScalpingIntelligence } from "../crypto/lowTimeframeScalping";
-import { autoPaperSettingsSchema, evaluateAndCreateAutoPaperTrial, getAutoPaperActive, getAutoPaperEvents, getAutoPaperHistory, getAutoPaperPerformance, getAutoPaperSettings, recordAutoPaperEvent, refreshAutoPaperActive, saveAutoPaperSettings } from "../crypto/autoPaper";
+import { autoPaperSettingsSchema, evaluateAndCreateAutoPaperTrial, getAutoPaperAccount, getAutoPaperActive, getAutoPaperEventFeed, getAutoPaperEvents, getAutoPaperHistory, getAutoPaperPerformance, getAutoPaperSettings, recordAutoPaperEvent, refreshAutoPaperActive, refreshAutoPaperForAllEnabled, saveAutoPaperSettings } from "../crypto/autoPaper";
 import { archiveSetupMonitor, createSetupMonitor, getSetupMonitorDetail, listActiveSetupMonitors, listSetupMonitorHistory, refreshSetupMonitor } from "../crypto/setupMonitor";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
@@ -84,13 +84,15 @@ export const cryptoRouter = router({
   paperPortfolio: protectedProcedure.query(async ({ ctx }) => getPaperPortfolio(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
   paperTradingSummary: protectedProcedure.query(async ({ ctx }) => getPaperTradingSummary(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
   autoPaperSettings: protectedProcedure.query(({ ctx }) => getAutoPaperSettings(ctx.user.id)),
-  saveAutoPaperSettings: protectedProcedure.input(autoPaperSettingsSchema).mutation(({ ctx, input }) => saveAutoPaperSettings(ctx.user.id, input)),
+  autoPaperAccount: protectedProcedure.query(({ ctx }) => getAutoPaperAccount(ctx.user.id)),
+  saveAutoPaperSettings: protectedProcedure.input(autoPaperSettingsSchema).mutation(async ({ ctx, input }) => saveAutoPaperSettings(ctx.user.id, input, (await getUserScoringConfig(ctx.user.id)).paperCapital)),
   evaluateAutoPaperTrial: protectedProcedure.input(z.object({ assetId: z.string().min(1).max(96), mode: z.enum(["SCALP", "SWING"]) })).mutation(async ({ ctx, input }) => evaluateAndCreateAutoPaperTrial(ctx.user.id, input.assetId, input.mode, await getUserScoringConfig(ctx.user.id))),
   autoPaperActive: protectedProcedure.query(({ ctx }) => getAutoPaperActive(ctx.user.id)),
   refreshAutoPaperActive: protectedProcedure.mutation(async ({ ctx }) => refreshAutoPaperActive(ctx.user.id, await getUserScoringConfig(ctx.user.id))),
   autoPaperHistory: protectedProcedure.query(({ ctx }) => getAutoPaperHistory(ctx.user.id)),
   autoPaperEvents: protectedProcedure.input(z.object({ trialId: z.number().int().positive() })).query(({ ctx, input }) => getAutoPaperEvents(ctx.user.id, input.trialId)),
-  autoPaperPerformance: protectedProcedure.query(({ ctx }) => getAutoPaperPerformance(ctx.user.id)),
+  autoPaperFeed: protectedProcedure.query(({ ctx }) => getAutoPaperEventFeed(ctx.user.id)),
+  autoPaperPerformance: protectedProcedure.input(z.object({ strategy: z.string().max(64).optional(), timeframe: z.string().max(12).optional(), direction: z.enum(["long", "short"]).optional(), mode: z.string().max(24).optional(), assetId: z.string().max(96).optional(), from: z.number().optional(), to: z.number().optional() }).optional()).query(({ ctx, input }) => getAutoPaperPerformance(ctx.user.id, input)),
   recordAutoPaperEvent: protectedProcedure.input(z.object({ trialId: z.number().int().positive(), eventKey: z.string().min(1).max(160), eventType: z.string().min(1).max(48), reason: z.string().min(1).max(2000), price: z.number().nullable().optional(), timeframe: z.string().max(12).nullable().optional(), provider: z.string().max(96).nullable().optional(), freshness: z.string().max(32).nullable().optional(), provenance: z.unknown().optional() })).mutation(({ ctx, input }) => recordAutoPaperEvent(ctx.user.id, input.trialId, input)),
   watchlist: protectedProcedure.query(({ ctx }) => getUserWatchlist(ctx.user.id)),
   addWatchlistAsset: protectedProcedure.input(z.object({ assetId: z.string().trim().min(1).max(96) })).mutation(({ ctx, input }) => addUserWatchlistAsset(ctx.user.id, input.assetId)),

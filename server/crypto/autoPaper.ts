@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { autoPaperEvents, autoPaperSettings, autoPaperTrials, paperPortfolios, paperTrades } from "../../drizzle/schema";
+import { autoPaperAccounts, autoPaperEvents, autoPaperSettings, autoPaperTrials } from "../../drizzle/schema";
 import type { ScoringConfig } from "../../shared/crypto";
 import { getDb } from "../db";
 import { cloneImmutableEntrySnapshot } from "./paperTrading";
@@ -22,7 +22,7 @@ export const AUTO_PAPER_DEFAULTS = {
   riskPercent: 1,
 };
 
-export const AUTO_PAPER_MODES = ["CONSERVATIVE", "BALANCED", "OPPORTUNITY", "CUSTOM"] as const;
+export const AUTO_PAPER_MODES = ["CONSERVATIVE", "BALANCED", "OPPORTUNITY", "EXPERIMENTAL", "CUSTOM"] as const;
 const settingsInput = {
   enabled: z.boolean().default(false),
   mode: z.enum(AUTO_PAPER_MODES).default("BALANCED"),
@@ -45,6 +45,12 @@ function normalizeSettings(value: unknown): AutoPaperSettings {
   return parsed.success ? parsed.data : autoPaperSettingsSchema.parse(AUTO_PAPER_DEFAULTS);
 }
 
+export async function getAutoPaperAccount(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; Auto Paper account cannot be loaded.");
+  return (await db.select().from(autoPaperAccounts).where(eq(autoPaperAccounts.userId, userId)).orderBy(asc(autoPaperAccounts.id)).limit(1))[0] ?? null;
+}
+
 export async function getAutoPaperSettings(userId: number): Promise<AutoPaperSettings> {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; Auto Paper settings cannot be loaded.");
@@ -52,22 +58,16 @@ export async function getAutoPaperSettings(userId: number): Promise<AutoPaperSet
   return row ? normalizeSettings(row) : autoPaperSettingsSchema.parse(AUTO_PAPER_DEFAULTS);
 }
 
-export async function saveAutoPaperSettings(userId: number, input: AutoPaperSettingsInput): Promise<AutoPaperSettings> {
+export async function saveAutoPaperSettings(userId: number, input: AutoPaperSettingsInput, startingCapital = 100000): Promise<AutoPaperSettings> {
   const validated = autoPaperSettingsSchema.parse(input);
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable; Auto Paper settings cannot be saved.");
   await db.insert(autoPaperSettings).values({ userId, ...validated }).onDuplicateKeyUpdate({ set: validated });
+  if (validated.enabled) {
+    const account = await getAutoPaperAccount(userId);
+    if (!account) await db.insert(autoPaperAccounts).values({ userId, startingCapital, currentEquity: startingCapital, availableCash: startingCapital, realizedPnl: 0, unrealizedPnl: 0 });
+  }
   return validated;
-}
-
-async function getOrCreatePaperPortfolio(userId: number, paperCapital: number, db: any) {
-  if (!db) throw new Error("Database is unavailable; Auto Paper cannot be created.");
-  const existing = (await db.select().from(paperPortfolios).where(eq(paperPortfolios.userId, userId)).orderBy(asc(paperPortfolios.id)).limit(1))[0];
-  if (existing) return existing;
-  await db.insert(paperPortfolios).values({ userId, name: "Primary paper portfolio", startingCapital: paperCapital, currentEquity: paperCapital });
-  const created = (await db.select().from(paperPortfolios).where(eq(paperPortfolios.userId, userId)).orderBy(asc(paperPortfolios.id)).limit(1))[0];
-  if (!created) throw new Error("Paper portfolio creation failed.");
-  return created;
 }
 
 function planStrategy(plan: TradeSetupPlan) { return plan.mode === "SCALP" ? "SCALP" : "SWING"; }
@@ -76,7 +76,11 @@ function validAutoPlan(plan: TradeSetupPlan, settings: AutoPaperSettings) {
   const direction = plan.direction;
   const strategy = planStrategy(plan);
   const quality = plan.tradeSetupQuality;
-  return plan.availability === "LIVE" && plan.dataBundle.coherent && plan.dataBundle.eligibleForScoring && plan.currentPrice !== null && (direction === "LONG" || direction === "SHORT") && plan.entryZone !== null && plan.stop !== null && plan.targets.length > 0 && plan.rewardRisk !== null && plan.rewardRisk >= settings.minRewardRisk && quality !== null && quality >= settings.minSetupQuality && settings.strategies.includes(strategy) && settings.directions.includes(direction) && (plan.actionable || settings.allowPotential);
+  const mode = settings.mode === "CUSTOM" ? "EXPERIMENTAL" : settings.mode;
+  const modeMinimumQuality = mode === "CONSERVATIVE" ? Math.max(settings.minSetupQuality, 80) : mode === "OPPORTUNITY" ? Math.max(settings.minSetupQuality, 55) : mode === "EXPERIMENTAL" ? Math.max(settings.minSetupQuality, 45) : settings.minSetupQuality;
+  const modeMinimumRewardRisk = mode === "CONSERVATIVE" ? Math.max(settings.minRewardRisk, 2) : mode === "OPPORTUNITY" || mode === "EXPERIMENTAL" ? Math.max(settings.minRewardRisk, 1) : settings.minRewardRisk;
+  const potentialAllowed = settings.allowPotential || mode === "OPPORTUNITY" || mode === "EXPERIMENTAL";
+  return plan.availability === "LIVE" && plan.dataBundle.coherent && plan.dataBundle.eligibleForScoring && plan.currentPrice !== null && (direction === "LONG" || direction === "SHORT") && plan.entryZone !== null && plan.stop !== null && plan.targets.length > 0 && plan.rewardRisk !== null && plan.rewardRisk >= modeMinimumRewardRisk && quality !== null && quality >= modeMinimumQuality && (settings.strategies.includes(strategy) || (strategy === "SCALP" && settings.strategies.includes("15M FAST SCALP"))) && settings.directions.includes(direction) && (plan.actionable || potentialAllowed);
 }
 
 function positionSize(entryPrice: number, stopPrice: number, equity: number, riskPercent: number) {
@@ -94,29 +98,30 @@ export async function createAutoPaperTrial(userId: number, plan: TradeSetupPlan,
   if (!db) throw new Error("Database is unavailable; Auto Paper cannot be created.");
   const identity = planIdentity(plan);
   const existing = (await db.select().from(autoPaperTrials).where(and(eq(autoPaperTrials.userId, userId), eq(autoPaperTrials.setupIdentity, identity))).limit(1))[0];
-  if (existing && ["OPEN", "HEALTHY", "WARNING", "REVERSAL_RISK", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED"].includes(existing.status)) return { created: false as const, duplicate: true as const, trial: existing };
-  const active = await db.select({ count: sql<number>`count(*)` }).from(autoPaperTrials).where(and(eq(autoPaperTrials.userId, userId), inArray(autoPaperTrials.status, ["OPEN", "HEALTHY", "WARNING", "REVERSAL_RISK", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED"])));
+  if (existing && ACTIVE_TRIAL_STATUSES.includes(existing.status as typeof ACTIVE_TRIAL_STATUSES[number])) return { created: false as const, duplicate: true as const, trial: existing };
+  const active = await db.select({ count: sql<number>`count(*)` }).from(autoPaperTrials).where(and(eq(autoPaperTrials.userId, userId), inArray(autoPaperTrials.status, ACTIVE_TRIAL_STATUSES)));
   if (Number(active[0]?.count ?? 0) >= settings.maxPositions) throw new Error("The configured maximum number of simultaneous Auto Paper positions has been reached.");
   const entry = plan.entryZone.preferred;
   const stop = plan.stop.price;
   const targets = plan.targets.slice(0, 3);
   const tradeDirection: "long" | "short" = plan.direction === "LONG" ? "long" : "short";
-  const paperSide: "long" | "short" = tradeDirection;
   const strategy: "SCALP" | "SWING" = planStrategy(plan) as "SCALP" | "SWING";
   const validatedRewardRisk = plan.rewardRisk;
   const validatedSetupQuality = plan.tradeSetupQuality;
   const now = Date.now();
   return db.transaction(async tx => {
-    const portfolio = await getOrCreatePaperPortfolio(userId, configuration.paperCapital, tx);
-    const size = positionSize(entry, stop, portfolio.currentEquity, settings.riskPercent);
-    const snapshot = cloneImmutableEntrySnapshot({ source: AUTO_PAPER_SOURCE, createdAt: now, plan });
-    const insertedTrade = await tx.insert(paperTrades).values([{ portfolioId: portfolio.id, assetId: plan.assetId, status: "open" as const, side: paperSide, entryAt: new Date(now), entryPrice: entry, stopLoss: stop, takeProfit: targets.map(target => ({ label: target.label, price: target.price })), positionSize: size, riskPercent: settings.riskPercent, rewardRisk: validatedRewardRisk, immutableEntrySnapshot: snapshot }]);
-    const paperTradeId = Number(insertedTrade[0].insertId);
-    const trialValues: typeof autoPaperTrials.$inferInsert = { userId, paperTradeId, setupIdentity: identity, assetId: plan.assetId, direction: tradeDirection, strategy, timeframe: plan.timeframes.execution, source: AUTO_PAPER_SOURCE, status: "OPEN", immutablePlanSnapshot: cloneImmutableEntrySnapshot(plan), immutableEntrySnapshot: snapshot, currentSnapshot: { observedAt: now, status: "OPEN", price: entry }, entryPrice: entry, stopPrice: stop, target1: targets[0]?.price, target2: targets[1]?.price, target3: targets[2]?.price, setupQuality: validatedSetupQuality, rewardRisk: validatedRewardRisk, provider: plan.provider ?? "UNAVAILABLE", provenance: plan.dataBundle, freshness: plan.availability, startedAt: new Date(now) };
+    const account = (await tx.select().from(autoPaperAccounts).where(eq(autoPaperAccounts.userId, userId)).orderBy(asc(autoPaperAccounts.id)).limit(1))[0];
+    if (!account) throw new Error("Auto Paper account is not initialized. Enable Auto Paper explicitly before creating simulations.");
+    const size = positionSize(entry, stop, account.currentEquity, settings.riskPercent);
+    const reservedCapital = Number((entry * size).toFixed(8));
+    if (!Number.isFinite(reservedCapital) || reservedCapital <= 0 || reservedCapital > account.availableCash) throw new Error("Auto Paper does not have enough independent simulated cash for this entry.");
+    await tx.update(autoPaperAccounts).set({ availableCash: account.availableCash - reservedCapital }).where(and(eq(autoPaperAccounts.id, account.id), eq(autoPaperAccounts.userId, userId)));
+    const snapshot = cloneImmutableEntrySnapshot({ source: AUTO_PAPER_SOURCE, createdAt: now, plan, mode: settings.mode, reservedCapital });
+    const trialValues: typeof autoPaperTrials.$inferInsert = { userId, accountId: account.id, paperTradeId: null, setupIdentity: identity, assetId: plan.assetId, direction: tradeDirection, strategy, timeframe: plan.timeframes.execution, source: AUTO_PAPER_SOURCE, mode: settings.mode, status: "ENTERED", immutablePlanSnapshot: cloneImmutableEntrySnapshot(plan), immutableEntrySnapshot: snapshot, currentSnapshot: { observedAt: now, status: "ENTERED", price: entry }, entryPrice: entry, stopPrice: stop, target1: targets[0]?.price, target2: targets[1]?.price, target3: targets[2]?.price, setupQuality: validatedSetupQuality, rewardRisk: validatedRewardRisk, positionSize: size, riskPercent: settings.riskPercent, realizedPnl: 0, currentPnl: 0, provider: plan.provider ?? "UNAVAILABLE", provenance: plan.dataBundle, freshness: plan.availability, startedAt: new Date(now) };
     const insertedTrial = await tx.insert(autoPaperTrials).values(trialValues);
     const trialId = Number(insertedTrial[0].insertId);
-    await tx.insert(autoPaperEvents).values([{ trialId, eventKey: "TRIAL_CREATED", eventType: "TRIAL_CREATED", reason: "Validated setup satisfied the enabled Auto Paper requirements.", price: entry, timeframe: plan.timeframes.execution, provider: plan.provider ?? undefined, freshness: plan.availability, provenance: plan.dataBundle }]);
-    return { created: true as const, duplicate: false as const, trialId, paperTradeId, identity, source: AUTO_PAPER_SOURCE, snapshot };
+    await tx.insert(autoPaperEvents).values([{ trialId, eventKey: "TRIAL_CREATED", eventType: "SIMULATED_ENTRY", reason: "Validated setup satisfied the enabled Auto Paper requirements; no real order was sent.", price: entry, timeframe: plan.timeframes.execution, provider: plan.provider ?? undefined, freshness: plan.availability, provenance: plan.dataBundle }]);
+    return { created: true as const, duplicate: false as const, trialId, paperTradeId: null, identity, source: AUTO_PAPER_SOURCE, snapshot };
   });
 }
 
@@ -148,7 +153,7 @@ export async function recordAutoPaperEvent(userId: number, trialId: number, even
   return { recorded: true as const, duplicate: false as const, eventKey: event.eventKey };
 }
 
-const ACTIVE_TRIAL_STATUSES = ["OPEN", "HEALTHY", "WARNING", "REVERSAL_RISK", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED", "DATA_UNAVAILABLE"] as const;
+const ACTIVE_TRIAL_STATUSES = ["DETECTED", "ENTERED", "OPEN", "HEALTHY", "WARNING", "REVERSAL_RISK", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED", "DATA_UNAVAILABLE"] as const;
 
 export function currentTrialStatus(trial: typeof autoPaperTrials.$inferSelect, price: number) {
   const direction = trial.direction;
@@ -189,11 +194,13 @@ export async function refreshAutoPaperTrial(userId: number, trialId: number, con
     return { trial: { ...trial, currentSnapshot, status: "DATA_UNAVAILABLE" as const }, refreshed: true as const, recordedEvents: recorded ? ["DATA_UNAVAILABLE"] : [] };
   }
   const observation = currentTrialStatus(trial, row.asset.price);
-  const currentSnapshot = { observedAt: scan.generatedAt, status: observation.status, price: row.asset.price, provider: bundle.provider, dataQuality: bundle.state, reason: observation.reason, reachedTargets: observation.reached };
-  await db.update(autoPaperTrials).set({ currentSnapshot, status: observation.status, completedAt: observation.status === "INVALIDATED" ? new Date(scan.generatedAt) : undefined }).where(and(eq(autoPaperTrials.id, trial.id), eq(autoPaperTrials.userId, userId)));
+  const status = observation.status === "INVALIDATED" ? "STOPPED" as const : observation.status;
+  const currentPnl = Number(((row.asset.price - trial.entryPrice) * trial.positionSize * (trial.direction === "long" ? 1 : -1)).toFixed(8));
+  const currentSnapshot = { observedAt: scan.generatedAt, status, price: row.asset.price, provider: bundle.provider, dataQuality: bundle.state, reason: observation.reason, reachedTargets: observation.reached, currentPnl };
+  await db.update(autoPaperTrials).set({ currentSnapshot, currentPnl: status === "STOPPED" ? 0 : currentPnl, realizedPnl: status === "STOPPED" ? currentPnl : trial.realizedPnl, status, completedAt: status === "STOPPED" ? new Date(scan.generatedAt) : undefined }).where(and(eq(autoPaperTrials.id, trial.id), eq(autoPaperTrials.userId, userId)));
   const eventKey = observation.eventType === "HEALTH_CHANGED" ? `HEALTH_CHANGED:${observation.status}` : observation.eventType;
   const recorded = await recordEventIfAbsent(db, trial, { eventKey, eventType: observation.eventType, reason: observation.reason, price: row.asset.price, provider: bundle.provider, freshness: bundle.state, provenance: bundle });
-  return { trial: { ...trial, currentSnapshot, status: observation.status }, refreshed: true as const, recordedEvents: recorded ? [eventKey] : [] };
+  return { trial: { ...trial, currentSnapshot, currentPnl, status }, refreshed: true as const, recordedEvents: recorded ? [eventKey] : [] };
 }
 
 export async function refreshAutoPaperForAllEnabled(getConfiguration: (userId: number) => Promise<ScoringConfig>) {
@@ -201,13 +208,60 @@ export async function refreshAutoPaperForAllEnabled(getConfiguration: (userId: n
   if (!db) throw new Error("Database is unavailable; Auto Paper cannot be refreshed.");
   const enabledUsers = await db.select({ userId: autoPaperSettings.userId }).from(autoPaperSettings).where(eq(autoPaperSettings.enabled, true));
   const results = [];
-  for (const row of enabledUsers) results.push({ userId: row.userId, trials: await refreshAutoPaperActive(row.userId, await getConfiguration(row.userId)) });
+  for (const row of enabledUsers) {
+    const configuration = await getConfiguration(row.userId);
+    const settings = await getAutoPaperSettings(row.userId);
+    const scan = await buildLiveScanner(false, configuration);
+    const createdTrials: unknown[] = [];
+    for (const candidate of scan.rows) {
+      const requestedModes = settings.strategies.includes("SWING") ? (["SWING", "SCALP"] as const) : (["SCALP"] as const);
+      for (const setupMode of requestedModes) {
+        const plan = await getTradeSetupForRow(setupMode, candidate, scan.marketRegime, configuration, undefined, getScannerLiveOhlcvBundle(scan, candidate.asset.symbol));
+        const adaptive = qualifyAdaptive(plan);
+        if (!adaptive.eligibleForAutoPaper || !validAutoPlan(plan, settings)) continue;
+        try {
+          const created = await createAutoPaperTrial(row.userId, plan, configuration, settings);
+          if (created.created) createdTrials.push(created);
+        } catch (error) {
+          if (!(error instanceof Error) || !error.message.includes("maximum number")) throw error;
+          break;
+        }
+      }
+    }
+    const refreshed = await refreshAutoPaperActive(row.userId, configuration);
+    results.push({ userId: row.userId, createdTrials, trials: refreshed });
+  }
   return { users: enabledUsers.length, results };
+}
+
+export function deriveAutoPaperAccountState(account: Pick<typeof autoPaperAccounts.$inferSelect, "startingCapital">, trials: Array<Pick<typeof autoPaperTrials.$inferSelect, "status" | "entryPrice" | "positionSize" | "realizedPnl" | "currentPnl">>) {
+  const active = trials.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number]));
+  const realizedPnl = trials.reduce((sum, trial) => sum + Number(trial.realizedPnl ?? 0), 0);
+  const unrealizedPnl = active.reduce((sum, trial) => sum + Number(trial.currentPnl ?? 0), 0);
+  const reservedCapital = active.reduce((sum, trial) => sum + Number(trial.entryPrice * trial.positionSize), 0);
+  const availableCash = Math.max(0, account.startingCapital + realizedPnl - reservedCapital);
+  return { startingCapital: account.startingCapital, reservedCapital, availableCash, unrealizedPnl, realizedPnl, currentEquity: account.startingCapital + realizedPnl + unrealizedPnl };
 }
 
 export async function refreshAutoPaperActive(userId: number, configuration: ScoringConfig) {
   const active = await getAutoPaperActive(userId);
-  return Promise.all(active.map(trial => refreshAutoPaperTrial(userId, trial.id, configuration)));
+  const refreshed = await Promise.all(active.map(trial => refreshAutoPaperTrial(userId, trial.id, configuration)));
+  const db = await getDb();
+  if (db) {
+    const account = await getAutoPaperAccount(userId);
+    if (account) {
+      const trials = await getAutoPaperHistory(userId);
+      const state = deriveAutoPaperAccountState(account, trials);
+      await db.update(autoPaperAccounts).set({ realizedPnl: state.realizedPnl, unrealizedPnl: state.unrealizedPnl, currentEquity: state.currentEquity, availableCash: state.availableCash }).where(and(eq(autoPaperAccounts.id, account.id), eq(autoPaperAccounts.userId, userId)));
+    }
+  }
+  return refreshed;
+}
+
+export async function getAutoPaperEventFeed(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable; Auto Paper feed cannot be loaded.");
+  return db.select({ event: autoPaperEvents, trial: autoPaperTrials }).from(autoPaperEvents).innerJoin(autoPaperTrials, eq(autoPaperEvents.trialId, autoPaperTrials.id)).where(eq(autoPaperTrials.userId, userId)).orderBy(desc(autoPaperEvents.createdAt)).limit(100);
 }
 
 export async function getAutoPaperEvents(userId: number, trialId: number) {
@@ -218,18 +272,27 @@ export async function getAutoPaperEvents(userId: number, trialId: number) {
   return db.select().from(autoPaperEvents).where(eq(autoPaperEvents.trialId, trialId)).orderBy(asc(autoPaperEvents.createdAt));
 }
 
-export async function getAutoPaperPerformance(userId: number) {
-  const trials = await getAutoPaperHistory(userId);
-  const closed = trials.filter(trial => ["CLOSED", "INVALIDATED"].includes(trial.status));
-  const wins = trials.filter(trial => ["TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED"].includes(trial.status));
-  const averageR = trials.length ? trials.reduce((sum, trial) => sum + trial.rewardRisk, 0) / trials.length : null;
-  const byStrategy = Array.from(new Set(trials.map(trial => trial.strategy))).map(strategy => ({ strategy, trials: trials.filter(trial => trial.strategy === strategy).length, wins: wins.filter(trial => trial.strategy === strategy).length }));
-  return { totalTrials: trials.length, open: trials.filter(trial => !closed.includes(trial) && !wins.includes(trial)).length, closed: closed.length, wins: wins.length, losses: trials.filter(trial => trial.status === "INVALIDATED").length, t1Hit: trials.filter(trial => ["TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED"].includes(trial.status)).length, t2Hit: trials.filter(trial => ["TARGET_2_REACHED", "TARGET_3_REACHED"].includes(trial.status)).length, t3Hit: trials.filter(trial => trial.status === "TARGET_3_REACHED").length, winRate: trials.length ? wins.length / trials.length * 100 : null, averageR, byStrategy };
+export async function getAutoPaperPerformance(userId: number, filters?: { strategy?: string; timeframe?: string; direction?: "long" | "short"; mode?: string; assetId?: string; from?: number; to?: number }) {
+  const all = await getAutoPaperHistory(userId);
+  const trials = all.filter(trial => (!filters?.strategy || trial.strategy === filters.strategy) && (!filters?.timeframe || trial.timeframe === filters.timeframe) && (!filters?.direction || trial.direction === filters.direction) && (!filters?.mode || trial.mode === filters.mode || (filters.mode === "EXPERIMENTAL" && trial.mode === "CUSTOM")) && (!filters?.assetId || trial.assetId === filters.assetId) && (!filters?.from || trial.createdAt.getTime() >= filters.from) && (!filters?.to || trial.createdAt.getTime() <= filters.to));
+  const targetStatuses = ["TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED"];
+  const terminalStatuses = ["INVALIDATED", "STOPPED", "CLOSED", "COMPLETED", "EXPIRED"];
+  const wins = trials.filter(trial => targetStatuses.includes(trial.status));
+  const losses = trials.filter(trial => ["INVALIDATED", "STOPPED"].includes(trial.status));
+  const completed = trials.filter(trial => terminalStatuses.includes(trial.status) || targetStatuses.includes(trial.status));
+  const active = trials.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number]));
+  const rValues = completed.map(trial => targetStatuses.includes(trial.status) ? trial.rewardRisk : losses.some(loss => loss.id === trial.id) ? -1 : null).filter((value): value is number => value !== null);
+  const averageR = rValues.length ? rValues.reduce((sum, value) => sum + value, 0) / rValues.length : null;
+  const positiveR = rValues.filter(value => value > 0).reduce((sum, value) => sum + value, 0);
+  const negativeR = Math.abs(rValues.filter(value => value < 0).reduce((sum, value) => sum + value, 0));
+  const pnl = trials.reduce((sum, trial) => sum + trial.realizedPnl + trial.currentPnl, 0);
+  const by = (key: "strategy" | "mode") => Array.from(new Set(trials.map(trial => trial[key]))).map(value => { const group = trials.filter(trial => trial[key] === value); const groupWins = group.filter(trial => targetStatuses.includes(trial.status)).length; return { [key]: value, trials: group.length, active: group.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number])).length, wins: groupWins, losses: group.filter(trial => ["INVALIDATED", "STOPPED"].includes(trial.status)).length, winRate: group.length ? groupWins / group.length * 100 : null, averageR: group.length ? group.reduce((sum, trial) => sum + (targetStatuses.includes(trial.status) ? trial.rewardRisk : trial.status === "INVALIDATED" || trial.status === "STOPPED" ? -1 : 0), 0) / group.length : null }; });
+  return { totalTrials: trials.length, active: active.length, open: active.length, completed: completed.length, closed: completed.length, wins: wins.length, losses: losses.length, breakeven: completed.filter(trial => trial.realizedPnl === 0 && !targetStatuses.includes(trial.status) && !["INVALIDATED", "STOPPED"].includes(trial.status)).length, t1Hit: trials.filter(trial => targetStatuses.includes(trial.status)).length, t2Hit: trials.filter(trial => ["TARGET_2_REACHED", "TARGET_3_REACHED"].includes(trial.status)).length, t3Hit: trials.filter(trial => trial.status === "TARGET_3_REACHED").length, reversalRate: trials.length ? trials.filter(trial => trial.status === "REVERSAL_RISK").length / trials.length * 100 : null, stopRate: trials.length ? losses.length / trials.length * 100 : null, winRate: completed.length >= 5 ? wins.length / completed.length * 100 : null, lossRate: completed.length >= 5 ? losses.length / completed.length * 100 : null, averageR: completed.length >= 5 ? averageR : null, totalR: completed.length >= 5 ? rValues.reduce((sum, value) => sum + value, 0) : null, simulatedPnl: pnl, profitFactor: completed.length >= 5 && negativeR > 0 ? positiveR / negativeR : null, insufficientSample: completed.length < 5, byStrategy: by("strategy"), byMode: by("mode") };
 }
 
 export async function getAutoPaperActive(userId: number) {
   const history = await getAutoPaperHistory(userId);
-  return history.filter(trial => ["OPEN", "HEALTHY", "WARNING", "REVERSAL_RISK", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED", "DATA_UNAVAILABLE"].includes(trial.status));
+  return history.filter(trial => ACTIVE_TRIAL_STATUSES.includes(trial.status as typeof ACTIVE_TRIAL_STATUSES[number]));
 }
 
 export function isAutoPaperOnlySource(source: string) { return source === AUTO_PAPER_SOURCE; }
