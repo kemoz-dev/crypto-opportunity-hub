@@ -414,3 +414,14 @@
 - [x] Verify dark/light/system themes, iPhone/iPad/desktop responsiveness, accessibility, PWA offline read-only boundaries, and Manual/Auto Paper isolation.
 - [x] Add or update Vitest coverage for Phase 19 UI contracts and chart interactions.
 - [x] Validate, document, and publish a recoverable Phase 19 checkpoint or report the exact blocker. Full Vitest 272/272, TypeScript, production build, diff audit, and desktop/iPhone visual checks passed.
+
+## Phase 20 — Trading Intelligence & Auto Paper Experiment
+- [x] Audit existing server contracts for opportunity states, adaptive qualification, setup plans, Auto Paper modes, accounting, event history, performance, exports, and current UI workspaces.
+- [x] Present server-derived QUALIFIED, POTENTIAL, WATCH, NO TRADE, and DATA UNAVAILABLE states without hiding Potential in RISK OFF regimes.
+- [x] Add server-derived opportunity funnel counts and transparent disappearance reasons without changing scoring or gates.
+- [x] Add display-only adaptive filters for status, strategy, direction, regime, health, and timeframe without changing scoring.
+- [x] Clarify Auto Paper modes, eligibility labels, confirmation requirements, immutable trial boundaries, and Manual Paper separation without enabling Auto Paper by default.
+- [x] Add measurable comparison views for Scalp/Swing, Qualified/Potential, Long/Short, and market regime using existing persisted Auto Paper data only.
+- [x] Add a read-only Trading Journal view backed by existing Auto Paper lifecycle, event, accounting, and performance data; do not create trials on page open.
+- [x] Add Phase 20 Vitest coverage for states, RISK OFF visibility, funnel derivation, filters, Auto Paper safety, journal read-only behavior, and no-real-trading boundaries.
+- [x] Validate no migration, protected-system integrity, TypeScript, full tests, production build, responsive UI, PWA boundaries, and publish a recoverable Phase 20 checkpoint.

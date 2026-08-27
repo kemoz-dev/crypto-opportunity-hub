@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Activity, BellRing, BookOpen, FlaskConical, Gauge, Layers3, Menu, Moon, ScanSearch, Settings2, Sparkles, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
+import { Activity, BarChart3, BellRing, BookOpen, FlaskConical, Gauge, Layers3, Menu, Moon, ScanSearch, Settings2, Sparkles, Sun, Target, TrendingUp, WalletCards, X } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research" | "settings";
+type PwaNavTarget = "dashboard" | "scanner" | "discovery" | "setup-monitor" | "watchlist" | "scalping" | "swing" | "paper" | "auto-paper" | "alerts" | "research" | "trading-intelligence" | "settings";
 
 function navigate(target: PwaNavTarget) {
   window.dispatchEvent(new CustomEvent<PwaNavTarget>("crypto-hub:navigate", { detail: target }));
@@ -25,6 +25,7 @@ export function PwaMobileNavigation() {
     { label: "Auto Paper Lab", target: "auto-paper" as const, icon: FlaskConical },
     { label: "Alerts", target: "alerts" as const, icon: BellRing },
     { label: "Research & History", target: "research" as const, icon: Layers3 },
+    { label: "Trading Intelligence", target: "trading-intelligence" as const, icon: BarChart3 },
     { label: "Settings", target: "settings" as const, icon: Settings2 },
   ];
 
