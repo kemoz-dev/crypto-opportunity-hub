@@ -255,3 +255,20 @@
 - [x] Run focused/full tests, TypeScript, production build, security scans, PWA/cache scans, and responsive visual verification.
 - [x] Document Phase 11 exact logic, evidence/provenance rules, limitations, and stop conditions.
 - [x] Save and publish the validated Phase 11 checkpoint only after all completed items are marked [x].
+
+
+## Phase 12 — Crypto Hub UX Reorganization and Responsive Redesign
+
+- [x] Audit the current sidebar, dashboard, scanner, Discovery, Asset Intelligence, Scalping, Swing, Setup Monitor, Paper Trading, Research, Alerts, Settings, health views, mobile navigation, dialogs, tables, cards, and empty/loading/error states.
+- [x] Define shared navigation groups, semantic status tokens, reusable Opportunity Card contract, Trade Health presentation, and responsive layout rules.
+- [x] Consolidate desktop navigation into Home, Trade, Analysis, Research, Monitor, and System groups without deleting functionality.
+- [x] Consolidate mobile navigation into a primary-plus-secondary pattern with clear access to all required workspaces.
+- [x] Redesign Dashboard as a control center with regime, top opportunities, authenticated active-setup count, and clear Scalping/Swing/Paper Trading workspace access using server-derived data only; Paper Trading balances remain in its protected workspace to avoid side-effectful portfolio initialization.
+- [x] Introduce and reuse a standardized Opportunity Card across Dashboard, Scanner, Scalping, Swing, and Asset Intelligence without fabricating levels or changing eligibility.
+- [x] Standardize status colors, text labels, health states, no-trade explanations, unavailable-data states, and accessibility contrast.
+- [x] Improve Scalping, Swing, Setup Monitor, Paper Trading, Research Lab, Alerts, Watchlist, Settings, health, dialogs, and tables for responsive desktop/tablet/mobile use.
+- [x] Preserve authentication, owner-scoped access, PWA static-shell-only caching, offline read-only behavior, Paper Trading rules, alerts, schedules, scoring, providers, Research Lab calculations, and real-trading prohibition.
+- [x] Add deterministic UI/contract tests for navigation, shared statuses, no-trade/unavailable semantics, server-derived levels, and protected actions.
+- [x] Run full tests, TypeScript, production build, security/cache scans, and desktop/tablet/mobile visual verification.
+- [x] Document Phase 12 IA, shared components, responsive decisions, accessibility, limitations, and unchanged business boundaries.
+- [x] Save and publish the validated Phase 12 checkpoint only after all completed items are marked [x].

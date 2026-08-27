@@ -12,6 +12,7 @@ import { AssetIntelligencePanel } from "@/components/crypto/AssetIntelligencePan
 import { TradeSetupWorkspace } from "@/components/crypto/TradeSetupWorkspace";
 import { OpportunityDiscoveryWorkspace } from "@/components/crypto/OpportunityDiscoveryWorkspace";
 import { SetupMonitorWorkspace } from "@/components/crypto/SetupMonitorWorkspace";
+import { OpportunityCard } from "@/components/crypto/OpportunityCard";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,7 @@ import { trpc } from "@/lib/trpc";
 import type { ScannerResponse, ScannerRow } from "@shared/crypto";
 import { cn } from "@/lib/utils";
 import { OnlineStatusLabel, usePwaStatus } from "@/pwa/PwaStatus";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Activity, AlertTriangle, ArchiveRestore, ArrowDownRight, ArrowUpRight, BarChart3, BellRing, BookOpen, Calculator, ChevronDown,
   ChevronRight, Clock3, Database, FlaskConical, Gauge, Layers3, LineChart, Loader2, PanelLeft,
@@ -30,25 +32,41 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type NavItem = { label: string; icon: typeof Gauge; phase: "live" | "planned" };
+type NavGroup = { label: string; items: NavItem[] };
 
-const navigation: NavItem[] = [
-  { label: "Dashboard", icon: Gauge, phase: "live" },
-  { label: "Market Scanner", icon: ScanSearch, phase: "live" },
-  { label: "Opportunity Discovery", icon: Sparkles, phase: "live" },
-  { label: "Setup Monitor", icon: Activity, phase: "live" },
-  { label: "Scalping", icon: Target, phase: "live" },
-  { label: "Swing", icon: TrendingUp, phase: "live" },
-  { label: "Research Summary", icon: FlaskConical, phase: "live" },
-  { label: "Research Lab", icon: FlaskConical, phase: "live" },
-  { label: "Historical Data", icon: Database, phase: "live" },
-  { label: "Execution Cost Lab", icon: Calculator, phase: "live" },
-  { label: "Backup & Recovery", icon: ArchiveRestore, phase: "live" },
-  { label: "Sectors", icon: Layers3, phase: "planned" },
-  { label: "Backtesting", icon: BarChart3, phase: "live" },
-  { label: "Paper Trading", icon: WalletCards, phase: "live" },
-  { label: "Alerts", icon: BellRing, phase: "live" },
-  { label: "Settings", icon: Settings2, phase: "live" },
+const navigationGroups: NavGroup[] = [
+  { label: "Home", items: [{ label: "Dashboard", icon: Gauge, phase: "live" }] },
+  { label: "Trade", items: [
+    { label: "Scalping", icon: Target, phase: "live" },
+    { label: "Swing", icon: TrendingUp, phase: "live" },
+    { label: "Setup Monitor", icon: Activity, phase: "live" },
+    { label: "Paper Trading", icon: WalletCards, phase: "live" },
+  ] },
+  { label: "Analysis", items: [
+    { label: "Market Scanner", icon: ScanSearch, phase: "live" },
+    { label: "Opportunity Discovery", icon: Sparkles, phase: "live" },
+    { label: "Asset Intelligence", icon: LineChart, phase: "live" },
+  ] },
+  { label: "Research", items: [
+    { label: "Research Lab", icon: FlaskConical, phase: "live" },
+    { label: "Research Summary", icon: FlaskConical, phase: "live" },
+    { label: "Historical Data", icon: Database, phase: "live" },
+    { label: "Execution Cost Lab", icon: Calculator, phase: "live" },
+    { label: "Backtesting", icon: BarChart3, phase: "live" },
+  ] },
+  { label: "Monitor", items: [
+    { label: "Watchlist", icon: BookOpen, phase: "planned" },
+    { label: "Alerts", icon: BellRing, phase: "live" },
+  ] },
+  { label: "System", items: [
+    { label: "Data / Provider Health", icon: ShieldCheck, phase: "live" },
+    { label: "Backup & Recovery", icon: ArchiveRestore, phase: "live" },
+    { label: "Settings", icon: Settings2, phase: "live" },
+    { label: "Sectors", icon: Layers3, phase: "planned" },
+  ] },
 ];
+
+const navigation = navigationGroups.flatMap(group => group.items);
 
 const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
@@ -97,7 +115,21 @@ function StatusDot({ status }: { status: "live" | "stale" | "unavailable" }) {
 }
 
 function EmptyRow() {
-  return <div className="grid min-h-48 place-items-center px-6 text-center text-sm text-slate-400"><div><Database className="mx-auto mb-3 h-5 w-5 text-slate-500" /><p className="font-medium text-slate-300">No live score is available</p><p className="mt-1 max-w-sm text-xs leading-5">The system will show “Unavailable” rather than construct an opportunity when the required source data is missing.</p></div></div>;
+  return <div className="grid min-h-48 place-items-center px-6 text-center text-sm text-slate-400"><div><Database className="mx-auto mb-3 h-5 w-5 text-slate-500" /><p className="font-medium text-slate-300">No live score is available</p><p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">The system will show “Unavailable” rather than construct an opportunity when the required source data is missing.</p></div></div>;
+}
+
+function ControlCenter({ scan, monitoredCount, authenticated, onDiscovery, onScalping, onSwing, onMonitor }: { scan: ScannerResponse | undefined; monitoredCount: number | null; authenticated: boolean; onDiscovery: () => void; onScalping: () => void; onSwing: () => void; onMonitor: () => void }) {
+  const rows = scan?.rows ?? [];
+  const scored = rows.filter(row => row.score).length;
+  const liveFeeds = scan?.dataStatus.filter(status => status.status === "live").length ?? 0;
+  const regime = scan?.marketRegime?.classification ?? "UNAVAILABLE";
+  const monitored = monitoredCount === null ? authenticated ? "Unavailable" : "Sign in" : String(monitoredCount);
+  const topRows = rows.filter(row => row.score).slice(0, 3);
+  return <section aria-labelledby="control-center-title" className="mb-5 rounded-2xl border border-white/[.08] bg-[#09111f]/90 p-4 shadow-[0_14px_50px_rgba(2,8,23,.18)] sm:p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-cyan-300">Market control center</p><h3 id="control-center-title" className="mt-1 text-lg font-semibold tracking-tight text-slate-100">One place to orient before opening a workspace</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">The dashboard summarizes current server-validated evidence. Detailed interpretation remains in Discovery, Setup Monitor, Scalping, and Swing.</p></div><span className="rounded-full border border-cyan-300/20 bg-cyan-300/[.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[.12em] text-cyan-100">{regime}</span></div><div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><ControlMetric label="Market regime" value={regime} note="Current context" /><ControlMetric label="Scored assets" value={`${scored}/${rows.length || "—"}`} note="Existing score response" /><ControlMetric label="Live feeds" value={String(liveFeeds)} note="Server data status" /><ControlMetric label="Monitored setups" value={monitored} note={authenticated ? "Owner-scoped monitor" : "Authentication required"} /><ControlMetric label="Latest scan" value={scan ? timeAgo(scan.generatedAt) : "Unavailable"} note="Generated timestamp" /></div>{topRows.length ? <div className="mt-4 grid gap-3 lg:grid-cols-3">{topRows.map(row => <OpportunityCard key={row.asset.id} data={{ assetId: row.asset.id, symbol: row.asset.symbol, name: row.asset.name, setupType: row.score?.setupType, status: "SCORED", score: row.score?.score, direction: row.score?.direction.toUpperCase(), why: row.score?.explanation }} onView={() => onDiscovery()} />)}</div> : null}<div className="mt-4 flex flex-wrap gap-2 border-t border-white/[.06] pt-4"><span className="mr-1 self-center text-[9px] font-semibold uppercase tracking-[.15em] text-slate-500">Open workspace</span><Button size="sm" onClick={onDiscovery} className="h-8 bg-cyan-300 px-3 text-[11px] text-slate-950 hover:bg-cyan-200"><Sparkles className="mr-1.5 h-3.5 w-3.5" />Discovery</Button><Button size="sm" variant="outline" onClick={onScalping} className="h-8 border-white/[.1] bg-white/[.025] px-3 text-[11px] text-slate-200"><Target className="mr-1.5 h-3.5 w-3.5" />Scalping</Button><Button size="sm" variant="outline" onClick={onSwing} className="h-8 border-white/[.1] bg-white/[.025] px-3 text-[11px] text-slate-200"><TrendingUp className="mr-1.5 h-3.5 w-3.5" />Swing</Button><Button size="sm" variant="outline" onClick={onMonitor} className="h-8 border-white/[.1] bg-white/[.025] px-3 text-[11px] text-slate-200"><Activity className="mr-1.5 h-3.5 w-3.5" />Setup Monitor</Button></div></section>;
+}
+
+function ControlMetric({ label, value, note }: { label: string; value: string; note: string }) {
+  return <div className="rounded-xl border border-white/[.06] bg-white/[.025] p-3"><p className="text-[9px] font-semibold uppercase tracking-[.13em] text-slate-500">{label}</p><p className="mt-1 truncate font-mono text-base text-slate-100">{value}</p><p className="mt-1 text-[10px] text-slate-600">{note}</p></div>;
 }
 
 function OpportunityRow({ row, rank, onSelect, selected }: { row: ScannerRow; rank: number; onSelect: () => void; selected: boolean }) {
@@ -165,6 +197,7 @@ function RegimeBanner({ scan }: { scan: ScannerResponse | undefined }) {
 
 export default function Home() {
   const { online, connectionState, liveDataAvailable, updateReady, markReadSnapshot, markLiveDataUnavailable } = usePwaStatus();
+  const { isAuthenticated } = useAuth();
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -186,6 +219,7 @@ export default function Home() {
   const [minScore, setMinScore] = useState(0);
   const [sector, setSector] = useState("All sectors");
   const { data: scan, isLoading, isFetching, error } = trpc.crypto.scanner.useQuery({ forceRefresh: refreshNonce > 0 }, { refetchOnWindowFocus: false, staleTime: 45_000, retry: 1 });
+  const { data: activeMonitors } = trpc.crypto.setupMonitorActive.useQuery(undefined, { enabled: online && isAuthenticated, staleTime: 30_000, refetchOnWindowFocus: false });
   const rows = scan?.rows ?? [];
   const sectors = useMemo(() => ["All sectors", ...Array.from(new Set(rows.map(row => row.asset.sector))).sort()], [rows]);
   const filteredRows = useMemo(() => rows.filter(row => (row.score?.score ?? -1) >= minScore && (sector === "All sectors" || row.asset.sector === sector)), [rows, minScore, sector]);
@@ -226,10 +260,11 @@ export default function Home() {
     <AssetIntelligencePanel row={selected} open={assetIntelligenceOpen} onOpenChange={setAssetIntelligenceOpen} onPaperTrade={(row, mode) => { setAssetIntelligenceOpen(false); openPaperWorkspace(row, mode); }} />
     <div className="terminal-grid fixed inset-0 pointer-events-none opacity-40" />
     <div className="relative mx-auto flex min-h-screen max-w-[1800px]">
-      <aside className="hidden w-[234px] shrink-0 border-r border-white/[.07] bg-[#070c16]/80 px-3 py-5 lg:flex lg:flex-col"><div className="flex items-center gap-3 px-2 pb-7"><div className="relative grid h-8 w-8 place-items-center rounded-lg bg-cyan-300 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,.32)]"><TrendingUp className="h-4 w-4 stroke-[2.7]" /><span className={cn("absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#070c16]", connectionState === "ONLINE" ? "bg-emerald-400" : "bg-amber-400")} /></div><div><h1 className="text-sm font-bold tracking-tight">Crypto Opportunity</h1><p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[.21em] text-cyan-300">Research terminal</p></div></div><nav className="space-y-1">{navigation.map(item => { const Icon = item.icon; const active = activeNav === item.label; return <button key={item.label} onClick={() => handleNav(item)} className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs transition-colors", active ? "bg-cyan-300/[.08] text-cyan-100 shadow-[inset_2px_0_0_#22d3ee]" : "text-slate-400 hover:bg-white/[.035] hover:text-slate-200")}><Icon className={cn("h-4 w-4", active ? "text-cyan-300" : "text-slate-500")} /><span className="flex-1">{item.label}</span>{item.phase === "planned" && <span className="text-[8px] uppercase tracking-wide text-slate-600">Soon</span>}</button> })}</nav><div className="mt-auto rounded-xl border border-white/[.07] bg-white/[.025] p-3"><div className="flex items-center justify-between"><span className="text-[9px] font-semibold uppercase tracking-[.15em] text-slate-500">System status</span><span className={cn("flex items-center gap-1.5 text-[10px]", liveDataAvailable ? "text-emerald-300" : "text-amber-200")}><StatusDot status={liveDataAvailable ? "live" : "stale"} />{connectionState}</span></div><p className="mt-2 text-[11px] leading-4 text-slate-500">Live inputs are timestamped. Scores are explainable research signals, not trade instructions.</p></div></aside>
+      <aside className="hidden w-[234px] shrink-0 border-r border-white/[.07] bg-[#070c16]/80 px-3 py-5 lg:flex lg:flex-col"><div className="flex items-center gap-3 px-2 pb-7"><div className="relative grid h-8 w-8 place-items-center rounded-lg bg-cyan-300 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,.32)]"><TrendingUp className="h-4 w-4 stroke-[2.7]" /><span className={cn("absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#070c16]", connectionState === "ONLINE" ? "bg-emerald-400" : "bg-amber-400")} /></div><div><h1 className="text-sm font-bold tracking-tight">Crypto Opportunity</h1><p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[.21em] text-cyan-300">Research terminal</p></div></div><nav aria-label="Primary workspace navigation" className="space-y-4">{navigationGroups.map(group => <section key={group.label} aria-labelledby={`nav-group-${group.label}`}><p id={`nav-group-${group.label}`} className="mb-1 px-3 text-[9px] font-semibold uppercase tracking-[.18em] text-slate-600">{group.label}</p><div className="space-y-0.5">{group.items.map(item => { const Icon = item.icon; const active = activeNav === item.label; return <button key={item.label} onClick={() => handleNav(item)} className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs transition-colors", active ? "bg-cyan-300/[.08] text-cyan-100 shadow-[inset_2px_0_0_#22d3ee]" : "text-slate-400 hover:bg-white/[.035] hover:text-slate-200")}><Icon className={cn("h-4 w-4", active ? "text-cyan-300" : "text-slate-500")} /><span className="min-w-0 flex-1 truncate">{item.label}</span>{item.phase === "planned" && <span className="text-[8px] uppercase tracking-wide text-slate-600">Soon</span>}</button> })}</div></section>)}</nav><div className="mt-auto rounded-xl border border-white/[.07] bg-white/[.025] p-3"><div className="flex items-center justify-between"><span className="text-[9px] font-semibold uppercase tracking-[.15em] text-slate-500">System status</span><span className={cn("flex items-center gap-1.5 text-[10px]", liveDataAvailable ? "text-emerald-300" : "text-amber-200")}><StatusDot status={liveDataAvailable ? "live" : "stale"} />{connectionState}</span></div><p className="mt-2 text-[11px] leading-4 text-slate-500">Live inputs are timestamped. Scores are explainable research signals, not trade instructions.</p></div></aside>
       <div className="min-w-0 flex-1"><main className="min-w-0"><header className="flex h-[70px] items-center justify-between border-b border-white/[.07] bg-[#080d17]/65 px-4 backdrop-blur-xl sm:px-6"><div className="flex items-center gap-3"><button className="rounded-md p-2 text-slate-400 hover:bg-white/[.05] lg:hidden"><PanelLeft className="h-4 w-4" /></button><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-slate-500">{activeNav} <span className="text-slate-700">/</span> Live scanner</p><div className="mt-1 flex items-center gap-2"><h2 className="text-base font-semibold tracking-tight text-slate-100">Opportunity intelligence</h2><span className="hidden items-center gap-1 text-[10px] text-slate-500 sm:flex"><Clock3 className="h-3 w-3" />{scan ? `Updated ${timeAgo(scan.generatedAt)}` : "Initializing sources"}</span><OnlineStatusLabel /></div></div></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={refresh} disabled={isFetching || !online} className="h-8 border-white/[.09] bg-white/[.025] px-3 text-xs text-slate-300 hover:bg-white/[.07] hover:text-white"><RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />Refresh</Button><button onClick={() => toast.message("Search will be introduced with the extended scanner universe.")} className="hidden rounded-md border border-white/[.09] bg-white/[.025] p-2 text-slate-400 hover:bg-white/[.07] sm:block"><ScanSearch className="h-3.5 w-3.5" /></button></div></header>
         <div className="p-4 sm:p-6"><div className="mb-5 grid gap-4 xl:grid-cols-[1.45fr_.9fr]"><RegimeBanner scan={scan} /><div className="flex items-center justify-between rounded-xl border border-white/[.07] bg-white/[.025] px-4 py-3"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Data quality</p><p className="mt-1 text-xs text-slate-300">{scan?.dataStatus.filter(status => status.status === "live").length ?? 0} live provider feeds · {scan?.dataStatus.filter(status => status.status !== "live").length ?? 0} unavailable</p></div><ShieldCheck className="h-5 w-5 text-cyan-300" /></div></div>
           {error ? <div className="mb-5 rounded-xl border border-rose-300/20 bg-rose-300/[.05] p-4 text-sm text-rose-100"><div className="flex gap-2"><AlertTriangle className="h-4 w-4 shrink-0" /><div><p className="font-semibold">Live scanner unavailable</p><p className="mt-1 text-xs text-rose-100/70">{error.message}. No market or score values have been generated.</p></div></div></div> : null}
+          <ControlCenter scan={scan} monitoredCount={isAuthenticated ? activeMonitors?.length ?? null : null} authenticated={isAuthenticated} onDiscovery={openDiscoveryWorkspace} onScalping={() => openSetupWorkspace("SCALP")} onSwing={() => openSetupWorkspace("SWING")} onMonitor={openSetupMonitorWorkspace} />
           <section className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-cyan-300/15 bg-cyan-300/[.03] p-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-200">Opportunity Discovery</p><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">Inspect validated Swing evidence as Qualified, Potential, Watch, No Trade, or Data Unavailable without changing Opportunity Score or creating an automatic trade.</p></div><Button size="sm" variant="outline" onClick={openDiscoveryWorkspace} className="border-cyan-300/20 bg-cyan-300/[.05] text-cyan-100"><Sparkles className="mr-1.5 h-3.5 w-3.5" />Open Discovery</Button></section>
           <section className="mb-5"><div className="mb-3 flex items-end justify-between"><div><span className="text-[10px] font-semibold uppercase tracking-[.18em] text-cyan-300">Live overview</span><h3 className="mt-1 text-lg font-semibold tracking-tight">Highest current research signals</h3></div><span className="hidden text-[11px] text-slate-500 md:block">Ranked from active configuration, timestamped market inputs</span></div><div className="grid gap-3 md:grid-cols-3">{isLoading ? [0, 1, 2].map(key => <Skeleton key={key} className="h-[146px] bg-white/[.04]" />) : topRows.length ? topRows.map((row, index) => <button key={row.asset.id} onClick={() => setSelectedId(row.asset.id)} className={cn("group rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5", index === 0 ? "border-cyan-300/25 bg-cyan-300/[.055] shadow-[0_10px_40px_rgba(8,145,178,.09)]" : "border-white/[.07] bg-white/[.025] hover:border-white/[.14]")}><div className="flex items-start justify-between"><span className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-800 font-mono text-xs font-bold text-cyan-200">{row.asset.symbol.slice(0, 2)}</span><span><span className="block text-sm font-semibold">{row.asset.symbol}</span><span className="block text-[10px] uppercase tracking-[.15em] text-slate-500">Rank {String(index + 1).padStart(2, "0")}</span></span></span><span className={cn("font-mono text-3xl font-semibold", scoreClass(row.score?.score))}>{row.score?.score ?? "—"}</span></div><div className="mt-4 flex items-end justify-between"><div><span className="font-mono text-sm text-slate-200">{formatPrice(row.asset.price)}</span><span className={cn("mt-1 block text-[11px]", changeClass(row.asset.change24h))}>{formatPct(row.asset.change24h)} <span className="text-slate-600">24H</span></span></div><span className="rounded-md border border-white/[.07] bg-black/15 px-2 py-1 text-[10px] text-slate-400">{row.score?.setupType}</span></div></button>) : <div className="col-span-3 rounded-xl border border-white/[.07] bg-white/[.025]"><EmptyRow /></div>}</div></section>
           <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_290px]"><section id="market-scanner" className="scroll-mt-24 overflow-hidden rounded-xl border border-white/[.07] bg-[#090f1b]/70"><div className="flex flex-col gap-3 border-b border-white/[.07] p-4 xl:flex-row xl:items-center xl:justify-between"><div><span className="text-[10px] font-semibold uppercase tracking-[.17em] text-cyan-300">Scanner</span><h3 className="mt-0.5 text-base font-semibold">Ranked opportunity universe</h3></div><div className="flex flex-wrap items-center gap-2"><label className="flex h-8 items-center gap-2 rounded-md border border-white/[.08] bg-white/[.025] px-2.5 text-[11px] text-slate-400">Min score <select value={minScore} onChange={event => setMinScore(Number(event.target.value))} className="bg-transparent text-slate-200 outline-none"><option value={0}>All</option><option value={50}>50+</option><option value={65}>65+</option><option value={75}>75+</option></select><ChevronDown className="h-3 w-3" /></label><label className="flex h-8 items-center gap-2 rounded-md border border-white/[.08] bg-white/[.025] px-2.5 text-[11px] text-slate-400">Sector <select value={sector} onChange={event => setSector(event.target.value)} className="max-w-24 bg-transparent text-slate-200 outline-none"><option>All sectors</option>{sectors.slice(1).map(item => <option key={item}>{item}</option>)}</select><ChevronDown className="h-3 w-3" /></label><Button variant="ghost" size="sm" onClick={() => toast.message("All active scanner inputs are currently visible in the detail card.")} className="h-8 px-2.5 text-xs text-cyan-200 hover:bg-cyan-300/[.08] hover:text-cyan-100"><SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />Filters</Button></div></div><div className="scanner-head grid grid-cols-[36px_minmax(150px,1.4fr)_minmax(88px,.8fr)_minmax(86px,.7fr)_minmax(116px,.9fr)_minmax(106px,.8fr)_32px] gap-3 border-b border-white/[.055] px-5 py-2 text-[9px] font-semibold uppercase tracking-[.14em] text-slate-600"><span>#</span><span>Asset / sector</span><span>Price / 24h</span><span>Score</span><span>Setup</span><span>Confidence</span><span /></div>{isLoading ? <div className="space-y-0 p-5">{[0, 1, 2, 3, 4].map(key => <Skeleton key={key} className="mb-3 h-12 bg-white/[.035]" />)}</div> : filteredRows.length ? filteredRows.map((row, index) => <OpportunityRow key={row.asset.id} row={row} rank={index + 1} selected={selected?.asset.id === row.asset.id} onSelect={() => setSelectedId(row.asset.id)} />) : <EmptyRow />}<div className="flex items-center justify-between bg-white/[.015] px-5 py-3 text-[10px] text-slate-500"><span>{filteredRows.length} of {rows.length} tracked assets shown</span><span>CoinGecko + Binance public data</span></div></section>

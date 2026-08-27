@@ -166,4 +166,25 @@ describe("Phase 2 secure PWA contract", () => {
     expect(home).toContain('connectionState !== "ONLINE" || updateReady');
     expect(home).toContain('pwaBannerVisible && "pt-16"');
   });
+
+  it("keeps Phase 12 presentation grouped, reusable, and server-derived", () => {
+    const home = read("client/src/pages/Home.tsx");
+    const card = read("client/src/components/crypto/OpportunityCard.tsx");
+    const discovery = read("client/src/components/crypto/OpportunityDiscoveryWorkspace.tsx");
+    const trade = read("client/src/components/crypto/TradeSetupWorkspace.tsx");
+    const asset = read("client/src/components/crypto/AssetIntelligencePanel.tsx");
+    expect(home).toContain("navigationGroups");
+    expect(home).toContain("Market control center");
+    expect(home).toContain("server-validated evidence");
+    expect(card).toContain("OpportunityCard");
+    expect(card).toContain("DATA UNAVAILABLE");
+    expect(card).toContain("Monitor Setup");
+    expect(discovery).toContain("<OpportunityCard");
+    expect(trade).toContain("<OpportunityCard");
+    expect(asset).toContain("<OpportunityCard");
+    for (const source of [home, card, discovery, trade, asset]) {
+      expect(source).not.toContain("api.bybit.com");
+      expect(source).not.toContain("fetch(\"https://api");
+    }
+  });
 });
