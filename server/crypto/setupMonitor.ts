@@ -4,6 +4,8 @@ import { setupMonitorEvents, setupMonitorInstances } from "../../drizzle/schema"
 import { getTradeSetups, type TradeSetupMode } from "./tradeSetup";
 import type { ScoringConfig } from "../../shared/crypto";
 import type { OpportunityDiscoveryItem } from "./opportunityDiscovery";
+import { detectOpportunityLifecycleEvent } from "./opportunityEventStore";
+import { lifecycleState } from "./opportunityLifecycle";
 
 export const SETUP_MONITOR_VERSION = "SETUP_MONITOR_V1";
 export const ACTIVE_MONITOR_STATUSES = ["NEW", "WATCH", "POTENTIAL", "QUALIFIED", "TARGET_1_REACHED", "TARGET_2_REACHED"] as const;
@@ -196,7 +198,26 @@ export async function refreshSetupMonitor(userId: number, instanceId: number, co
   const previousState = asJson(existing.currentTechnicalState) ?? {};
   const previousProgress = Array.isArray(previousState.targetProgress) ? previousState.targetProgress as Array<{ ordinal?: number; reached?: boolean }> : [];
   const events: Array<{ key: string; type: SetupMonitorEventType; reason: string; price: number | null; timeframe: string | null; provider: string | null; provenance: unknown; freshness: string | null }> = [];
-  if (nextStatus !== existing.currentStatus) events.push({ key: `STATE:${nextStatus}`, type: nextStatus === "INVALIDATED" ? "INVALIDATED" : nextStatus === "DATA_UNAVAILABLE" ? "DATA_UNAVAILABLE" : "STATE_CHANGED", reason: `Setup state changed from ${existing.currentStatus} to ${nextStatus}.`, price: item.readinessPlan.currentPrice, timeframe: JSON.stringify(item.timeframes), provider: item.provider, provenance: snapshot, freshness: item.freshness });
+
+  if (nextStatus !== existing.currentStatus) {
+    const eventAt = Date.now();
+    const previousLifecycleState = lifecycleStateFromMonitorStatus(existing.currentStatus);
+    const lifecycleEvent = previousLifecycleState ? detectOpportunityLifecycleEvent(previousLifecycleState, item, eventAt) : null;
+    if (lifecycleEvent) {
+      events.push({
+        key: lifecycleEvent.key,
+        type: lifecycleEvent.type === "INVALIDATED" ? "INVALIDATED" : "STATE_CHANGED",
+        reason: `Opportunity lifecycle changed from ${lifecycleEvent.from ?? "NONE"} to ${lifecycleEvent.to}.`,
+        price: lifecycleEvent.price,
+        timeframe: JSON.stringify(item.timeframes),
+        provider: item.provider,
+        provenance: lifecycleEvent.snapshot,
+        freshness: item.freshness,
+      });
+    } else {
+      events.push({ key: `STATE:${nextStatus}:${eventAt}`, type: nextStatus === "INVALIDATED" ? "INVALIDATED" : nextStatus === "DATA_UNAVAILABLE" ? "DATA_UNAVAILABLE" : "STATE_CHANGED", reason: `Setup state changed from ${existing.currentStatus} to ${nextStatus}.`, price: item.readinessPlan.currentPrice, timeframe: JSON.stringify(item.timeframes), provider: item.provider, provenance: snapshot, freshness: item.freshness });
+    }
+  }
   for (const target of progress) if (target.reached && !previousProgress.some(previous => previous.ordinal === target.ordinal && previous.reached)) events.push({ key: `TARGET:${target.ordinal}`, type: "TARGET_REACHED", reason: `${target.label} was reached by the current validated price.`, price: item.readinessPlan.currentPrice, timeframe: JSON.stringify(item.timeframes), provider: item.provider, provenance: snapshot, freshness: item.freshness });
   const health = snapshot.health as { state: SetupMonitorHealth; reason: string };
   if (health.state === "CAUTION") events.push({ key: "HEALTH:CAUTION", type: "CAUTION", reason: health.reason, price: item.readinessPlan.currentPrice, timeframe: JSON.stringify(item.timeframes), provider: item.provider, provenance: snapshot, freshness: item.freshness });
@@ -207,6 +228,11 @@ export async function refreshSetupMonitor(userId: number, instanceId: number, co
   await db.update(setupMonitorInstances).set({ currentStatus: nextStatus, currentReadinessSnapshot: unavailable ? existing.currentReadinessSnapshot : item.setupReadiness, currentPrice: unavailable ? existing.currentPrice : item.readinessPlan.currentPrice, currentTechnicalState: unavailable ? { ...previousState, health, unavailableObservation } : { health, targetProgress: progress, direction: item.direction, currentSnapshot: snapshot }, currentProviderProvenance: unavailable ? { ...(asJson(existing.currentProviderProvenance) ?? {}), unavailableObservation } : { provider: item.provider, dataTimestamp: item.dataTimestamp, freshness: item.freshness, validationStatus: item.validationStatus }, currentStateReason: health.reason, lastValidatedAt: unavailable ? existing.lastValidatedAt : item.dataTimestamp ? new Date(item.dataTimestamp) : new Date(), terminalAt }).where(and(eq(setupMonitorInstances.id, instanceId), eq(setupMonitorInstances.userId, userId)));
   for (const event of events) await insertEvent(db, instanceId, event);
   return getSetupMonitorDetail(userId, instanceId);
+}
+
+function lifecycleStateFromMonitorStatus(status: SetupMonitorStatus) {
+  if (["WATCH", "POTENTIAL", "QUALIFIED", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED", "INVALIDATED", "ARCHIVED"].includes(status)) return status as Parameters<typeof detectOpportunityLifecycleEvent>[0];
+  return null;
 }
 
 export async function archiveSetupMonitor(userId: number, instanceId: number) {
