@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocation } from "wouter";
-import { Activity, ArrowDownRight, ArrowUpRight, ChevronRight, RefreshCw } from "lucide-react";
+import { Activity, ChevronRight, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { usePwaStatus } from "@/pwa/PwaStatus";
 import type { ScannerResponse } from "@shared/crypto";
@@ -29,8 +29,9 @@ export default function CleanHome() {
     const unique = new Map<string, DiscoveryItem>();
     for (const item of all) {
       if (!["QUALIFIED", "POTENTIAL", "WATCH"].includes(item.status)) continue;
-      const key = `${item.assetId}-${item.status}`;
-      if (!unique.has(key)) unique.set(key, item);
+      // One canonical card per asset. Prefer the stronger lifecycle state, then score.
+      const current = unique.get(item.assetId);
+      if (!current || lifecycleRank(item.status) > lifecycleRank(current.status) || (lifecycleRank(item.status) === lifecycleRank(current.status) && (item.opportunityScore ?? -1) > (current.opportunityScore ?? -1))) unique.set(item.assetId, item);
     }
     return Array.from(unique.values()).sort((a, b) => (b.opportunityScore ?? -1) - (a.opportunityScore ?? -1)).slice(0, 8);
   }, [swing.data, scalp.data]);
@@ -53,9 +54,9 @@ export default function CleanHome() {
         </div>
       </section>
 
-      <div className="mt-8 flex items-end justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-cyan-300">Opportunities</p><h2 className="mt-1 text-lg font-semibold">What matters now</h2></div><span className="text-[10px] text-slate-600">Ranked by existing server scores</span></div>
+      <div className="mt-8 flex items-end justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-cyan-300">Opportunities</p><h2 className="mt-1 text-lg font-semibold">What matters now</h2></div><span className="text-[10px] text-slate-600">One card per asset</span></div>
       <section className="mt-3 grid gap-3 lg:grid-cols-2">
-        {opportunities.length ? opportunities.map((item, index) => <Opportunity key={`${item.assetId}-${item.status}`} item={item} scannerScore={scoreByAsset.get(item.assetId)} rank={index + 1} onOpen={() => setLocation(`/asset/${encodeURIComponent(item.assetId)}`)} />) : <Empty loading={swing.isLoading || scalp.isLoading} />}
+        {opportunities.length ? opportunities.map((item, index) => <Opportunity key={item.assetId} item={item} scannerScore={scoreByAsset.get(item.assetId)} rank={index + 1} onOpen={() => setLocation(`/asset/${encodeURIComponent(item.assetId)}`)} />) : <Empty loading={swing.isLoading || scalp.isLoading} />}
       </section>
 
       <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/[.06] pt-4 text-[10px] text-slate-600"><span>Scores remain the core research signals. Full evidence is available inside each asset.</span><span>{scan ? `Scanner ${ago(scan.generatedAt)}` : "Scanner unavailable"}</span></footer>
@@ -63,6 +64,7 @@ export default function CleanHome() {
   </main>;
 }
 
+function lifecycleRank(status: string) { return status === "QUALIFIED" ? 3 : status === "POTENTIAL" ? 2 : status === "WATCH" ? 1 : 0; }
 function MarketMetric({ label, value, sub }: { label: string; value: string; sub: string }) { return <div><p className="text-[8px] font-semibold uppercase tracking-[.14em] text-slate-600">{label}</p><p className="font-mono text-sm text-slate-200">{value}</p><p className="text-[9px] text-slate-600">{sub}</p></div>; }
 
 function Opportunity({ item, scannerScore, rank, onOpen }: { item: DiscoveryItem; scannerScore: any; rank: number; onOpen: () => void }) {
@@ -70,12 +72,12 @@ function Opportunity({ item, scannerScore, rank, onOpen }: { item: DiscoveryItem
   const entry = plan.entryZone;
   const stop = plan.invalidation ?? plan.stop;
   const targets = plan.targets ?? [];
-  const technical = scannerScore?.technicalScore ?? null;
+  const technical = item.opportunityScore?.technicalScore ?? scannerScore?.technicalScore ?? null;
   const current = item.readinessPlan?.currentPrice ?? item.currentPrice ?? null;
   return <button onClick={onOpen} className="group w-full rounded-2xl border border-white/[.07] bg-[#09111b]/90 p-4 text-left transition-all hover:border-cyan-300/20 hover:bg-[#0b1422] sm:p-5">
     <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><span className="font-mono text-[10px] text-slate-600">{String(rank).padStart(2, "0")}</span><div><div className="flex items-center gap-2"><h3 className="text-base font-semibold">{item.symbol}</h3><span className={`rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-[.08em] ${statusTone(item.status)}`}>{item.status}</span></div><p className="mt-1 text-[10px] uppercase tracking-[.12em] text-slate-600">{item.strategy ?? "SWING"} · {String(item.timeframes?.execution ?? "—").toUpperCase()} · {item.direction}</p></div></div><ChevronRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-1" /></div>
     <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5"><Value label="Price" value={money(current)} /><Value label="Entry" value={entry?.low != null && entry?.high != null ? `${money(entry.low)} – ${money(entry.high)}` : "—"} /><Value label="Target" value={targets[0]?.price != null ? money(targets[0].price) : "—"} /><Value label="Stop" value={stop?.price != null ? money(stop.price) : "—"} /><Value label="R:R" value={plan.rewardRisk != null ? `${Number(plan.rewardRisk).toFixed(2)}×` : "—"} /></div>
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[.05] pt-3"><div className="flex items-center gap-4"><Score label="Score" value={item.opportunityScore ?? scannerScore?.score ?? null} /><Score label="Technical" value={technical} /></div><div className="text-right text-[9px] text-slate-600">{item.dataTimestamp ? `Detected data ${new Date(item.dataTimestamp).toLocaleString()}` : "Detection time unavailable"}</div></div>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[.05] pt-3"><div className="flex items-center gap-4"><Score label="Score" value={item.opportunityScore?.score ?? (typeof item.opportunityScore === "number" ? item.opportunityScore : scannerScore?.score) ?? null} /><Score label="Technical" value={technical} /></div><div className="text-right text-[9px] text-slate-600">{item.dataTimestamp ? `Data ${new Date(item.dataTimestamp).toLocaleString()}` : "Data time unavailable"}</div></div>
   </button>;
 }
 
