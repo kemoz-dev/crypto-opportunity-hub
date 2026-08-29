@@ -41,6 +41,7 @@ export type OpportunityLifecycleSnapshot = {
 
 export type OpportunityLifecycleEvent = {
   version: typeof OPPORTUNITY_LIFECYCLE_VERSION;
+  key: string;
   type: OpportunityLifecycleEventType;
   from: OpportunityLifecycleState | null;
   to: OpportunityLifecycleState;
@@ -60,7 +61,6 @@ export function lifecycleState(item: OpportunityDiscoveryItem): OpportunityLifec
 
 export function lifecycleSnapshot(item: OpportunityDiscoveryItem, state: OpportunityLifecycleState, capturedAt = Date.now()): OpportunityLifecycleSnapshot {
   const score = item.opportunityScore;
-  const scoreRecord = score && typeof score === "object" ? score as unknown as { technicalScore?: number | null } : null;
 
   return {
     version: OPPORTUNITY_LIFECYCLE_VERSION,
@@ -69,8 +69,8 @@ export function lifecycleSnapshot(item: OpportunityDiscoveryItem, state: Opportu
     symbol: item.symbol,
     state,
     price: item.readinessPlan.currentPrice,
-    opportunityScore: item.opportunityScore,
-    technicalScore: scoreRecord?.technicalScore ?? null,
+    opportunityScore: score?.score ?? null,
+    technicalScore: score?.technicalScore ?? null,
     direction: item.direction,
     entryZone: item.readinessPlan.entryZone,
     stop: item.sourcePlan.stop,
@@ -92,8 +92,21 @@ const eventTypeFor = (to: OpportunityLifecycleState): OpportunityLifecycleEventT
 };
 
 /**
+ * A transition key contains the from/to states and exact event timestamp.
+ * This prevents a later WATCH -> POTENTIAL transition from colliding with
+ * an earlier POTENTIAL event for the same monitored setup.
+ */
+export function lifecycleEventKey(
+  previousState: OpportunityLifecycleState | null,
+  nextState: OpportunityLifecycleState,
+  eventAt: number,
+) {
+  return `${OPPORTUNITY_LIFECYCLE_VERSION}:${previousState ?? "NONE"}->${nextState}:${eventAt}`;
+}
+
+/**
  * Returns an event only when the canonical opportunity state changes.
- * This deliberately does not emit an event for score-only fluctuations.
+ * Score-only fluctuations deliberately do not create lifecycle events.
  */
 export function buildLifecycleEvent(
   previousState: OpportunityLifecycleState | null,
@@ -105,6 +118,7 @@ export function buildLifecycleEvent(
 
   return {
     version: OPPORTUNITY_LIFECYCLE_VERSION,
+    key: lifecycleEventKey(previousState, nextState, eventAt),
     type: eventTypeFor(nextState),
     from: previousState,
     to: nextState,
