@@ -662,3 +662,27 @@
 - [x] Add Phase 34 contract and regression tests for quality/state mapping, warnings, missing evidence, plan/data visibility, Risk Off, simulation evidence, navigation, auth, PWA, and no-real-trading boundaries.
 - [x] Run focused/full tests, TypeScript, production build, protected-core/security scans, and responsive QA at mobile and desktop widths.
 - [x] Review todo.md, save the Phase 34 checkpoint, and deliver the published release.
+
+
+# Phase 35 — Live Opportunity Decision & Trade Readiness Workspace
+
+- [ ] Audit Phase 35 against the completed Phase 34 contracts and map existing Command Center, Feed, Decision Center, Asset, chart, Scalp, Swing, Watchlist, Auto Paper, auth, PWA, and scheduler boundaries.
+- [ ] Preserve the protected core: Opportunity Score, qualification/adaptive logic, strategies, risk/sizing, providers/fallback, validation/freshness, Manual Paper, Auto Paper lifecycle/accounting, Research Lab, alerts, schedules, authentication/authorization, PWA policy, and no-real-trading boundary.
+- [ ] Preserve no migration, schema, table, column, persistence, synthetic-data, client ranking, provider, threshold, strategy, or risk changes.
+- [ ] Implement or expose Trade Readiness as display-only labels over existing server states: READY TO REVIEW, POTENTIAL — REVIEW REQUIRED, WATCH — WAIT FOR CONFIRMATION, NO TRADE, DATA LIMITED, and PLAN UNAVAILABLE.
+- [ ] Reorder Command Center hierarchy to Market State, Best Opportunity, Best Potential, Scalp, Swing, Market Warnings, Watchlist, and Auto Paper Intelligence without fabricating or re-ranking client-side.
+- [ ] Present Best Opportunity from the server-ranked Qualified result with plan, quality, WHY, RISK, DATA, simulation evidence, and safe OPEN TRADE ANALYSIS action.
+- [ ] Present Best Potential from the server-ranked Potential result with missing evidence, warnings, plan/data boundaries, and safe REVIEW POTENTIAL action.
+- [ ] Present honest NO ACTIVE OPPORTUNITY diagnostics when Qualified/Potential are absent, including Risk Off, Data Limited, missing evidence, no valid plan, no strategy match, and insufficient evidence where returned.
+- [ ] Keep server-derived Entry, Stop Loss, TP1/TP2/TP3, R:R, Plan Status, WHY, RISK, DATA, freshness, provenance, and simulation evidence visible without unsafe implication.
+- [ ] Preserve chart-first Trade Analysis with existing candles, volume, crosshair, zoom/pan, EMA20/50/200, and valid Entry/SL/TP overlays only; show PLAN OVERLAY UNAVAILABLE with reason when incomplete.
+- [ ] Ensure chart legend is textual and non-color-only for Entry, Stop, Target 1/2/3, EMA20/50/200, and Volume; preserve accessible chart summary.
+- [ ] Present Simulation Evidence only from matching persisted Auto Paper samples, otherwise NO MATCHING SAMPLE with the non-negative warning about historical results not guaranteeing future results.
+- [ ] Keep Scalp timeframe availability and Data Limited reasons for 1M/3M/5M based on existing validated strategy evidence; preserve separate 15M FAST SCALP identity and plan/evidence.
+- [ ] Keep Swing best setup presentation server-derived with quality, plan, WHY, RISK, DATA, and simulation evidence.
+- [ ] Preserve Feed filters, URL persistence, Back/Forward/Refresh, deep links, Watchlist, Auto Paper separation, navigation grouping, themes, accessibility, performance, and static-shell-only PWA caching.
+- [ ] Add or preserve mobile-first ordering and a safe-area-aware 44px+ bottom action bar for Full Analysis, Watchlist, and Simulation without covering content.
+- [ ] Add Phase 35 contract/regression tests for readiness, best opportunity/potential, no active opportunity, plan/overlay/legend, evidence, Scalp/15M/Swing, filters/navigation, mobile action bar, themes, accessibility, auth, authorization, PWA, and no-real-trading boundaries.
+- [ ] Run focused/full tests, TypeScript, production build, security/PWA scans, runtime restart, responsive QA at 375x812, 390x844, 414x896, 1280x800, 1440x900, and 1920x1080 where available.
+- [ ] Perform only read-only production smoke if an owner session is already available; otherwise report AUTHENTICATED PRODUCTION VERIFICATION BLOCKED — NO OWNER SESSION.
+- [ ] Review todo.md, save the Phase 35 checkpoint, and deliver the published release with limitations.
