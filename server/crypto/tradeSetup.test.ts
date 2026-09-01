@@ -1,6 +1,6 @@
 import { DEFAULT_SCORING_CONFIG, type MarketRegime, type ScannerRow } from "../../shared/crypto";
 import type { LiveOhlcvBundle } from "./providers";
-import { buildTradeHealth, buildTradeSetupPlan, summarizeDiagnostics } from "./tradeSetup";
+import { buildTradeHealth, buildTradeSetupPlan, selectForwardTargetPrices, summarizeDiagnostics } from "./tradeSetup";
 import { describe, expect, it } from "vitest";
 
 const analysis = (timeframe: "15m" | "1h" | "4h" | "1d", bias: "bullish" | "neutral" | "bearish") => ({ timeframe, score: 8, maxScore: 10, bias, rsi: 58, macdHistogram: 1, ema20: 139, ema50: 135, ema200: 120, bollinger: null, atrPercent: 2, volumeExpansion: 1.2, priceStructure: ["Higher low"], reasons: [{ key: "ema", label: "Bullish EMA alignment", score: 2, maxScore: 2, direction: "positive" as const, detail: "Validated alignment." }] });
@@ -19,6 +19,19 @@ const bundle = (): LiveOhlcvBundle => ({
 });
 
 describe("trade setup intelligence", () => {
+  it("selects the first meaningful structural LONG target instead of rejecting a setup because of a near level", () => {
+    expect(selectForwardTargetPrices("LONG", 100, 96, 2, [100.3, 104, 108])).toEqual([104, 106, 108]);
+  });
+
+  it("selects the first meaningful structural SHORT target symmetrically", () => {
+    expect(selectForwardTargetPrices("SHORT", 100, 104, 2, [99.7, 96, 92])).toEqual([96, 94, 92]);
+  });
+
+  it("uses a justified ATR fallback only when no meaningful structural target exists", () => {
+    expect(selectForwardTargetPrices("LONG", 100, 96, 2, [100.2])).toEqual([104, 106, 108]);
+    expect(selectForwardTargetPrices("SHORT", 100, 104, 2, [99.8])).toEqual([96, 94, 92]);
+    expect(selectForwardTargetPrices("LONG", 100, 96, 0, [100.2])).toEqual([]);
+  });
   it("creates a separate, explainable 15M scalp plan from validated technical inputs without changing the Opportunity score", () => {
     const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123, bundle());
     expect(plan.minimumValidatedTimeframe).toContain("15M");
@@ -33,16 +46,11 @@ describe("trade setup intelligence", () => {
     expect(plan.diagnostics.find(condition => condition.key === "provider_bundle")).toMatchObject({ status: "PASSED" });
   });
 
-  it("returns NO TRADE rather than inventing a plan when structure cannot yield a valid target", () => {
-    const unavailable = buildTradeSetupPlan("SCALP", row(), regime, candles.map(candle => ({ ...candle, high: 141, low: 139 })), "Binance Futures", 123);
+  it("keeps a setup non-actionable when no structural or ATR target can be defended", () => {
+    const unavailable = buildTradeSetupPlan("SCALP", row(), regime, candles.map(candle => ({ ...candle, high: 140, low: 140, close: 140 })), "Binance Futures", 123);
     expect(unavailable.actionable).toBe(false);
     expect(unavailable.direction).toBe("NO TRADE");
     expect(unavailable.targets).toEqual([]);
-    expect(unavailable.readinessCandidate).toMatchObject({ availability: "PARTIAL", entryZone: expect.any(Object), invalidation: expect.any(Object), rewardRisk: expect.any(Number) });
-    expect(unavailable.readinessCandidate?.rewardRisk).toBeLessThan(1);
-    expect(unavailable.diagnostics.find(condition => condition.key === "structural_stop")?.status).toBe("PASSED");
-    expect(unavailable.diagnostics.find(condition => condition.key === "risk_reward")).toMatchObject({ status: "FAILED" });
-    expect(unavailable.diagnostics.find(condition => condition.key === "risk_reward")?.required).toContain("1:1");
   });
 
   it("explains an existing neutral-direction rejection without changing the rejection", () => {
@@ -61,12 +69,12 @@ describe("trade setup intelligence", () => {
     const neutral = row();
     neutral.score!.direction = "neutral";
     const neutralPlan = buildTradeSetupPlan("SCALP", neutral, regime, candles, "Binance Futures", 123, bundle());
-    const unavailablePlan = buildTradeSetupPlan("SCALP", row(), regime, candles.map(candle => ({ ...candle, high: 141, low: 139 })), "Binance Futures", 123, bundle());
+    const unavailablePlan = buildTradeSetupPlan("SCALP", row(), regime, candles.map(candle => ({ ...candle, high: 140, low: 140, close: 140 })), "Binance Futures", 123, bundle());
     const summary = summarizeDiagnostics([neutralPlan, unavailablePlan]);
     expect(summary).toMatchObject({ evaluatedAssets: 2, noTradeAssets: 2 });
     expect(summary.byCondition.find(condition => condition.key === "opportunity_direction")?.failed).toBe(1);
     expect(summary.topNoTradeReasons.length).toBeGreaterThan(0);
-    expect(summary.classification).toEqual({ lackOfMarketSetups: 1, missingData: 0, staleData: 0, existingSetupRequirement: 1 });
+    expect(summary.classification).toEqual({ lackOfMarketSetups: 2, missingData: 0, staleData: 0, existingSetupRequirement: 0 });
   });
 
   it("keeps current Trade Health separate from immutable entry evidence and never implies auto-close", () => {
