@@ -232,7 +232,7 @@ export function selectForwardTargetPrices(direction: Exclude<TradeSetupDirection
     .filter(price => isForward(price) && distance(price) >= minimumMeaningfulDistance);
   const firstTarget = validStructural[0] ?? atrExtensions[0];
   if (firstTarget === undefined) return [];
-  const additionalTargets = [...validStructural.slice(1), ...atrExtensions]
+  const additionalTargets = (validStructural.length ? validStructural.slice(1) : atrExtensions.slice(1))
     .filter(price => distance(price) > distance(firstTarget))
     .sort((left, right) => direction === "LONG" ? left - right : right - left);
   return Array.from(new Set([firstTarget, ...additionalTargets])).slice(0, 3);

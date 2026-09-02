@@ -20,11 +20,11 @@ const bundle = (): LiveOhlcvBundle => ({
 
 describe("trade setup intelligence", () => {
   it("selects the first meaningful structural LONG target instead of rejecting a setup because of a near level", () => {
-    expect(selectForwardTargetPrices("LONG", 100, 96, 2, [100.3, 104, 108])).toEqual([104, 106, 108]);
+    expect(selectForwardTargetPrices("LONG", 100, 96, 2, [100.3, 104, 108])).toEqual([104, 108]);
   });
 
   it("selects the first meaningful structural SHORT target symmetrically", () => {
-    expect(selectForwardTargetPrices("SHORT", 100, 104, 2, [99.7, 96, 92])).toEqual([96, 94, 92]);
+    expect(selectForwardTargetPrices("SHORT", 100, 104, 2, [99.7, 96, 92])).toEqual([96, 92]);
   });
 
   it("uses a justified ATR fallback only when no meaningful structural target exists", () => {
@@ -102,9 +102,9 @@ describe("trade setup intelligence", () => {
     const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123, bundle());
     const current = { price: plan.entryZone!.preferred, execution: analysis("15m", "bullish"), confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "LIVE" as const };
     expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 1) }, current).targetProgress).toHaveLength(1);
-    expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 2) }, current).targetProgress).toHaveLength(1);
+    expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 2) }, current).targetProgress).toHaveLength(2);
     const three = buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 3) }, current).targetProgress;
-    expect(three).toHaveLength(1);
+    expect(three).toHaveLength(3);
     expect(three.every(target => target.distancePercent !== null && target.distancePercent! >= 0)).toBe(true);
   });
 
