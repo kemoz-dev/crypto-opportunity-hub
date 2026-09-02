@@ -94,10 +94,24 @@ describe("trade setup intelligence", () => {
     const plan = buildTradeSetupPlan("SCALP", row(), regime, candles, "Binance Futures", 123, bundle());
     const current = { price: plan.entryZone!.preferred, execution: analysis("15m", "bullish"), confirmation: analysis("1h", "bullish"), context: analysis("4h", "bullish"), generatedAt: 456, provider: "Binance Futures", availability: "LIVE" as const };
     expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 1) }, current).targetProgress).toHaveLength(1);
-    expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 2) }, current).targetProgress).toHaveLength(2);
+    expect(buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 2) }, current).targetProgress).toHaveLength(1);
     const three = buildTradeHealth({ ...plan, targets: plan.targets.slice(0, 3) }, current).targetProgress;
-    expect(three).toHaveLength(3);
+    expect(three).toHaveLength(1);
     expect(three.every(target => target.distancePercent !== null && target.distancePercent! >= 0)).toBe(true);
+  });
+
+  it("uses the same structural target and R:R formula for SHORT setups without flipping target direction", () => {
+    const shortRow = row();
+    shortRow.score!.direction = "bearish";
+    shortRow.score!.technicalByTimeframe = shortRow.score!.technicalByTimeframe.map(item => ({ ...item, bias: "bearish" as const }));
+    const shortCandles = candles.map((candle, index) => ({ ...candle, high: index === 70 ? 150 : 145, low: index === 65 ? 110 : 135, close: 140 }));
+    const plan = buildTradeSetupPlan("SCALP", shortRow, regime, shortCandles, "Binance Futures", 123, bundle());
+    expect(plan.actionable).toBe(true);
+    expect(plan.direction).toBe("SHORT");
+    expect(plan.stop?.price).toBeGreaterThan(plan.entryZone!.preferred);
+    expect(plan.targets[0]?.price).toBeLessThan(plan.entryZone!.preferred);
+    expect(plan.rewardRisk).toBeGreaterThanOrEqual(1);
+    expect(plan.rewardRisk).toBeCloseTo(Math.abs(plan.targets[0]!.price - plan.entryZone!.preferred) / Math.abs(plan.entryZone!.preferred - plan.stop!.price), 2);
   });
 
   it("does not create a health label from a legacy trade without an immutable setup plan", () => {

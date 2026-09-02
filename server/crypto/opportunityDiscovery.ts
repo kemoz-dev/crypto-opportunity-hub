@@ -38,6 +38,7 @@ export type OpportunityDiscoveryItem = {
   potentialAlertEligible: false;
   rank: number | null;
   opportunityScore: number | null;
+  technicalScore: number | null;
   direction: TradeSetupDirection;
   provider: string | null;
   dataTimestamp: number | null;
@@ -185,6 +186,7 @@ function item(plan: TradeSetupPlan): OpportunityDiscoveryItem {
     mode: plan.mode,
     rank: null,
     opportunityScore: plan.opportunityScore,
+    technicalScore: plan.technicalScore,
     direction,
     provider: plan.provider,
     dataTimestamp: plan.dataTimestamp,

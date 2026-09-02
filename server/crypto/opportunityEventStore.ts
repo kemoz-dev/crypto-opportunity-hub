@@ -18,3 +18,7 @@ export function shouldNotifyLifecycleEvent(event: OpportunityLifecycleEvent | nu
   if (!event) return false;
   return event.type === "POTENTIAL_STARTED" || event.type === "QUALIFIED_STARTED";
 }
+
+export function shouldDispatchLifecycleNotification(inserted: boolean, event: OpportunityLifecycleEvent | null) {
+  return inserted && shouldNotifyLifecycleEvent(event);
+}

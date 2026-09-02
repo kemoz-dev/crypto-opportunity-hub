@@ -26,9 +26,11 @@ export type OpportunityLifecycleSnapshot = {
   assetId: string;
   symbol: string;
   state: OpportunityLifecycleState;
+  from: OpportunityLifecycleState | null;
   price: number | null;
   opportunityScore: number | null;
   technicalScore: number | null;
+  rewardRisk: number | null;
   direction: OpportunityDiscoveryItem["direction"];
   entryZone: OpportunityDiscoveryItem["readinessPlan"]["entryZone"];
   stop: OpportunityDiscoveryItem["sourcePlan"]["stop"];
@@ -59,7 +61,7 @@ export function lifecycleState(item: OpportunityDiscoveryItem): OpportunityLifec
   return null;
 }
 
-export function lifecycleSnapshot(item: OpportunityDiscoveryItem, state: OpportunityLifecycleState, capturedAt = Date.now()): OpportunityLifecycleSnapshot {
+export function lifecycleSnapshot(item: OpportunityDiscoveryItem, state: OpportunityLifecycleState, capturedAt = Date.now(), from: OpportunityLifecycleState | null = null): OpportunityLifecycleSnapshot {
   const score = item.opportunityScore;
 
   return {
@@ -68,9 +70,11 @@ export function lifecycleSnapshot(item: OpportunityDiscoveryItem, state: Opportu
     assetId: item.assetId,
     symbol: item.symbol,
     state,
+    from,
     price: item.readinessPlan.currentPrice,
-    opportunityScore: score?.score ?? null,
-    technicalScore: score?.technicalScore ?? null,
+    opportunityScore: score ?? null,
+    technicalScore: item.technicalScore ?? null,
+    rewardRisk: item.readinessPlan.rewardRisk ?? null,
     direction: item.direction,
     entryZone: item.readinessPlan.entryZone,
     stop: item.sourcePlan.stop,
@@ -124,6 +128,6 @@ export function buildLifecycleEvent(
     to: nextState,
     eventAt,
     price: item.readinessPlan.currentPrice,
-    snapshot: lifecycleSnapshot(item, nextState, eventAt),
+    snapshot: lifecycleSnapshot(item, nextState, eventAt, previousState),
   };
 }

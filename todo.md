@@ -686,3 +686,54 @@
 - [ ] Run focused/full tests, TypeScript, production build, security/PWA scans, runtime restart, responsive QA at 375x812, 390x844, 414x896, 1280x800, 1440x900, and 1920x1080 where available.
 - [ ] Perform only read-only production smoke if an owner session is already available; otherwise report AUTHENTICATED PRODUCTION VERIFICATION BLOCKED — NO OWNER SESSION.
 - [ ] Review todo.md, save the Phase 35 checkpoint, and deliver the published release with limitations.
+
+
+# R:R Source Correction — Verification Task
+
+- [x] Identify and document the source of the current rewardRisk calculation and the near-target failure mode.
+- [x] Correct source-level target selection to prefer meaningful validated structural targets and use ATR targets only as a justified fallback.
+- [x] Keep Preferred Entry and Structural Stop authoritative, preserve the existing minimum R:R gate, and keep poor-R:R setups non-actionable/WATCH rather than upgrading them.
+- [x] Verify identical LONG/SHORT direction handling and preserve lifecycle, event, history, scoring, UI, and no-real-trading boundaries.
+- [x] Add regression tests for near-target avoidance, poor-R:R selectivity, SHORT symmetry, and exact rewardRisk arithmetic.
+- [x] Run focused/full tests, TypeScript, production build, security/boundary scans, and confirm no deployment is performed.
+
+
+# Approved Pre-Deployment Lifecycle Timeline & Notifications
+
+- [x] Audit the canonical lifecycle/event history and existing notification delivery path before adding UI or notification behavior.
+- [x] Preserve one canonical lifecycle/event system, existing Event Key/idempotency behavior, event/history persistence, lifecycle selectivity, R:R gating, Clean Home layout, and no-deployment constraint.
+- [x] Ensure lifecycle snapshots freeze state-at-transition values: previous/new state, timestamp, price, Opportunity Score, Technical Score, Entry, Stop, and targets when available.
+- [x] Build a concise asset/opportunity Timeline from canonical lifecycle/event history with readable transition evidence and detailed expansion support.
+- [x] Connect WATCH→POTENTIAL and POTENTIAL→QUALIFIED transitions to the same canonical event notifications without repeated delivery for one event key.
+- [x] Preserve legitimate notifications for later distinct WATCH→POTENTIAL cycles on the same asset.
+- [x] Include symbol, new status, event price, score, technical score, direction, and R:R when available in lifecycle notifications.
+- [x] Preserve asset-detail hierarchy: status, scores, plan, why, timeline/history, then full technical evidence; keep Clean Home unchanged.
+- [x] Add regression tests for event snapshot immutability, duplicate event/notification prevention, repeated lifecycle cycles, LONG/SHORT behavior, and existing R:R behavior.
+- [x] Run full Vitest, TypeScript, production build, security/boundary scans, and runtime validation without deploying.
+- [x] Review todo.md, report changed files and latest commit SHA, and keep deployment deferred for user review.
+
+
+# Complete Lifecycle Timeline + Notification + Deployment Cycle
+
+- [x] Add regression coverage for TP1 selection, nearby-target rejection, farther-target selection, R:R arithmetic, and LONG/SHORT symmetry.
+- [x] Add regression coverage for WATCH to POTENTIAL and POTENTIAL to QUALIFIED canonical events.
+- [x] Add regression coverage for duplicate event/notification prevention, repeated legitimate cycles, and frozen historical price/score snapshots.
+- [x] Implement the canonical asset/opportunity Timeline and lifecycle notifications without introducing a competing event system.
+- [x] Run all Vitest tests, TypeScript, production build, security/boundary scans, and runtime verification; fix all failures before deployment.
+- [x] Commit the verified changes to main and redeploy the existing Manus project only after validation succeeds.
+- [x] Verify the existing production URL, latest deployed commit, and application load after redeployment.
+- [x] Deliver the complete implementation, validation, deployment, and remaining-issues report.
+
+
+# Complete Implementation + Validation + Deployment Cycle
+
+- [x] Reconcile the latest requirements with current R:R, lifecycle, setup-monitor, timeline, notification, and asset-detail implementations.
+- [x] Preserve selective opportunity lifecycle semantics and reject weak-R:R setups rather than increasing opportunity count.
+- [x] Complete canonical lifecycle Timeline with frozen transition snapshots and concise asset-detail hierarchy.
+- [x] Connect only WATCH→POTENTIAL and POTENTIAL→QUALIFIED canonical events to idempotent owner notifications.
+- [x] Add/update TP1, poor-nearby-target, farther-valid-target, R:R arithmetic, and LONG/SHORT symmetry tests.
+- [x] Add/update lifecycle transition, duplicate event/notification, repeated-cycle, and frozen historical snapshot tests.
+- [x] Run all Vitest tests, TypeScript, production build, security/boundary scans, and runtime verification; fix failures before deployment.
+- [x] Commit the fully verified changes to main and redeploy the existing Manus project with unchanged URL, environment, and database configuration.
+- [x] Verify deployed commit and successful application load after redeployment.
+- [x] Report files, R:R criteria/examples, Timeline, notifications, tests, build, deployment, SHA, and remaining issues.

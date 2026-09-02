@@ -5,7 +5,9 @@ import { getTradeSetups, type TradeSetupMode } from "./tradeSetup";
 import type { ScoringConfig } from "../../shared/crypto";
 import type { OpportunityDiscoveryItem } from "./opportunityDiscovery";
 import { detectOpportunityLifecycleEvent } from "./opportunityEventStore";
-import { lifecycleState } from "./opportunityLifecycle";
+import { lifecycleState, type OpportunityLifecycleEvent } from "./opportunityLifecycle";
+import { shouldDispatchLifecycleNotification } from "./opportunityEventStore";
+import { getNotificationAdapter } from "../adapters/notifications";
 
 export const SETUP_MONITOR_VERSION = "SETUP_MONITOR_V1";
 export const ACTIVE_MONITOR_STATUSES = ["NEW", "WATCH", "POTENTIAL", "QUALIFIED", "TARGET_1_REACHED", "TARGET_2_REACHED"] as const;
@@ -198,12 +200,14 @@ export async function refreshSetupMonitor(userId: number, instanceId: number, co
   const previousState = asJson(existing.currentTechnicalState) ?? {};
   const previousProgress = Array.isArray(previousState.targetProgress) ? previousState.targetProgress as Array<{ ordinal?: number; reached?: boolean }> : [];
   const events: Array<{ key: string; type: SetupMonitorEventType; reason: string; price: number | null; timeframe: string | null; provider: string | null; provenance: unknown; freshness: string | null }> = [];
+  let lifecycleNotification: OpportunityLifecycleEvent | null = null;
 
   if (nextStatus !== existing.currentStatus) {
     const eventAt = Date.now();
     const previousLifecycleState = lifecycleStateFromMonitorStatus(existing.currentStatus);
     const lifecycleEvent = previousLifecycleState ? detectOpportunityLifecycleEvent(previousLifecycleState, item, eventAt) : null;
     if (lifecycleEvent) {
+      lifecycleNotification = lifecycleEvent;
       events.push({
         key: lifecycleEvent.key,
         type: lifecycleEvent.type === "INVALIDATED" ? "INVALIDATED" : "STATE_CHANGED",
@@ -226,11 +230,24 @@ export async function refreshSetupMonitor(userId: number, instanceId: number, co
   const terminalAt = TERMINAL_MONITOR_STATUSES.includes(nextStatus as typeof TERMINAL_MONITOR_STATUSES[number]) ? new Date() : existing.terminalAt;
   const unavailableObservation = { observedAt: Date.now(), provider: item.provider, dataTimestamp: item.dataTimestamp, freshness: item.freshness, validationStatus: item.validationStatus, reason: health.reason };
   await db.update(setupMonitorInstances).set({ currentStatus: nextStatus, currentReadinessSnapshot: unavailable ? existing.currentReadinessSnapshot : item.setupReadiness, currentPrice: unavailable ? existing.currentPrice : item.readinessPlan.currentPrice, currentTechnicalState: unavailable ? { ...previousState, health, unavailableObservation } : { health, targetProgress: progress, direction: item.direction, currentSnapshot: snapshot }, currentProviderProvenance: unavailable ? { ...(asJson(existing.currentProviderProvenance) ?? {}), unavailableObservation } : { provider: item.provider, dataTimestamp: item.dataTimestamp, freshness: item.freshness, validationStatus: item.validationStatus }, currentStateReason: health.reason, lastValidatedAt: unavailable ? existing.lastValidatedAt : item.dataTimestamp ? new Date(item.dataTimestamp) : new Date(), terminalAt }).where(and(eq(setupMonitorInstances.id, instanceId), eq(setupMonitorInstances.userId, userId)));
-  for (const event of events) await insertEvent(db, instanceId, event);
+  for (const event of events) {
+    const inserted = await insertEvent(db, instanceId, event);
+    if (lifecycleNotification && event.key === lifecycleNotification.key && shouldDispatchLifecycleNotification(inserted, lifecycleNotification)) {
+      const snapshot = lifecycleNotification.snapshot;
+      try {
+        await getNotificationAdapter().notifyOwner({
+          title: `${snapshot.symbol} moved to ${lifecycleNotification.to}`,
+          content: `${snapshot.symbol} ${lifecycleNotification.from ?? "NONE"} → ${lifecycleNotification.to} at ${snapshot.price ?? "UNAVAILABLE"}. Score ${snapshot.opportunityScore ?? "UNAVAILABLE"} · Technical ${snapshot.technicalScore ?? "UNAVAILABLE"} · Direction ${snapshot.direction} · R:R ${snapshot.rewardRisk ?? "UNAVAILABLE"}. Event ${lifecycleNotification.key}.`,
+        });
+      } catch (error) {
+        console.warn("[Lifecycle] Notification delivery failed:", error);
+      }
+    }
+  }
   return getSetupMonitorDetail(userId, instanceId);
 }
 
-function lifecycleStateFromMonitorStatus(status: SetupMonitorStatus) {
+function lifecycleStateFromMonitorStatus(status: string) {
   if (["WATCH", "POTENTIAL", "QUALIFIED", "TARGET_1_REACHED", "TARGET_2_REACHED", "TARGET_3_REACHED", "INVALIDATED", "ARCHIVED"].includes(status)) return status as Parameters<typeof detectOpportunityLifecycleEvent>[0];
   return null;
 }
