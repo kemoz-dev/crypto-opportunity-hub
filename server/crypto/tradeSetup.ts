@@ -219,6 +219,25 @@ function quality(direction: TradeSetupDirection, execution: TimeframeAnalysis, c
   return round(executionAlignment + confirmationAlignment + contextAlignment + volume + riskReward + regimeWeight, 1);
 }
 
+export function selectForwardTargetPrices(direction: Exclude<TradeSetupDirection, "NO TRADE">, preferred: number, stopPrice: number, atr: number, structuralTargets: number[]) {
+  const risk = Math.abs(preferred - stopPrice);
+  const minimumMeaningfulDistance = Math.max(atr * 0.75, risk * MINIMUM_REWARD_RISK);
+  const isForward = (price: number) => direction === "LONG" ? price > preferred : price < preferred;
+  const distance = (price: number) => Math.abs(price - preferred);
+  const validStructural = Array.from(new Set(structuralTargets.map(price => round(price, 8))))
+    .filter(price => isForward(price) && distance(price) >= minimumMeaningfulDistance)
+    .sort((left, right) => direction === "LONG" ? left - right : right - left);
+  const atrExtensions = [1, 2, 3, 4]
+    .map(multiplier => round(direction === "LONG" ? preferred + atr * multiplier : preferred - atr * multiplier, 8))
+    .filter(price => isForward(price) && distance(price) >= minimumMeaningfulDistance);
+  const firstTarget = validStructural[0] ?? atrExtensions[0];
+  if (firstTarget === undefined) return [];
+  const additionalTargets = [...validStructural.slice(1), ...atrExtensions]
+    .filter(price => distance(price) > distance(firstTarget))
+    .sort((left, right) => direction === "LONG" ? left - right : right - left);
+  return Array.from(new Set([firstTarget, ...additionalTargets])).slice(0, 3);
+}
+
 function buildLevels(direction: TradeSetupDirection, candles: Candle[], currentPrice: number, atr: number): LevelDerivation {
   const ema20 = candles.slice(-20).reduce((sum, candle) => sum + candle.close, 0) / 20;
   const entryLow = direction === "LONG" ? Math.min(currentPrice, ema20) : Math.min(currentPrice, ema20);
@@ -234,23 +253,10 @@ function buildLevels(direction: TradeSetupDirection, candles: Candle[], currentP
   const entryZone = { low: round(entryLow, 8), high: round(entryHigh, 8), preferred, reason: "Current price and execution-timeframe EMA20 define the validated timing zone." };
   const stop = { label: "STOP" as const, price: round(stopPrice, 8), reason: "Recent structural pivot with a 0.25 ATR volatility buffer.", priority: "PRIMARY" as const };
   const invalidation = { label: "INVALIDATION" as const, price: round(stopPrice, 8), reason: "Crossing this structural level invalidates the recorded setup context.", priority: "PRIMARY" as const };
-  const structuralTargets = historicalLevels(candles, direction === "LONG" ? "high" : "low", direction, preferred);
-  const minimumMeaningfulDistance = Math.max(perUnitRisk * MINIMUM_REWARD_RISK, atr * 0.75);
-  const meaningfulStructuralTargets = structuralTargets.filter(price => Math.abs(price - preferred) >= minimumMeaningfulDistance);
-  const extensions = [2, 3, 4].map(multiplier => round(direction === "LONG" ? preferred + atr * multiplier : preferred - atr * multiplier, 8));
-  const meaningfulAtrTargets = extensions.filter(price => Math.abs(price - preferred) >= minimumMeaningfulDistance);
-  // Structural levels are authoritative. ATR extensions are a fallback only when
-  // no forward structural level exists; they must still clear the same minimum
-  // distance so volatility is not used to manufacture a better-looking R:R.
-  const prices = Array.from(new Set(
-    meaningfulStructuralTargets.length
-      ? meaningfulStructuralTargets
-      : structuralTargets.length
-        ? structuralTargets.slice(0, 3)
-        : meaningfulAtrTargets,
-  )).filter(price => direction === "LONG" ? price > preferred : price < preferred).slice(0, 3);
-  if (!prices.length) return { state: "NO_TARGET", levels: null, candidate: { availability: "PARTIAL", reason: "A validated entry zone and structural invalidation exist, but no forward technical target was derivable.", entryZone, stop, invalidation, targets: [], rewardRisk: null }, preferred, pivot, stopPrice, firstTarget: null, rewardRisk: null };
-  const targets = prices.map((price, index) => ({ label: (`TP${index + 1}` as "TP1" | "TP2" | "TP3"), price, reason: structuralTargets.includes(price) ? "Validated swing structure at a meaningful risk distance" : "ATR-based volatility extension without a validated structural target", priority: index === 0 ? "PRIMARY" as const : index === 1 ? "SECONDARY" as const : "EXTENDED" as const }));
+  const candidates = historicalLevels(candles, direction === "LONG" ? "high" : "low", direction, preferred);
+  const prices = selectForwardTargetPrices(direction as Exclude<TradeSetupDirection, "NO TRADE">, preferred, stopPrice, atr, candidates);
+  if (!prices.length) return { state: "NO_TARGET", levels: null, candidate: { availability: "PARTIAL", reason: "A validated entry zone and structural invalidation exist, but no meaningful forward technical target was derivable.", entryZone, stop, invalidation, targets: [], rewardRisk: null }, preferred, pivot, stopPrice, firstTarget: null, rewardRisk: null };
+  const targets = prices.map((price, index) => ({ label: (`TP${index + 1}` as "TP1" | "TP2" | "TP3"), price, reason: candidates.includes(price) ? "First meaningful validated forward structural target" : "Technically justified ATR-based volatility extension", priority: index === 0 ? "PRIMARY" as const : index === 1 ? "SECONDARY" as const : "EXTENDED" as const }));
   const rr = Math.abs(targets[0].price - preferred) / perUnitRisk;
   const normalizedRewardRisk = Number.isFinite(rr) ? round(rr, 2) : null;
   const candidate = { availability: normalizedRewardRisk !== null && normalizedRewardRisk >= MINIMUM_REWARD_RISK ? "SUPPORTED" as const : "PARTIAL" as const, reason: normalizedRewardRisk !== null && normalizedRewardRisk >= MINIMUM_REWARD_RISK ? "Validated entry, target path, and structural invalidation are available from existing setup methodology." : "Validated entry, target path, and structural invalidation are available, but the existing first-target minimum R:R is not met.", entryZone, stop, invalidation, targets, rewardRisk: normalizedRewardRisk };

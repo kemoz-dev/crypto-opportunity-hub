@@ -192,6 +192,7 @@ export async function refreshSetupMonitor(userId: number, instanceId: number, co
   const existing = rows[0];
   if (!existing) throw new Error("Setup Monitor instance not found.");
   if (existing.currentStatus === "ARCHIVED") throw new Error("Archived Setup Monitor instances cannot be refreshed.");
+  const existingStatus = existing.currentStatus as SetupMonitorStatus;
   const item = await currentItem(existing.assetId, setupMode(existing.setupType), configuration);
   const baseStatus = monitorStatus(item);
   const progress = targetProgress(item);
@@ -204,7 +205,7 @@ export async function refreshSetupMonitor(userId: number, instanceId: number, co
 
   if (nextStatus !== existing.currentStatus) {
     const eventAt = Date.now();
-    const previousLifecycleState = lifecycleStateFromMonitorStatus(existing.currentStatus);
+    const previousLifecycleState = lifecycleStateFromMonitorStatus(existingStatus);
     const lifecycleEvent = previousLifecycleState ? detectOpportunityLifecycleEvent(previousLifecycleState, item, eventAt) : null;
     if (lifecycleEvent) {
       lifecycleNotification = lifecycleEvent;

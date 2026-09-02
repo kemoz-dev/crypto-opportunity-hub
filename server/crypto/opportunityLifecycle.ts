@@ -61,10 +61,11 @@ export function lifecycleState(item: OpportunityDiscoveryItem): OpportunityLifec
   return null;
 }
 
+const immutableCopy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
 export function lifecycleSnapshot(item: OpportunityDiscoveryItem, state: OpportunityLifecycleState, capturedAt = Date.now(), from: OpportunityLifecycleState | null = null): OpportunityLifecycleSnapshot {
   const score = item.opportunityScore;
-
-  return {
+  return immutableCopy({
     version: OPPORTUNITY_LIFECYCLE_VERSION,
     capturedAt,
     assetId: item.assetId,
@@ -83,7 +84,7 @@ export function lifecycleSnapshot(item: OpportunityDiscoveryItem, state: Opportu
     provider: item.provider,
     dataTimestamp: item.dataTimestamp,
     reasons: item.whyInteresting.slice(0, 4),
-  };
+  });
 }
 
 const eventTypeFor = (to: OpportunityLifecycleState): OpportunityLifecycleEventType => {
